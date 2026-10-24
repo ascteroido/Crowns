@@ -8,9 +8,9 @@ const Variant_ := preload("res://addons/GodotPlayGameServices/scripts/leaderboar
 
 ## Leaderboard IDs from the Play Console (Play Games Services > Leaderboards).
 ## Daily: Time format, smaller is better. The others: numeric, larger is better.
-const DAILY_ID := ""
-const CLIMB_ID := ""
-const SOLVED_ID := ""
+const DAILY_ID := "CgkIs_CWu6AOEAIQAg"
+const CLIMB_ID := "CgkIs_CWu6AOEAIQAw"
+const SOLVED_ID := "CgkIs_CWu6AOEAIQAQ"
 
 var _available := false
 var _signed_in := false
