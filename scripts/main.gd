@@ -10,25 +10,40 @@ const Settings := preload("res://scripts/settings.gd")
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
 
+enum Mode { REGULAR, DAILY, CHALLENGE }
+
 const SIZES := [5, 6, 7, 8, 9, 10]
 const DEFAULT_SIZE := 7
 const DAILY_SIZES := [7, 8, 9]
 const DEFAULT_DIFFICULTY := Generator.Difficulty.MEDIUM
 const DAILY_DIFFICULTY := Generator.Difficulty.MEDIUM
+## [size, difficulty] for each challenge puzzle; the last one repeats.
+const CHALLENGE_STAGES := [
+	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
+	[6, Generator.Difficulty.MEDIUM], [6, Generator.Difficulty.MEDIUM], [7, Generator.Difficulty.MEDIUM],
+	[7, Generator.Difficulty.MEDIUM], [7, Generator.Difficulty.HARD], [8, Generator.Difficulty.MEDIUM],
+	[8, Generator.Difficulty.HARD], [8, Generator.Difficulty.HARD], [9, Generator.Difficulty.MEDIUM],
+	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
+]
+const CHALLENGE_KEY := "challenge"
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ## Where progress and best times are stored; tests point this elsewhere.
 var save_path := "user://queens_progress.cfg"
 
 var _board: Board
-## Save key of the loaded board; stays put while `_number` or `_size` change for the next load.
+## Save key of the loaded board; stays put while `_number` or `_size` change for
+## the next load. Empty once a challenge run has ended, so nothing is saved.
 var _board_key := ""
+var _mode := Mode.REGULAR
 var _size := DEFAULT_SIZE
 var _difficulty: int = DEFAULT_DIFFICULTY
 var _number := 1
-## Playing the daily puzzle for `_daily_date` ("YYYY-MM-DD") instead of the numbered ones.
-var _daily := false
+## Date ("YYYY-MM-DD") of the daily puzzle being played.
 var _daily_date := ""
+## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
+## before this puzzle}. Empty when no run is going.
+var _run := {}
 var _elapsed := 0.0
 var _running := false
 ## The timer only counts while the window has focus.
@@ -53,7 +68,9 @@ var _timer_label: Label
 var _best_label: Label
 var _view: BoardView
 var _undo_button: Button
+var _hint_button: Button
 var _win_overlay: Control
+var _win_heading: Label
 var _win_label: Label
 var _next_puzzle_button: Button
 
@@ -63,6 +80,7 @@ func _ready() -> void:
 	_size = _progress.get_value("last", "size", DEFAULT_SIZE)
 	_number = _progress.get_value("last", "number", 1)
 	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
+	_run = _progress.get_value(CHALLENGE_KEY, "run", {})
 	_build_ui()
 	var dark: bool = _progress.get_value("settings", "dark_mode", false)
 	_settings.dark_mode_toggle.set_pressed_no_signal(dark)
@@ -110,8 +128,9 @@ func _build_ui() -> void:
 
 	_menu = Menu.new()
 	_menu.set_anchors_preset(PRESET_FULL_RECT)
-	_menu.continue_chosen.connect(_start_regular)
-	_menu.daily_chosen.connect(_start_daily)
+	_menu.continue_chosen.connect(_start.bind(Mode.REGULAR))
+	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
+	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.settings_chosen.connect(_show_settings)
 	add_child(_menu)
 
@@ -192,7 +211,8 @@ func _build_ui() -> void:
 	_undo_button = _button("Undo", _on_undo)
 	actions.add_child(_undo_button)
 	actions.add_child(_button("Clear", _on_clear))
-	actions.add_child(_button("Hint", _on_hint))
+	_hint_button = _button("Hint", _on_hint)
+	actions.add_child(_hint_button)
 
 	var help := _label("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.\n"
 			+ "Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo.", 14)
@@ -226,9 +246,9 @@ func _build_win_overlay() -> void:
 	box.add_theme_constant_override("separation", 14)
 	inner.add_child(box)
 
-	var heading := _label("Solved!", 32)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(heading)
+	_win_heading = _label("Solved!", 32)
+	_win_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_win_heading)
 	_win_label = _label("", 18)
 	_win_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_win_label)
@@ -238,7 +258,7 @@ func _build_win_overlay() -> void:
 	box.add_child(buttons)
 	buttons.add_child(_button("Look at board", func() -> void: _win_overlay.visible = false))
 	buttons.add_child(_button("Menu", _show_menu))
-	_next_puzzle_button = _button("Next puzzle", func() -> void: _go_to(_number + 1))
+	_next_puzzle_button = _button("Next puzzle", _on_next_puzzle)
 	buttons.add_child(_next_puzzle_button)
 
 
@@ -274,8 +294,15 @@ func _show_menu() -> void:
 		daily_detail = "Solved in %s" % _format_time(best)
 	elif _progress.get_value("solved", _daily_key(today), false):
 		daily_detail = "Solved (hints used)"
+	var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
+	var challenge_detail := "One life, no hints"
+	if not _run.is_empty():
+		challenge_detail = "Run in progress · Puzzle %d" % _run.level
+	elif best_run > 0:
+		challenge_detail = "Best run: %s" % _puzzles(best_run)
 	_menu.set_details("Continue" if started else "Play",
-			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number], daily_detail)
+			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number],
+			daily_detail, challenge_detail)
 
 
 func _show_settings() -> void:
@@ -320,26 +347,27 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_view.dark = enabled
 
 
-func _start_regular() -> void:
-	_daily = false
-	_open_game()
-
-
-func _start_daily() -> void:
-	_daily = true
-	_daily_date = _today()
-	_open_game()
-
-
-func _open_game() -> void:
+func _start(mode: Mode) -> void:
+	_mode = mode
+	if mode == Mode.DAILY:
+		_daily_date = _today()
+	elif mode == Mode.CHALLENGE and _run.is_empty():
+		_new_run()
 	_menu.visible = false
 	_game.visible = true
-	_size_picker.visible = not _daily
-	_difficulty_picker.visible = not _daily
-	_prev_button.visible = not _daily
-	_next_button.visible = not _daily
-	_next_puzzle_button.visible = not _daily
+	var regular := mode == Mode.REGULAR
+	_size_picker.visible = regular
+	_difficulty_picker.visible = regular
+	_prev_button.visible = regular
+	_next_button.visible = regular
+	_hint_button.visible = mode != Mode.CHALLENGE
 	_load_puzzle()
+
+
+func _new_run() -> void:
+	_run = {"seed": randi(), "level": 1, "elapsed": 0.0}
+	_progress.set_value(CHALLENGE_KEY, "run", _run)
+	_progress.save(save_path)
 
 
 func _load_puzzle() -> void:
@@ -353,15 +381,24 @@ func _load_puzzle() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var size := _daily_size(_daily_date) if _daily else _size
-	var difficulty: int = DAILY_DIFFICULTY if _daily else _difficulty
+	var size := _size
+	var difficulty := _difficulty
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(["daily", _daily_date]) if _daily else hash([_size, _difficulty, _number])
+	rng.seed = hash([_size, _difficulty, _number])
+	if _mode == Mode.DAILY:
+		size = _daily_size(_daily_date)
+		difficulty = DAILY_DIFFICULTY
+		rng.seed = hash(["daily", _daily_date])
+	elif _mode == Mode.CHALLENGE:
+		var stage: Array = _challenge_stage()
+		size = stage[0]
+		difficulty = stage[1]
+		rng.seed = hash([_run.seed, _run.level])
 	var puzzle := Generator.generate(size, difficulty, rng)
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
 	_board_key = _puzzle_key()
 	_hinted = false
-	_elapsed = 0.0
+	_elapsed = _run.elapsed if _mode == Mode.CHALLENGE else 0.0
 	var saved: Dictionary = _progress.get_value("in_progress", _board_key, {})
 	# Only restore onto the same layout, in case puzzle generation has changed since.
 	if saved.get("regions", PackedInt32Array()) == _board.regions:
@@ -375,20 +412,39 @@ func _load_puzzle() -> void:
 	_undo_button.disabled = true
 	_timer_label.text = _format_time(_elapsed)
 	_running = true
-	_puzzle_label.text = "Daily · %s" % _pretty_date(_daily_date) if _daily else "Puzzle #%d" % _number
+	match _mode:
+		Mode.REGULAR:
+			_puzzle_label.text = "Puzzle #%d" % _number
+		Mode.DAILY:
+			_puzzle_label.text = "Daily · %s" % _pretty_date(_daily_date)
+		Mode.CHALLENGE:
+			_puzzle_label.text = "The Climb #%d · %s" % [_run.level, Generator.DIFFICULTY_NAMES[difficulty]]
 	_update_best()
 
-	if not _daily:
+	if _mode == Mode.REGULAR:
 		_progress.set_value("last", "size", _size)
 		_progress.set_value("last", "number", _number)
 		_progress.set_value("last", "difficulty", _difficulty)
 		_progress.save(save_path)
 
 
+func _challenge_stage() -> Array:
+	return CHALLENGE_STAGES[mini(_run.level, CHALLENGE_STAGES.size()) - 1]
+
+
 func _go_to(number: int) -> void:
-	if number < 1 or _generating or _daily:
+	if number < 1 or _generating or _mode != Mode.REGULAR:
 		return
 	_number = number
+	_load_puzzle()
+
+
+func _on_next_puzzle() -> void:
+	if _mode == Mode.REGULAR:
+		_go_to(_number + 1)
+		return
+	if _mode == Mode.CHALLENGE and _run.is_empty():
+		_new_run()
 	_load_puzzle()
 
 
@@ -413,13 +469,19 @@ func _on_difficulty_selected(index: int) -> void:
 func _on_board_edited(changes: Array) -> void:
 	_undo.append(changes)
 	_undo_button.disabled = false
+	if _mode == Mode.CHALLENGE:
+		for change in changes:
+			var cell: Vector2i = change[0]
+			if change[2] == Board.Mark.CROWN and _board.solution[cell.x] != cell.y:
+				_end_run(cell)
+				return
 	_check_win()
 	_save_board()
 
 
 ## Stores the loaded board's marks and timer, or forgets them once it is solved.
 func _save_board() -> void:
-	if _board == null:
+	if _board == null or _board_key.is_empty():
 		return
 	if _board.is_solved():
 		if _progress.has_section_key("in_progress", _board_key):
@@ -465,7 +527,7 @@ func _on_clear() -> void:
 
 ## Removes a misplaced crown if there is one, otherwise places a correct crown.
 func _on_hint() -> void:
-	if not _view.interactive:
+	if not _view.interactive or _mode == Mode.CHALLENGE:
 		return
 	_hinted = true
 	for cell in _board.crowns():
@@ -497,6 +559,22 @@ func _check_win() -> void:
 		return
 	_running = false
 	_view.interactive = false
+	_win_heading.text = "Solved!"
+	_next_puzzle_button.visible = _mode != Mode.DAILY
+	_next_puzzle_button.text = "Next puzzle"
+	if _mode == Mode.CHALLENGE:
+		var solved: int = _run.level
+		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
+		if solved > best_run:
+			_progress.set_value(CHALLENGE_KEY, "best", solved)
+		_run.level += 1
+		_run.elapsed = _elapsed
+		_progress.set_value(CHALLENGE_KEY, "run", _run)
+		_progress.save(save_path)
+		_win_label.text = "%s solved · %s" % [_puzzles(solved), _format_time(_elapsed)]
+		_update_best()
+		_win_overlay.visible = true
+		return
 	var key := _puzzle_key()
 	var best: float = _progress.get_value("best", key, INF)
 	# Hinted solves don't count towards best times.
@@ -511,14 +589,43 @@ func _check_win() -> void:
 	_win_overlay.visible = true
 
 
+## A wrong crown ends the challenge run.
+func _end_run(mistake: Vector2i) -> void:
+	_running = false
+	_view.interactive = false
+	_view.mistake = mistake
+	var solved: int = _run.level - 1
+	var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
+	_run = {}
+	_board_key = ""
+	_progress.erase_section_key(CHALLENGE_KEY, "run")
+	if _progress.has_section_key("in_progress", CHALLENGE_KEY):
+		_progress.erase_section_key("in_progress", CHALLENGE_KEY)
+	_progress.save(save_path)
+	_win_heading.text = "Out of lives"
+	var note := "  (best run!)" if solved > 0 and solved >= best_run else ""
+	_win_label.text = "That crown doesn't belong there.\n%s solved · %s%s" % [_puzzles(solved), _format_time(_elapsed), note]
+	_next_puzzle_button.visible = true
+	_next_puzzle_button.text = "New run"
+	_update_best()
+	_win_overlay.visible = true
+
+
 func _update_best() -> void:
+	if _mode == Mode.CHALLENGE:
+		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
+		_best_label.text = "" if best_run == 0 else "Best run %d" % best_run
+		return
 	var best: float = _progress.get_value("best", _puzzle_key(), INF)
 	_best_label.text = "" if best == INF else "Best %s" % _format_time(best)
 
 
 func _puzzle_key() -> String:
-	if _daily:
-		return _daily_key(_daily_date)
+	match _mode:
+		Mode.DAILY:
+			return _daily_key(_daily_date)
+		Mode.CHALLENGE:
+			return CHALLENGE_KEY
 	return "%dx%d_%s_%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty].to_lower(), _number]
 
 
@@ -538,6 +645,10 @@ func _today() -> String:
 func _pretty_date(date: String) -> String:
 	var parts := date.split("-")
 	return "%s %d" % [MONTHS[parts[1].to_int() - 1], parts[2].to_int()]
+
+
+func _puzzles(count: int) -> String:
+	return "%d puzzle%s" % [count, "" if count == 1 else "s"]
 
 
 func _format_time(seconds: float) -> String:

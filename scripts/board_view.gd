@@ -26,6 +26,12 @@ const DOUBLE_TAP_MS := 400
 var board: Board:
 	set(value):
 		board = value
+		mistake = Vector2i(-1, -1)
+		queue_redraw()
+## A wrongly placed crown to show in red, or (-1, -1).
+var mistake := Vector2i(-1, -1):
+	set(value):
+		mistake = value
 		queue_redraw()
 ## When false the board ignores input, e.g. after the puzzle is solved.
 var interactive := true
@@ -156,7 +162,7 @@ func _draw() -> void:
 			var rect := Rect2(origin + Vector2(col, row) * cs, Vector2(cs, cs))
 			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
 			draw_rect(rect, fill.darkened(0.18) if dark else fill)
-			var conflicted := flags[board.index(cell)] == 1
+			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
 			if conflicted:
 				_draw_stripes(rect)
 			match board.get_mark(cell):

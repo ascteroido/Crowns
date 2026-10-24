@@ -162,7 +162,7 @@ func _run() -> void:
 	main._menu.daily_button.pressed.emit()
 	await _frames(10)
 	var daily: Board = main._board
-	_expect(main._daily and main.DAILY_SIZES.has(daily.size), "daily puzzle loads with a daily size")
+	_expect(main._mode == main.Mode.DAILY and main.DAILY_SIZES.has(daily.size), "daily puzzle loads with a daily size")
 	_expect(not main._size_picker.visible and not main._next_button.visible, "daily hides size and navigation")
 	_expect(main._puzzle_label.text.begins_with("Daily"), "daily label shown")
 	_screenshot("daily.png")
@@ -180,7 +180,7 @@ func _run() -> void:
 
 	main._menu.continue_button.pressed.emit()
 	await _frames(10)
-	_expect(not main._daily and main._number == 2 and main._next_button.visible, "continue resumes the regular puzzles")
+	_expect(main._mode == main.Mode.REGULAR and main._number == 2 and main._next_button.visible, "continue resumes the regular puzzles")
 	main._on_dark_mode_toggled(true)
 	await _right_click(view, Vector2i(0, 0))
 	await _click(view, Vector2i(2, 2))
@@ -254,10 +254,71 @@ func _run() -> void:
 	await _frames(10)
 	_expect(not graded._difficulty_picker.visible, "daily hides the difficulty picker")
 	graded.queue_free()
+	await _frames(2)
+	await _check_challenge()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
+
+
+func _check_challenge() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(game._menu._challenge_detail.text == "One life, no hints", "menu introduces the challenge")
+	game._menu.challenge_button.pressed.emit()
+	await _frames(10)
+	var view: Control = game._view
+	var board: Board = game._board
+	_expect(game._mode == game.Mode.CHALLENGE and not game._hint_button.visible, "challenge hides hints")
+	_expect(not game._size_picker.visible and not game._prev_button.visible, "challenge hides puzzle pickers")
+	_expect(board.size == 5 and Grader.grade(5, board.regions) == 1, "challenge starts with an easy 5x5")
+
+	# Solving advances the run and keeps the run's time going.
+	for row in board.size:
+		await _right_click(view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	_expect(game._win_overlay.visible and game._run.level == 2, "solving moves the run to puzzle 2")
+	_expect(game._progress.get_value("challenge", "best", 0) == 1, "best run counts the solved puzzle")
+	game._elapsed = 30.0
+	game._run.elapsed = 30.0
+	game._next_puzzle_button.pressed.emit()
+	await _frames(10)
+	board = game._board
+	_expect(game._puzzle_label.text.begins_with("The Climb #2") and game._elapsed >= 30.0, "next puzzle continues the run")
+
+	# Leaving mid-run keeps the run and its board.
+	await _click(view, Vector2i(0, 0))
+	var marks: PackedInt32Array = board.marks.duplicate()
+	game._show_menu()
+	_expect(game._menu._challenge_detail.text == "Run in progress · Puzzle 2", "menu offers the run in progress")
+	game._menu.challenge_button.pressed.emit()
+	await _frames(10)
+	board = game._board
+	_expect(game._run.level == 2 and board.marks == marks, "challenge resumes the same puzzle and board")
+
+	# Undo still works for crosses, but a wrong crown ends the run.
+	var wrong := Vector2i(0, (board.solution[0] + 2) % board.size)
+	await _right_click(view, wrong)
+	_expect(not view.interactive and game._win_heading.text == "Out of lives", "a wrong crown ends the run")
+	_expect(view.mistake == wrong, "the wrong crown is marked")
+	_expect(game._run.is_empty() and not game._progress.has_section_key("challenge", "run"), "the run is cleared")
+	_expect(not game._progress.has_section_key("in_progress", "challenge"), "the run's board is not kept")
+	_expect(game._win_label.text.contains("1 puzzle solved"), "game over shows the score")
+	await _frames(2)
+	_screenshot("challenge_over.png")
+	game._show_menu()
+	_expect(game._menu._challenge_detail.text == "Best run: 1 puzzle", "menu shows the best run")
+
+	game._menu.challenge_button.pressed.emit()
+	await _frames(10)
+	_expect(game._run.level == 1 and game._board.size == 5 and view.mistake == Vector2i(-1, -1), "a new run starts from the first puzzle")
+	_expect(game.CHALLENGE_STAGES[-1] == [10, Generator.Difficulty.HARD], "challenge ramps up to 10x10 Hard")
+	game._run.level = 99
+	_expect(game._challenge_stage() == game.CHALLENGE_STAGES[-1], "the last stage repeats")
+	game.queue_free()
 
 
 func _cell_center(view: Control, cell: Vector2i) -> Vector2:
