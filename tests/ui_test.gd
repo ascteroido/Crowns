@@ -30,6 +30,8 @@ func _run() -> void:
 	await _frames(3)
 	_expect(main._menu.visible and not main._game.visible and main._board == null, "starts on the menu")
 	_expect(main._menu.continue_button.text == "Play", "fresh save offers Play")
+	_expect(main._menu.exit_button.visible == OS.has_feature("pc"), "exit shows on desktop only")
+	_expect(main._menu.exit_chosen.is_connected(main._exit), "exit button closes the game")
 	_screenshot("menu.png")
 
 	# Settings: dark mode recolours the screen and is saved.
@@ -128,7 +130,11 @@ func _run() -> void:
 	_expect(board.get_mark(crown) == Board.Mark.CROWN and board.marks.has(Board.Mark.AUTO_CROSS), "undo restores crown and auto crosses")
 	main._on_undo()
 	_expect(not board.marks.has(Board.Mark.AUTO_CROSS) and board.get_mark(crown) == Board.Mark.EMPTY, "undo removes crown and auto crosses together")
-	main._on_hint()
+	for i in 100:
+		if board.marks.has(Board.Mark.CROWN):
+			break
+		main._on_hint()
+		main._on_hint()
 	_expect(board.marks.has(Board.Mark.AUTO_CROSS), "hinted crowns auto-cross too")
 	main._on_clear()
 	main._on_auto_cross_toggled(false)
@@ -141,11 +147,47 @@ func _run() -> void:
 	_screenshot("conflict.png")
 	main._on_clear()
 
+	# A hint explains a deduction first and only changes the board when applied.
+	main._on_hint()
+	var before: PackedInt32Array = board.marks.duplicate()
+	_expect(not main._hint_label.text.is_empty(), "hint shows an explanation")
+	_expect(main._hint_label.text[0] == main._hint_label.text[0].to_upper(), "explanation starts with a capital")
+	_expect(not view.hint_targets.is_empty() and board.marks == before, "hint highlights cells without changing the board")
+	_expect(main._hint_button.text == "Apply hint", "hint button offers to apply")
+	await _frames(2)
+	_screenshot("hint.png")
+	var targets: PackedInt32Array = view.hint_targets
+	main._on_hint()
+	var applied := true
+	for i in targets:
+		if board.marks[i] == before[i]:
+			applied = false
+	_expect(applied and main._hint_label.text.is_empty() and main._hint_button.text == "Hint", "applying a hint changes the highlighted cells")
+	main._on_hint()
+	await _click(view, Vector2i(board.size - 1, board.size - 1))
+	_expect(main._hint_label.text.is_empty() and view.hint_targets.is_empty(), "editing the board dismisses the hint")
+	main._on_clear()
+
+	# Mistakes are pointed out before any deduction.
+	var bad_crown := Vector2i(0, (board.solution[0] + 2) % board.size)
+	await _right_click(view, bad_crown)
+	main._on_hint()
+	_expect(main._hint_label.text == "This crown isn't part of the solution." and view.hint_targets == PackedInt32Array([board.index(bad_crown)]),
+			"hint points out a wrong crown")
+	main._on_hint()
+	_expect(board.get_mark(bad_crown) == Board.Mark.EMPTY, "applying removes the wrong crown")
+	var needed := Vector2i(1, board.solution[1])
+	await _slow_click(view, needed)
+	main._on_hint()
+	_expect(main._hint_label.text == "This cell is crossed out, but it needs a crown.", "hint points out a wrong cross")
+	main._on_hint()
+	_expect(board.get_mark(needed) == Board.Mark.EMPTY, "applying removes the wrong cross")
+	main._on_clear()
+
 	# Solve through hints and check the win overlay.
-	for i in board.size:
-		main._on_hint()
+	var steps := _solve_with_hints(main)
 	await _frames(3)
-	_expect(board.is_solved(), "hints solve the puzzle")
+	_expect(board.is_solved(), "hints solve the puzzle (%d steps)" % steps)
 	_expect(main._win_overlay.visible and not view.interactive, "win overlay shows and board locks")
 	_expect(main._best_label.text.is_empty(), "hinted solve does not record a best time")
 	_screenshot("solved.png")
@@ -171,8 +213,7 @@ func _run() -> void:
 	main._menu.daily_button.pressed.emit()
 	await _frames(10)
 	_expect(main._board.regions == daily.regions, "daily puzzle is the same when reopened")
-	for i in main._board.size:
-		main._on_hint()
+	_solve_with_hints(main)
 	await _frames(3)
 	_expect(main._win_overlay.visible and not main._next_puzzle_button.visible, "daily win has no next puzzle")
 	main._show_menu()
@@ -260,6 +301,27 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
+
+
+## Applies hints until solved, checking no hint ever makes a wrong mark. Returns the step count.
+func _solve_with_hints(game: Control) -> int:
+	var board: Board = game._board
+	var steps := 0
+	var sound := true
+	while not board.is_solved() and steps < 300:
+		game._on_hint()
+		var fallback: bool = game._hint_label.text.begins_with("There's no simple deduction")
+		game._on_hint()
+		steps += 1
+		_expect(not fallback, "every hint is a deduction")
+		for row in board.size:
+			for col in board.size:
+				var cell := Vector2i(row, col)
+				var is_solution: bool = board.solution[row] == col
+				if (board.get_mark(cell) == Board.Mark.CROWN and not is_solution) or (board.is_cross(cell) and is_solution):
+					sound = false
+	_expect(sound, "hints never make a wrong mark")
+	return steps
 
 
 func _check_challenge() -> void:

@@ -4,6 +4,7 @@ extends Control
 const Board := preload("res://scripts/board.gd")
 const BoardView := preload("res://scripts/board_view.gd")
 const Generator := preload("res://scripts/generator.gd")
+const Grader := preload("res://scripts/grader.gd")
 const Menu := preload("res://scripts/menu.gd")
 const Settings := preload("res://scripts/settings.gd")
 
@@ -50,6 +51,9 @@ var _running := false
 var _focused := true
 var _generating := false
 var _hinted := false
+## Hint on show: {"message": String, "focus", "targets": cell indices, "changes":
+## the [cell, old, new] batch Apply hint makes}. Empty when none is showing.
+var _hint := {}
 var _undo: Array = []
 var _progress := ConfigFile.new()
 
@@ -69,6 +73,7 @@ var _best_label: Label
 var _view: BoardView
 var _undo_button: Button
 var _hint_button: Button
+var _hint_label: Label
 var _win_overlay: Control
 var _win_heading: Label
 var _win_label: Label
@@ -132,6 +137,7 @@ func _build_ui() -> void:
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.settings_chosen.connect(_show_settings)
+	_menu.exit_chosen.connect(_exit)
 	add_child(_menu)
 
 	_settings = Settings.new()
@@ -212,7 +218,15 @@ func _build_ui() -> void:
 	actions.add_child(_undo_button)
 	actions.add_child(_button("Clear", _on_clear))
 	_hint_button = _button("Hint", _on_hint)
+	_hint_button.custom_minimum_size.x = 120
 	actions.add_child(_hint_button)
+
+	_hint_label = _label("", 16)
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Room for two lines kept even when empty, so the board doesn't resize as hints come and go.
+	_hint_label.custom_minimum_size.y = 46
+	column.add_child(_hint_label)
 
 	var help := _label("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.\n"
 			+ "Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo.", 14)
@@ -303,6 +317,11 @@ func _show_menu() -> void:
 	_menu.set_details("Continue" if started else "Play",
 			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number],
 			daily_detail, challenge_detail)
+
+
+func _exit() -> void:
+	_save_board()
+	get_tree().quit()
 
 
 func _show_settings() -> void:
@@ -406,6 +425,7 @@ func _load_puzzle() -> void:
 		_elapsed = saved.elapsed
 		_hinted = saved.hinted
 	_view.board = _board
+	_clear_hint()
 	_view.interactive = true
 	_generating = false
 	_undo.clear()
@@ -467,6 +487,7 @@ func _on_difficulty_selected(index: int) -> void:
 
 
 func _on_board_edited(changes: Array) -> void:
+	_clear_hint()
 	_undo.append(changes)
 	_undo_button.disabled = false
 	if _mode == Mode.CHALLENGE:
@@ -504,6 +525,7 @@ func _prune_old_dailies() -> void:
 func _on_undo() -> void:
 	if _undo.is_empty() or not _view.interactive:
 		return
+	_clear_hint()
 	var changes: Array = _undo.pop_back()
 	for i in range(changes.size() - 1, -1, -1):
 		_board.set_mark(changes[i][0], changes[i][1])
@@ -525,20 +547,121 @@ func _on_clear() -> void:
 	_apply(changes)
 
 
-## Removes a misplaced crown if there is one, otherwise places a correct crown.
+## First press explains the next deduction; pressing again (Apply hint) carries it out.
 func _on_hint() -> void:
 	if not _view.interactive or _mode == Mode.CHALLENGE:
 		return
+	if not _hint.is_empty():
+		_apply(_hint.changes.duplicate())
+		return
 	_hinted = true
+	_hint = _find_hint()
+	_hint_label.text = _hint.message
+	_view.hint_focus = _hint.focus
+	_view.hint_targets = _hint.targets
+	_hint_button.text = "Apply hint"
+
+
+func _clear_hint() -> void:
+	_hint = {}
+	_hint_label.text = ""
+	_view.hint_focus = PackedInt32Array()
+	_view.hint_targets = PackedInt32Array()
+	_hint_button.text = "Hint"
+
+
+## Points out a mistake if there is one, otherwise the easiest deduction left.
+func _find_hint() -> Dictionary:
+	var n := _board.size
 	for cell in _board.crowns():
 		if _board.solution[cell.x] != cell.y:
-			_apply([[cell, Board.Mark.CROWN, Board.Mark.EMPTY]])
-			return
-	for row in _board.size:
+			return _make_hint("This crown isn't part of the solution.", [cell], [[cell, Board.Mark.CROWN, Board.Mark.EMPTY]])
+	for row in n:
 		var cell := Vector2i(row, _board.solution[row])
-		if _board.get_mark(cell) != Board.Mark.CROWN:
-			_apply([[cell, _board.get_mark(cell), Board.Mark.CROWN]])
-			return
+		if _board.is_cross(cell):
+			return _make_hint("This cell is crossed out, but it needs a crown.", [cell],
+					[[cell, _board.get_mark(cell), Board.Mark.EMPTY]])
+
+	var step := Grader.next_step(n, _board.regions, _board.marks)
+	if step.is_empty():
+		for row in n:
+			var cell := Vector2i(row, _board.solution[row])
+			if _board.get_mark(cell) != Board.Mark.CROWN:
+				return _make_hint("There's no simple deduction from here, so here's a crown.", [cell],
+						[[cell, _board.get_mark(cell), Board.Mark.CROWN]])
+	var changes := []
+	var targets: Array[Vector2i] = []
+	if step.crown >= 0:
+		var cell := Vector2i(step.crown / n, step.crown % n)
+		changes.append([cell, _board.get_mark(cell), Board.Mark.CROWN])
+		targets.append(cell)
+	for i: int in step.cross:
+		var cell := Vector2i(i / n, i % n)
+		changes.append([cell, _board.get_mark(cell), Board.Mark.CROSS])
+		targets.append(cell)
+	var hint := _make_hint(_explain(step), targets, changes)
+	hint.focus = step.focus
+	return hint
+
+
+func _make_hint(message: String, targets: Array, changes: Array) -> Dictionary:
+	var indices := PackedInt32Array()
+	for cell: Vector2i in targets:
+		indices.append(_board.index(cell))
+	return {"message": message, "focus": indices, "targets": indices, "changes": changes}
+
+
+func _explain(step: Dictionary) -> String:
+	var from: Array = step.from
+	match step.rule:
+		"single":
+			return "%s has only one cell left that can hold its crown." % _upper_first(_group_name(from[0]))
+		"blocker":
+			var cell: int = step.cross[0]
+			return "A crown in row %d, column %d would rule out every open cell left in %s, so cross it out." \
+					% [cell / _board.size + 1, cell % _board.size + 1, _group_name(from[0])]
+	var to: Array = step.to
+	if from.size() == 1:
+		var a := _group_name(from[0])
+		var b := _group_name(to[0])
+		return "%s's open cells all lie in %s, so %s's crown must come from %s. Cross out the rest of %s." \
+				% [_upper_first(a), b, b, a, b]
+	var a := _group_names(from)
+	var b := _group_names(to)
+	return "%s only have open cells in %s, so their %d crowns fill %s. Cross out everything else in %s." \
+			% [_upper_first(a), b, from.size(), b, b]
+
+
+func _upper_first(text: String) -> String:
+	return text[0].to_upper() + text.substr(1)
+
+
+func _group_name(group: int) -> String:
+	var index := Grader.group_index(_board.size, group)
+	match Grader.group_kind(_board.size, group):
+		Grader.Kind.ROW:
+			return "row %d" % (index + 1)
+		Grader.Kind.COLUMN:
+			return "column %d" % (index + 1)
+	return "the %s region" % BoardView.REGION_NAMES[index % BoardView.REGION_NAMES.size()]
+
+
+## "rows 2 and 3", "the purple, blue and green regions".
+func _group_names(groups: Array) -> String:
+	var parts: Array[String] = []
+	for group: int in groups:
+		var index := Grader.group_index(_board.size, group)
+		if Grader.group_kind(_board.size, group) == Grader.Kind.REGION:
+			parts.append(BoardView.REGION_NAMES[index % BoardView.REGION_NAMES.size()])
+		else:
+			parts.append(str(index + 1))
+	var listed := ", ".join(parts.slice(0, -1)) + " and " + parts[-1]
+	match Grader.group_kind(_board.size, groups[0]):
+		Grader.Kind.ROW:
+			return "rows " + listed
+		Grader.Kind.COLUMN:
+			return "columns " + listed
+	return "the %s regions" % listed
 
 
 ## Applies an undoable batch of [cell, old, new] changes made outside the board view.

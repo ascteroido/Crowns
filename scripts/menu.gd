@@ -5,11 +5,13 @@ signal continue_chosen
 signal daily_chosen
 signal challenge_chosen
 signal settings_chosen
+signal exit_chosen
 
 var continue_button: Button
 var daily_button: Button
 var challenge_button: Button
 var settings_button: Button
+var exit_button: Button
 var _continue_detail: Label
 var _daily_detail: Label
 var _challenge_detail: Label
@@ -54,6 +56,11 @@ func _ready() -> void:
 
 	settings_button = _button("Settings", settings_chosen.emit)
 	box.add_child(settings_button)
+
+	# Phones and browsers leave closing apps to the system.
+	exit_button = _button("Exit", exit_chosen.emit)
+	exit_button.visible = OS.has_feature("pc")
+	box.add_child(exit_button)
 
 
 func set_details(continue_title: String, continue_detail: String, daily_detail: String, challenge_detail: String) -> void:

@@ -7,7 +7,7 @@
 
 ## Puzzle quality
 - [x] Difficulty grading: rate puzzles by the deduction steps a logic solver needs; offer Easy/Medium/Hard
-- [ ] Teaching hints: point out the next deduction instead of revealing a crown
+- [x] Teaching hints: point out the next deduction instead of revealing a crown
 
 ## Daily and progress
 - [x] The Climb (challenge mode): one life, no hints, puzzles ramp from 5×5 Easy to 10×10 Hard

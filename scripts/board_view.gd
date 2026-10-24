@@ -17,7 +17,10 @@ const REGION_COLORS: Array[Color] = [
 	Color("bba3e2"), Color("ffc992"), Color("96beff"), Color("b3dfa0"), Color("dfdfdf"),
 	Color("e6f388"), Color("dfa0bf"), Color("a3d2d8"), Color("b9b29e"), Color("7fd1ae"),
 ]
+const REGION_NAMES := ["purple", "orange", "blue", "green", "grey", "yellow", "pink", "teal", "tan", "mint"]
 const LINE_COLOR := Color(0.1, 0.1, 0.1, 0.35)
+const HINT_COLOR := Color("2f6fde")
+const HINT_DIM := Color(0, 0, 0, 0.3)
 const BORDER_COLOR := Color("1e1e1e")
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
@@ -27,6 +30,18 @@ var board: Board:
 	set(value):
 		board = value
 		mistake = Vector2i(-1, -1)
+		hint_focus = PackedInt32Array()
+		hint_targets = PackedInt32Array()
+		queue_redraw()
+## Cell indices a hint is about; every other cell is dimmed while it's set.
+var hint_focus := PackedInt32Array():
+	set(value):
+		hint_focus = value
+		queue_redraw()
+## Cell indices a hint would change, ringed in blue.
+var hint_targets := PackedInt32Array():
+	set(value):
+		hint_targets = value
 		queue_redraw()
 ## A wrongly placed crown to show in red, or (-1, -1).
 var mistake := Vector2i(-1, -1):
@@ -172,6 +187,12 @@ func _draw() -> void:
 					_draw_cross(rect, Color(MARK_COLOR, 0.45))
 				Board.Mark.CROWN:
 					_draw_crown(rect, CONFLICT_COLOR if conflicted else MARK_COLOR)
+			var i := board.index(cell)
+			if not hint_focus.is_empty() and not hint_focus.has(i):
+				draw_rect(rect, HINT_DIM)
+			if hint_targets.has(i):
+				var inset := cs * 0.1
+				draw_rect(rect.grow(-inset), HINT_COLOR, false, maxf(2.0, cs * 0.07))
 
 	# Thin lines between all cells, thick ones where regions meet.
 	var thin := maxf(1.0, cs * 0.02)
