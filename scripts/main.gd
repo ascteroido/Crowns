@@ -8,6 +8,7 @@ const Grader := preload("res://scripts/grader.gd")
 const Menu := preload("res://scripts/menu.gd")
 const Settings := preload("res://scripts/settings.gd")
 const Stats := preload("res://scripts/stats.gd")
+const PlayGames := preload("res://scripts/play_games.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -19,6 +20,7 @@ const DEFAULT_SIZE := 7
 const DAILY_SIZES := [7, 8, 9]
 const DEFAULT_DIFFICULTY := Generator.Difficulty.MEDIUM
 const DAILY_DIFFICULTY := Generator.Difficulty.MEDIUM
+const DAILY_UTC_OFFSET := -7 * 3600
 ## [size, difficulty] for each challenge puzzle; the last one repeats.
 const CHALLENGE_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
@@ -66,6 +68,7 @@ var _panel_style := StyleBoxFlat.new()
 var _menu: Menu
 var _settings: Settings
 var _stats: Stats
+var _play_games: PlayGames
 var _game: Control
 var _size_picker: OptionButton
 var _difficulty_picker: OptionButton
@@ -82,6 +85,7 @@ var _win_overlay: Control
 var _win_heading: Label
 var _win_label: Label
 var _next_puzzle_button: Button
+var _win_leaderboard_button: Button
 
 
 func _ready() -> void:
@@ -96,6 +100,8 @@ func _ready() -> void:
 	_apply_dark_mode(dark)
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false)
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
+	_view.patterns = _progress.get_value("settings", "patterns", false)
+	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
 	_prune_old_dailies()
 	_show_menu()
 
@@ -141,6 +147,7 @@ func _build_ui() -> void:
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.stats_chosen.connect(_show_stats)
+	_menu.leaderboards_chosen.connect(func() -> void: _play_games.show_all())
 	_menu.settings_chosen.connect(_show_settings)
 	_menu.exit_chosen.connect(_exit)
 	add_child(_menu)
@@ -150,6 +157,7 @@ func _build_ui() -> void:
 	_settings.visible = false
 	_settings.dark_mode_toggled.connect(_on_dark_mode_toggled)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
+	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.back.connect(_show_menu)
 	add_child(_settings)
 
@@ -158,6 +166,10 @@ func _build_ui() -> void:
 	_stats.visible = false
 	_stats.back.connect(_show_menu)
 	add_child(_stats)
+
+	_play_games = PlayGames.new()
+	add_child(_play_games)
+	_menu.leaderboards_button.visible = _play_games.available()
 
 	_game = Control.new()
 	_game.set_anchors_preset(PRESET_FULL_RECT)
@@ -285,6 +297,9 @@ func _build_win_overlay() -> void:
 	buttons.add_child(_button("Menu", _show_menu))
 	_next_puzzle_button = _button("Next puzzle", _on_next_puzzle)
 	buttons.add_child(_next_puzzle_button)
+	_win_leaderboard_button = _button("Leaderboard", _show_mode_leaderboard)
+	_win_leaderboard_button.visible = _play_games.available()
+	buttons.add_child(_win_leaderboard_button)
 
 
 func _label(text: String, font_size: int) -> Label:
@@ -416,6 +431,12 @@ func _on_dark_mode_toggled(enabled: bool) -> void:
 func _on_auto_cross_toggled(enabled: bool) -> void:
 	_view.auto_cross = enabled
 	_progress.set_value("settings", "auto_cross", enabled)
+	_progress.save(save_path)
+
+
+func _on_patterns_toggled(enabled: bool) -> void:
+	_view.patterns = enabled
+	_progress.set_value("settings", "patterns", enabled)
 	_progress.save(save_path)
 
 
@@ -773,6 +794,7 @@ func _check_win() -> void:
 		_run.elapsed = _elapsed
 		_progress.set_value(CHALLENGE_KEY, "run", _run)
 		_add_stat("climb_solved", 1)
+		_play_games.submit_climb(solved)
 		_progress.save(save_path)
 		_win_label.text = "%s solved · %s" % [_puzzles(solved), _format_time(_elapsed)]
 		_update_best()
@@ -788,6 +810,11 @@ func _check_win() -> void:
 		_record_solve(_board.size, _hinted, _elapsed)
 		if _mode == Mode.DAILY:
 			_record_daily(_daily_date)
+		elif not _hinted:
+			_add_stat("puzzles_unhinted", 1)
+			_play_games.submit_solved(_progress.get_value(STATS, "puzzles_unhinted", 0))
+	if _mode == Mode.DAILY and not _hinted:
+		_play_games.submit_daily_time(_elapsed)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
 	var note := "  (hints used)" if _hinted else "  (new best!)" if record and best != INF else ""
@@ -818,6 +845,17 @@ func _end_run(mistake: Vector2i) -> void:
 	_win_overlay.visible = true
 
 
+## Opens the Play Games board for the mode just played.
+func _show_mode_leaderboard() -> void:
+	match _mode:
+		Mode.DAILY:
+			_play_games.show_daily()
+		Mode.CHALLENGE:
+			_play_games.show_climb()
+		_:
+			_play_games.show_solved()
+
+
 func _update_best() -> void:
 	if _mode == Mode.CHALLENGE:
 		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
@@ -844,8 +882,10 @@ func _daily_size(date: String) -> int:
 	return DAILY_SIZES[posmod(hash(["daily_size", date]), DAILY_SIZES.size())]
 
 
+## The daily puzzle's date. It changes at midnight UTC−7 for everyone, the
+## moment Google Play Games resets its daily leaderboards.
 func _today() -> String:
-	return Time.get_date_string_from_system()
+	return Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET)
 
 
 ## "2026-10-23" -> "Oct 23".

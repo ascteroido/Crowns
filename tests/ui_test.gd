@@ -4,6 +4,7 @@ extends SceneTree
 ## Saves screenshots when a directory is given and a renderer is available.
 
 const Board := preload("res://scripts/board.gd")
+const BoardViewScript := preload("res://scripts/board_view.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
 const TEST_SAVE := "user://test_progress.cfg"
@@ -299,6 +300,8 @@ func _run() -> void:
 	await _check_challenge()
 	await _frames(2)
 	await _check_stats()
+	await _frames(2)
+	await _check_patterns()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
@@ -416,6 +419,13 @@ func _check_stats() -> void:
 	_expect(progress.get_value("stats", "solved_5", 0) == 1, "a puzzle counts once however often it's solved")
 	_expect(progress.get_value("stats", "timed_5", 0) == 1 and progress.get_value("stats", "best_5", INF) < 41.0,
 			"unhinted solves record their time")
+	_expect(progress.get_value("stats", "puzzles_unhinted", 0) == 1, "unhinted numbered solves are counted for the leaderboard")
+
+	# Play Games only exists on Android; elsewhere its buttons stay hidden and calls do nothing.
+	_expect(not game._play_games.available() and not game._menu.leaderboards_button.visible
+			and not game._win_leaderboard_button.visible, "leaderboard buttons are hidden off Android")
+	var utc_minus_7 := Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) - 7 * 3600)
+	_expect(game._today() == utc_minus_7, "the daily date follows UTC-7")
 
 	# Streak dates.
 	_expect(game._day_before("2026-03-01") == "2026-02-28" and game._day_before("2028-03-01") == "2028-02-29"
@@ -444,6 +454,40 @@ func _check_stats() -> void:
 	game._stats.back.emit()
 	_expect(game._menu.visible and not game._stats.visible, "back returns from stats")
 	game.queue_free()
+
+
+func _check_patterns() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.settings_button.pressed.emit()
+	game._settings.patterns_toggle.button_pressed = true
+	_expect(game._view.patterns, "region patterns turn on from settings")
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "patterns", false) == true, "region patterns setting is saved")
+	game._settings.patterns_toggle.button_pressed = false
+	game.queue_free()
+	await _frames(2)
+
+	# Every pattern side by side: one region per row of a 14x14 board.
+	var regions := PackedInt32Array()
+	for row in 14:
+		for col in 14:
+			regions.append(row)
+	var board := Board.new(14, regions, PackedInt32Array())
+	board.set_mark(Vector2i(2, 3), Board.Mark.CROSS)
+	board.set_mark(Vector2i(5, 8), Board.Mark.CROWN)
+	board.set_mark(Vector2i(9, 1), Board.Mark.AUTO_CROSS)
+	var view := BoardViewScript.new()
+	view.size = Vector2(root.size)
+	view.patterns = true
+	root.add_child(view)
+	view.board = board
+	await _frames(3)
+	_screenshot("patterns.png")
+	view.queue_free()
 
 
 func _cell_center(view: Control, cell: Vector2i) -> Vector2:

@@ -16,11 +16,15 @@ signal edited(changes: Array)
 const REGION_COLORS: Array[Color] = [
 	Color("bba3e2"), Color("ffc992"), Color("96beff"), Color("b3dfa0"), Color("dfdfdf"),
 	Color("e6f388"), Color("dfa0bf"), Color("a3d2d8"), Color("b9b29e"), Color("7fd1ae"),
+	Color("f4a99b"), Color("e8c55e"), Color("a9bd72"), Color("a9b0f0"),
 ]
-const REGION_NAMES := ["purple", "orange", "blue", "green", "grey", "yellow", "pink", "teal", "tan", "mint"]
+const REGION_NAMES := ["purple", "orange", "blue", "green", "grey", "yellow", "pink", "teal", "tan", "mint",
+		"salmon", "gold", "olive", "periwinkle"]
 const LINE_COLOR := Color(0.1, 0.1, 0.1, 0.35)
 const HINT_COLOR := Color("2f6fde")
 const HINT_DIM := Color(0, 0, 0, 0.3)
+const PATTERN_INK := Color(0, 0, 0, 0.2)
+const PATTERN_COUNT := 14
 const BORDER_COLOR := Color("1e1e1e")
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
@@ -52,6 +56,11 @@ var mistake := Vector2i(-1, -1):
 var interactive := true
 ## Placing or removing a crown also adds or removes the auto crosses it implies.
 var auto_cross := false
+## Gives each region its own texture so regions can be told apart without colour.
+var patterns := false:
+	set(value):
+		patterns = value
+		queue_redraw()
 ## Dims the region colours so they don't glare on a dark background.
 var dark := false:
 	set(value):
@@ -177,6 +186,8 @@ func _draw() -> void:
 			var rect := Rect2(origin + Vector2(col, row) * cs, Vector2(cs, cs))
 			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
 			draw_rect(rect, fill.darkened(0.18) if dark else fill)
+			if patterns:
+				_draw_pattern(rect, board.region_at(cell))
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
 			if conflicted:
 				_draw_stripes(rect)
@@ -212,6 +223,93 @@ func _draw() -> void:
 				draw_line(Vector2(top_left.x, y), Vector2(top_left.x + cs, y),
 						BORDER_COLOR if below_differs else LINE_COLOR, thick if below_differs else thin)
 	draw_rect(Rect2(origin, Vector2(cs, cs) * n), BORDER_COLOR, false, thick)
+
+
+## One of PATTERN_COUNT faint textures, repeating every third or quarter of a
+## cell so neighbouring cells of a region join up. None of them look like a
+## cross, and the only diagonal lines run the opposite way to conflict hatching.
+func _draw_pattern(rect: Rect2, region: int) -> void:
+	var s := rect.size.x
+	var p := rect.position
+	var w := maxf(1.0, s * 0.035)
+	var ink := PATTERN_INK
+	match region % PATTERN_COUNT:
+		0: # dots
+			for i in 3:
+				for j in 3:
+					draw_circle(p + Vector2(i + 0.5, j + 0.5) * s / 3.0, s * 0.045, ink, true, -1.0, true)
+		1: # horizontal lines
+			for j in 3:
+				var y := p.y + (j + 0.5) * s / 3.0
+				draw_line(Vector2(p.x, y), Vector2(p.x + s, y), ink, w)
+		2: # vertical lines
+			for i in 3:
+				var x := p.x + (i + 0.5) * s / 3.0
+				draw_line(Vector2(x, p.y), Vector2(x, p.y + s), ink, w)
+		3: # diagonals running top-left to bottom-right
+			for k in range(-3, 4):
+				var c := k * s / 3.0
+				var a := Vector2(maxf(0.0, c), maxf(0.0, -c))
+				var b := Vector2(minf(s, s + c), minf(s, s - c))
+				draw_line(p + a, p + b, ink, w)
+		4: # grid
+			for k in 2:
+				var t := (k + 0.5) * s / 2.0
+				draw_line(p + Vector2(t, 0), p + Vector2(t, s), ink, w)
+				draw_line(p + Vector2(0, t), p + Vector2(s, t), ink, w)
+		5: # rings
+			for i in 2:
+				for j in 2:
+					draw_arc(p + Vector2(i + 0.5, j + 0.5) * s / 2.0, s * 0.13, 0, TAU, 20, ink, w, true)
+		6: # plus signs
+			for i in 2:
+				for j in 2:
+					var c := p + Vector2(i + 0.5, j + 0.5) * s / 2.0
+					var r := s * 0.09
+					draw_line(c - Vector2(r, 0), c + Vector2(r, 0), ink, w)
+					draw_line(c - Vector2(0, r), c + Vector2(0, r), ink, w)
+		7: # small squares
+			for i in 2:
+				for j in 2:
+					var c := p + Vector2(i + 0.5, j + 0.5) * s / 2.0
+					draw_rect(Rect2(c - Vector2.ONE * s * 0.09, Vector2.ONE * s * 0.18), ink, false, w)
+		8: # diamonds
+			for i in 2:
+				for j in 2:
+					var c := p + Vector2(i + 0.5, j + 0.5) * s / 2.0
+					var r := s * 0.12
+					draw_polyline(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r),
+							c + Vector2(-r, 0), c + Vector2(0, -r)]), ink, w, true)
+		9: # triangles
+			for i in 2:
+				for j in 2:
+					var c := p + Vector2(i + 0.5, j + 0.5) * s / 2.0
+					var r := s * 0.1
+					draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, r * 0.8),
+							c + Vector2(-r, r * 0.8)]), ink)
+		10: # zigzags
+			for j in 2:
+				var y := p.y + (j + 0.5) * s / 2.0
+				var points := PackedVector2Array()
+				for k in 7:
+					points.append(Vector2(p.x + k * s / 6.0, y + (s * 0.06 if k % 2 else -s * 0.06)))
+				draw_polyline(points, ink, w, true)
+		11: # checks
+			for i in 4:
+				for j in 4:
+					if (i + j) % 2 == 0:
+						draw_rect(Rect2(p + Vector2(i, j) * s / 4.0, Vector2.ONE * s / 4.0), Color(ink, ink.a * 0.6))
+		12: # fine dots
+			for i in 4:
+				for j in 4:
+					draw_circle(p + Vector2(i + 0.5, j + 0.5) * s / 4.0, s * 0.025, ink, true, -1.0, true)
+		13: # dashes
+			for j in 3:
+				var y := p.y + (j + 0.5) * s / 3.0
+				var shift := 0.0 if j % 2 == 0 else s / 6.0
+				for k in 3:
+					var x := p.x + shift + k * s / 3.0 - s / 12.0
+					draw_line(Vector2(maxf(p.x, x), y), Vector2(minf(p.x + s, x + s / 6.0), y), ink, w)
 
 
 ## Red diagonal hatching over a cell that breaks a rule.

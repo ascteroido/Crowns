@@ -5,6 +5,7 @@ signal continue_chosen
 signal daily_chosen
 signal challenge_chosen
 signal stats_chosen
+signal leaderboards_chosen
 signal settings_chosen
 signal exit_chosen
 
@@ -12,6 +13,7 @@ var continue_button: Button
 var daily_button: Button
 var challenge_button: Button
 var stats_button: Button
+var leaderboards_button: Button
 var settings_button: Button
 var exit_button: Button
 var _continue_detail: Label
@@ -58,6 +60,11 @@ func _ready() -> void:
 
 	stats_button = _button("Stats", stats_chosen.emit)
 	box.add_child(stats_button)
+
+	# Shown only where Google Play Games is available.
+	leaderboards_button = _button("Leaderboards", leaderboards_chosen.emit)
+	leaderboards_button.visible = false
+	box.add_child(leaderboards_button)
 
 	settings_button = _button("Settings", settings_chosen.emit)
 	box.add_child(settings_button)
