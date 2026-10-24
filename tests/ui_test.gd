@@ -217,7 +217,7 @@ func _run() -> void:
 	await _frames(3)
 	_expect(main._win_overlay.visible and not main._next_puzzle_button.visible, "daily win has no next puzzle")
 	main._show_menu()
-	_expect(main._menu._daily_detail.text == "Solved (hints used)", "menu shows the daily as solved")
+	_expect(main._menu._daily_detail.text.begins_with("Solved (hints used)"), "menu shows the daily as solved")
 
 	main._menu.continue_button.pressed.emit()
 	await _frames(10)
@@ -297,6 +297,8 @@ func _run() -> void:
 	graded.queue_free()
 	await _frames(2)
 	await _check_challenge()
+	await _frames(2)
+	await _check_stats()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
@@ -380,6 +382,67 @@ func _check_challenge() -> void:
 	_expect(game.CHALLENGE_STAGES[-1] == [10, Generator.Difficulty.HARD], "challenge ramps up to 10x10 Hard")
 	game._run.level = 99
 	_expect(game._challenge_stage() == game.CHALLENGE_STAGES[-1], "the last stage repeats")
+	game.queue_free()
+
+
+func _check_stats() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var progress: ConfigFile = game._progress
+
+	# Earlier in this run: a hinted 7x7, a hinted daily and two Climb runs with one clear.
+	_expect(progress.get_value("stats", "solved_7", 0) >= 1 and progress.get_value("stats", "timed_7", 0) == 0,
+			"hinted solves count as solved but not timed")
+	_expect(progress.get_value("stats", "dailies_solved", 0) == 1 and game._current_streak() == 1, "solving the daily starts a streak")
+	_expect(game._menu._daily_detail.text.ends_with("1 day streak"), "menu shows the daily streak")
+	_expect(progress.get_value("stats", "climb_runs", 0) == 2 and progress.get_value("stats", "climb_solved", 0) == 1,
+			"Climb runs and clears are counted")
+
+	# An unhinted solve is timed; solving the same puzzle again isn't counted twice.
+	game._menu.continue_button.pressed.emit()
+	await _frames(10)
+	game._size_picker.select(0)
+	game._on_size_selected(0)
+	await _frames(10)
+	for attempt in 2:
+		var board: Board = game._board
+		game._elapsed = 40.0
+		for row in board.size:
+			await _right_click(game._view, Vector2i(row, board.solution[row]))
+		game._go_to(1)
+		await _frames(10)
+	_expect(progress.get_value("stats", "solved_5", 0) == 1, "a puzzle counts once however often it's solved")
+	_expect(progress.get_value("stats", "timed_5", 0) == 1 and progress.get_value("stats", "best_5", INF) < 41.0,
+			"unhinted solves record their time")
+
+	# Streak dates.
+	_expect(game._day_before("2026-03-01") == "2026-02-28" and game._day_before("2028-03-01") == "2028-02-29"
+			and game._day_before("2027-01-01") == "2026-12-31", "the day before handles month, leap year and year ends")
+	var today: String = game._today()
+	progress.set_value("stats", "last_daily", game._day_before(today))
+	progress.set_value("stats", "streak", 4)
+	_expect(game._current_streak() == 4, "a streak survives until today's daily is due")
+	game._record_daily(today)
+	_expect(game._current_streak() == 5 and progress.get_value("stats", "longest_streak", 0) == 5, "solving the next day extends the streak")
+	progress.set_value("stats", "last_daily", game._day_before(game._day_before(today)))
+	_expect(game._current_streak() == 0, "missing a day breaks the streak")
+	game._record_daily(today)
+	_expect(progress.get_value("stats", "streak", 0) == 1 and progress.get_value("stats", "longest_streak", 0) == 5,
+			"a new streak starts at 1 and keeps the longest")
+
+	game._show_menu()
+	game._menu.stats_button.pressed.emit()
+	await _frames(3)
+	_expect(game._stats.visible and not game._menu.visible, "stats opens from the menu")
+	var texts := []
+	for label in game._stats.find_children("*", "Label", true, false):
+		texts.append(label.text)
+	_expect(texts.has("5×5") and texts.has("0:40") and texts.has("5 days"), "stats screen shows sizes, times and streaks")
+	_screenshot("stats.png")
+	game._stats.back.emit()
+	_expect(game._menu.visible and not game._stats.visible, "back returns from stats")
 	game.queue_free()
 
 

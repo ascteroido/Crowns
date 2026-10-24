@@ -7,6 +7,7 @@ const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
 const Menu := preload("res://scripts/menu.gd")
 const Settings := preload("res://scripts/settings.gd")
+const Stats := preload("res://scripts/stats.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -27,6 +28,8 @@ const CHALLENGE_STAGES := [
 	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
 ]
 const CHALLENGE_KEY := "challenge"
+## Save section for streaks and per-size totals.
+const STATS := "stats"
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ## Where progress and best times are stored; tests point this elsewhere.
@@ -62,6 +65,7 @@ var _background: ColorRect
 var _panel_style := StyleBoxFlat.new()
 var _menu: Menu
 var _settings: Settings
+var _stats: Stats
 var _game: Control
 var _size_picker: OptionButton
 var _difficulty_picker: OptionButton
@@ -112,7 +116,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _settings.visible and event.is_action_pressed("ui_cancel"):
+	if (_settings.visible or _stats.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
 	if not _game.visible:
@@ -136,6 +140,7 @@ func _build_ui() -> void:
 	_menu.continue_chosen.connect(_start.bind(Mode.REGULAR))
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
+	_menu.stats_chosen.connect(_show_stats)
 	_menu.settings_chosen.connect(_show_settings)
 	_menu.exit_chosen.connect(_exit)
 	add_child(_menu)
@@ -147,6 +152,12 @@ func _build_ui() -> void:
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.back.connect(_show_menu)
 	add_child(_settings)
+
+	_stats = Stats.new()
+	_stats.set_anchors_preset(PRESET_FULL_RECT)
+	_stats.visible = false
+	_stats.back.connect(_show_menu)
+	add_child(_stats)
 
 	_game = Control.new()
 	_game.set_anchors_preset(PRESET_FULL_RECT)
@@ -298,6 +309,7 @@ func _show_menu() -> void:
 	_running = false
 	_game.visible = false
 	_settings.visible = false
+	_stats.visible = false
 	_menu.visible = true
 	var started := _progress.has_section("last")
 	var today := _today()
@@ -308,6 +320,9 @@ func _show_menu() -> void:
 		daily_detail = "Solved in %s" % _format_time(best)
 	elif _progress.get_value("solved", _daily_key(today), false):
 		daily_detail = "Solved (hints used)"
+	var streak := _current_streak()
+	if streak > 0:
+		daily_detail += " · %s streak" % _days(streak)
 	var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
 	var challenge_detail := "One life, no hints"
 	if not _run.is_empty():
@@ -322,6 +337,69 @@ func _show_menu() -> void:
 func _exit() -> void:
 	_save_board()
 	get_tree().quit()
+
+
+func _show_stats() -> void:
+	var daily := [
+		["Current streak", _days(_current_streak())],
+		["Longest streak", _days(_progress.get_value(STATS, "longest_streak", 0))],
+		["Dailies solved", _progress.get_value(STATS, "dailies_solved", 0)],
+	]
+	var sizes := []
+	for size: int in SIZES:
+		var timed: int = _progress.get_value(STATS, "timed_%d" % size, 0)
+		var total: float = _progress.get_value(STATS, "time_%d" % size, 0.0)
+		var best: float = _progress.get_value(STATS, "best_%d" % size, INF)
+		sizes.append(["%d×%d" % [size, size], _progress.get_value(STATS, "solved_%d" % size, 0),
+				_format_time(total / timed) if timed > 0 else "–", _format_time(best) if best != INF else "–"])
+	var climb := [
+		["Best run", _puzzles(_progress.get_value(CHALLENGE_KEY, "best", 0))],
+		["Runs played", _progress.get_value(STATS, "climb_runs", 0)],
+		["Puzzles cleared", _progress.get_value(STATS, "climb_solved", 0)],
+	]
+	_stats.set_stats(daily, sizes, climb)
+	_menu.visible = false
+	_stats.visible = true
+
+
+## Counts a puzzle's first solve; only solves without hints count towards times.
+func _record_solve(size: int, hinted: bool, seconds: float) -> void:
+	_add_stat("solved_%d" % size, 1)
+	if hinted:
+		return
+	_add_stat("timed_%d" % size, 1)
+	_add_stat("time_%d" % size, seconds)
+	if seconds < _progress.get_value(STATS, "best_%d" % size, INF):
+		_progress.set_value(STATS, "best_%d" % size, seconds)
+
+
+## Extends the streak when the previous solved daily was the day before.
+func _record_daily(date: String) -> void:
+	_add_stat("dailies_solved", 1)
+	var last: String = _progress.get_value(STATS, "last_daily", "")
+	var streak: int = _progress.get_value(STATS, "streak", 0)
+	streak = streak + 1 if last == _day_before(date) else 1
+	_progress.set_value(STATS, "streak", streak)
+	_progress.set_value(STATS, "last_daily", date)
+	if streak > _progress.get_value(STATS, "longest_streak", 0):
+		_progress.set_value(STATS, "longest_streak", streak)
+
+
+## The streak stays alive until a whole day passes without solving the daily.
+func _current_streak() -> int:
+	var last: String = _progress.get_value(STATS, "last_daily", "")
+	var today := _today()
+	if last != today and last != _day_before(today):
+		return 0
+	return _progress.get_value(STATS, "streak", 0)
+
+
+func _add_stat(key: String, amount: Variant) -> void:
+	_progress.set_value(STATS, key, _progress.get_value(STATS, key, 0) + amount)
+
+
+func _day_before(date: String) -> String:
+	return Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(date) - 86400)
 
 
 func _show_settings() -> void:
@@ -386,6 +464,7 @@ func _start(mode: Mode) -> void:
 func _new_run() -> void:
 	_run = {"seed": randi(), "level": 1, "elapsed": 0.0}
 	_progress.set_value(CHALLENGE_KEY, "run", _run)
+	_add_stat("climb_runs", 1)
 	_progress.save(save_path)
 
 
@@ -693,6 +772,7 @@ func _check_win() -> void:
 		_run.level += 1
 		_run.elapsed = _elapsed
 		_progress.set_value(CHALLENGE_KEY, "run", _run)
+		_add_stat("climb_solved", 1)
 		_progress.save(save_path)
 		_win_label.text = "%s solved · %s" % [_puzzles(solved), _format_time(_elapsed)]
 		_update_best()
@@ -704,6 +784,10 @@ func _check_win() -> void:
 	var record := not _hinted and _elapsed < best
 	if record:
 		_progress.set_value("best", key, _elapsed)
+	if not _progress.get_value("solved", key, false):
+		_record_solve(_board.size, _hinted, _elapsed)
+		if _mode == Mode.DAILY:
+			_record_daily(_daily_date)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
 	var note := "  (hints used)" if _hinted else "  (new best!)" if record and best != INF else ""
@@ -772,6 +856,10 @@ func _pretty_date(date: String) -> String:
 
 func _puzzles(count: int) -> String:
 	return "%d puzzle%s" % [count, "" if count == 1 else "s"]
+
+
+func _days(count: int) -> String:
+	return "%d day%s" % [count, "" if count == 1 else "s"]
 
 
 func _format_time(seconds: float) -> String:

@@ -11,7 +11,7 @@
 
 ## Daily and progress
 - [x] The Climb (challenge mode): one life, no hints, puzzles ramp from 5×5 Easy to 10×10 Hard
-- [ ] Daily streaks and stats (current/longest streak, solves and average time per size)
+- [x] Daily streaks and stats (current/longest streak, solves and average time per size)
 - [ ] Share daily result to the clipboard
 - [ ] Daily archive to play past dailies
 

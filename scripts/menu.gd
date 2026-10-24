@@ -4,12 +4,14 @@ extends Control
 signal continue_chosen
 signal daily_chosen
 signal challenge_chosen
+signal stats_chosen
 signal settings_chosen
 signal exit_chosen
 
 var continue_button: Button
 var daily_button: Button
 var challenge_button: Button
+var stats_button: Button
 var settings_button: Button
 var exit_button: Button
 var _continue_detail: Label
@@ -53,6 +55,9 @@ func _ready() -> void:
 	_challenge_detail.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(_challenge_detail)
 	box.add_child(_gap(8))
+
+	stats_button = _button("Stats", stats_chosen.emit)
+	box.add_child(stats_button)
 
 	settings_button = _button("Settings", settings_chosen.emit)
 	box.add_child(settings_button)
