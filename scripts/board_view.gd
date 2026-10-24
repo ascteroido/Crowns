@@ -7,10 +7,13 @@ extends Control
 ## click toggles a crown.
 
 const Board := preload("res://scripts/board.gd")
+const CrownArt := preload("res://scripts/crown_art.gd")
 
 ## Emitted once per click or drag with every change it made, as
 ## [cell: Vector2i, old_mark: int, new_mark: int] entries.
 signal edited(changes: Array)
+## Emitted for each cell the player changes, as it happens, including auto crosses.
+signal marked(cell: Vector2i, old_mark: int, new_mark: int)
 
 # No reds, so conflict hatching always stands out.
 const REGION_COLORS: Array[Color] = [
@@ -28,11 +31,21 @@ const PATTERN_COUNT := 14
 const BORDER_COLOR := Color("1e1e1e")
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
+const CONFLICT_BAND := Color("a8221d")
 const DOUBLE_TAP_MS := 400
+## How long a new crown or cross takes to pop in.
+const POP_MS := {Board.Mark.CROWN: 220.0, Board.Mark.CROSS: 130.0, Board.Mark.AUTO_CROSS: 160.0}
+## The win wave: each row's crowns hop this long after the row above.
+const WAVE_STEP_MS := 70.0
+const HOP_MS := 420.0
 
 var board: Board:
 	set(value):
 		board = value
+		# Marks already on a newly shown board appear without popping in.
+		_shown_marks = board.marks.duplicate() if board else PackedInt32Array()
+		_pops.clear()
+		_celebrate_at = -1
 		mistake = Vector2i(-1, -1)
 		hint_focus = PackedInt32Array()
 		hint_targets = PackedInt32Array()
@@ -76,11 +89,33 @@ var _press_cell := Vector2i(-1, -1)
 ## Cell and time of the last press that stayed on its cell, for spotting double taps.
 var _tap_cell := Vector2i(-1, -1)
 var _tap_time := -DOUBLE_TAP_MS
+## Marks as last drawn, to spot cells that changed and pop them in.
+var _shown_marks := PackedInt32Array()
+## Cell index -> time its mark started popping in.
+var _pops := {}
+## Time the win wave started, or -1.
+var _celebrate_at := -1
 
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
 	resized.connect(queue_redraw)
+
+
+func _process(_delta: float) -> void:
+	if not _pops.is_empty() or _celebrate_at >= 0 or not hint_targets.is_empty():
+		queue_redraw()
+
+
+## Sends a wave of hopping crowns down the board.
+func celebrate() -> void:
+	_celebrate_at = Time.get_ticks_msec()
+	queue_redraw()
+
+
+## How long celebrate() runs on the current board.
+func celebration_ms() -> float:
+	return (board.size - 1) * WAVE_STEP_MS + HOP_MS if board else 0.0
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -134,6 +169,7 @@ func _change(cell: Vector2i, mark: int) -> void:
 		return
 	board.set_mark(cell, mark)
 	_stroke.append([cell, old, mark])
+	marked.emit(cell, old, mark)
 	queue_redraw()
 
 
@@ -179,6 +215,13 @@ func _draw() -> void:
 	var cs := _cell_size()
 	var origin := _origin()
 	var flags := board.conflicts()
+	var now := Time.get_ticks_msec()
+	_update_pops(now)
+	var wave := float(now - _celebrate_at) if _celebrate_at >= 0 else -1.0
+	if wave > celebration_ms():
+		_celebrate_at = -1
+		wave = -1.0
+	var pulse := 0.65 + 0.35 * sin(now / 1000.0 * TAU * 1.2)
 
 	for row in n:
 		for col in n:
@@ -191,19 +234,33 @@ func _draw() -> void:
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
 			if conflicted:
 				_draw_stripes(rect)
-			match board.get_mark(cell):
-				Board.Mark.CROSS:
-					_draw_cross(rect, MARK_COLOR)
-				Board.Mark.AUTO_CROSS:
-					_draw_cross(rect, Color(MARK_COLOR, 0.7))
-				Board.Mark.CROWN:
-					_draw_crown(rect, CONFLICT_COLOR if conflicted else MARK_COLOR)
 			var i := board.index(cell)
+			var mark := board.get_mark(cell)
+			var mark_rect := rect
+			if _pops.has(i):
+				var t: float = (now - _pops[i]) / POP_MS.get(mark, 150.0)
+				mark_rect = _scaled(rect, _ease_out_back(t))
+			match mark:
+				Board.Mark.CROSS:
+					_draw_cross(mark_rect, MARK_COLOR)
+				Board.Mark.AUTO_CROSS:
+					_draw_cross(mark_rect, Color(MARK_COLOR, 0.7))
+				Board.Mark.CROWN:
+					if wave >= 0.0:
+						var t := clampf((wave - row * WAVE_STEP_MS) / HOP_MS, 0.0, 1.0)
+						var lift := sin(PI * t)
+						draw_circle(rect.get_center(), cs * 0.45, Color(1, 1, 1, 0.45 * lift), true, -1.0, true)
+						mark_rect = _scaled(rect, 1.0 + 0.15 * lift)
+						mark_rect.position.y -= lift * cs * 0.18
+					if conflicted:
+						CrownArt.draw(self, mark_rect, CONFLICT_COLOR, CONFLICT_BAND)
+					else:
+						CrownArt.draw(self, mark_rect)
 			if not hint_focus.is_empty() and not hint_focus.has(i):
 				draw_rect(rect, HINT_DIM)
 			if hint_targets.has(i):
 				var inset := cs * 0.1
-				draw_rect(rect.grow(-inset), HINT_COLOR, false, maxf(2.0, cs * 0.07))
+				draw_rect(rect.grow(-inset), Color(HINT_COLOR, pulse), false, maxf(2.0, cs * 0.07))
 
 	# Thin lines between all cells, thick ones where regions meet.
 	var thin := maxf(1.0, cs * 0.02)
@@ -334,16 +391,32 @@ func _draw_cross(rect: Rect2, color: Color) -> void:
 	draw_line(center + Vector2(-r, r), center + Vector2(r, -r), color, width, true)
 
 
-func _draw_crown(rect: Rect2, color: Color) -> void:
-	var s := rect.size.x
-	var p := rect.position
-	var outline := PackedVector2Array([
-		Vector2(0.22, 0.70), Vector2(0.17, 0.32), Vector2(0.36, 0.50), Vector2(0.50, 0.24),
-		Vector2(0.64, 0.50), Vector2(0.83, 0.32), Vector2(0.78, 0.70),
-	])
-	for i in outline.size():
-		outline[i] = p + outline[i] * s
-	draw_colored_polygon(outline, color)
-	draw_rect(Rect2(p + Vector2(0.22, 0.74) * s, Vector2(0.56, 0.08) * s), color)
-	for tip in [Vector2(0.17, 0.30), Vector2(0.50, 0.21), Vector2(0.83, 0.30)]:
-		draw_circle(p + tip * s, s * 0.045, color, true, -1.0, true)
+## Starts a pop for every cell that gained a mark since the last draw,
+## whichever way it changed: a tap, a drag, a hint, undo or auto crosses.
+func _update_pops(now: int) -> void:
+	var marks := board.marks
+	if _shown_marks.size() == marks.size():
+		for i in marks.size():
+			if marks[i] != _shown_marks[i]:
+				if marks[i] == Board.Mark.EMPTY:
+					_pops.erase(i)
+				else:
+					_pops[i] = now
+	_shown_marks = marks.duplicate()
+	for i: int in _pops.keys():
+		if now - _pops[i] > POP_MS.get(marks[i], 150.0):
+			_pops.erase(i)
+
+
+func _scaled(rect: Rect2, factor: float) -> Rect2:
+	var side := rect.size * factor
+	return Rect2(rect.get_center() - side / 2.0, side)
+
+
+## 0 -> 1 with a little overshoot, like a piece settling into place.
+func _ease_out_back(t: float) -> float:
+	if t >= 1.0:
+		return 1.0
+	var c := 1.70158
+	var u := clampf(t, 0.0, 1.0) - 1.0
+	return 1.0 + (c + 1.0) * u * u * u + c * u * u

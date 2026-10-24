@@ -18,7 +18,7 @@
 
 ## Feel and polish
 - [ ] Redo (Ctrl+Shift+Z)
-- [ ] Win animation
-- [ ] Optional sound effects
+- [x] Win animation
+- [x] Optional sound effects
 - [x] Colour-blind support: region patterns setting
 - [ ] Keyboard play: arrow keys to move, keys to place × and crown

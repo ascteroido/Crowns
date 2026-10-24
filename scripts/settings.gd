@@ -4,11 +4,13 @@ extends Control
 signal dark_mode_toggled(enabled: bool)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
+signal sound_toggled(enabled: bool)
 signal back
 
 var dark_mode_toggle: CheckButton
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
+var sound_toggle: CheckButton
 
 
 func _ready() -> void:
@@ -43,6 +45,12 @@ func _ready() -> void:
 	patterns_toggle.add_theme_font_size_override("font_size", 20)
 	patterns_toggle.toggled.connect(patterns_toggled.emit)
 	box.add_child(patterns_toggle)
+
+	sound_toggle = CheckButton.new()
+	sound_toggle.text = "Sound effects"
+	sound_toggle.add_theme_font_size_override("font_size", 20)
+	sound_toggle.toggled.connect(sound_toggled.emit)
+	box.add_child(sound_toggle)
 
 	var back_button := Button.new()
 	back_button.text = "Back"

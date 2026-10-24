@@ -10,9 +10,19 @@ const Settings := preload("res://scripts/settings.gd")
 const Stats := preload("res://scripts/stats.gd")
 const Archive := preload("res://scripts/archive.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
+const Sounds := preload("res://scripts/sounds.gd")
+const CrownIcon := preload("res://scripts/crown_icon.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
+## Button fills, matching the purple of the app icon; deeper in dark mode.
+const BUTTON_LIGHT := {"normal": Color("5b4a9e"), "hover": Color("6b59b3"), "pressed": Color("483a85"),
+		"hover_pressed": Color("483a85"), "disabled": Color("5b4a9e", 0.45)}
+const BUTTON_DARK := {"normal": Color("46397f"), "hover": Color("554794"), "pressed": Color("372c66"),
+		"hover_pressed": Color("372c66"), "disabled": Color("46397f", 0.45)}
+const GOLD := Color("f4c542")
+## Screens fade in over this many seconds.
+const FADE := 0.15
 
 enum Mode { REGULAR, DAILY, CHALLENGE }
 
@@ -78,6 +88,7 @@ var _settings: Settings
 var _stats: Stats
 var _archive: Archive
 var _play_games: PlayGames
+var _sounds: Sounds
 var _game: Control
 var _back_button: Button
 var _win_back_button: Button
@@ -93,6 +104,9 @@ var _undo_button: Button
 var _hint_button: Button
 var _hint_label: Label
 var _win_overlay: Control
+var _win_panel: PanelContainer
+var _win_crown: CrownIcon
+var _overlay_tween: Tween
 var _win_heading: Label
 var _win_label: Label
 var _next_puzzle_button: Button
@@ -105,6 +119,8 @@ func _ready() -> void:
 	_number = _progress.get_value("last", "number", 1)
 	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
 	_run = _progress.get_value(CHALLENGE_KEY, "run", {})
+	# Every button, whenever it's made, clicks when pressed.
+	get_tree().node_added.connect(_on_node_added)
 	_build_ui()
 	var dark: bool = _progress.get_value("settings", "dark_mode", false)
 	_settings.dark_mode_toggle.set_pressed_no_signal(dark)
@@ -113,6 +129,8 @@ func _ready() -> void:
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
+	_sounds.enabled = _progress.get_value("settings", "sound", true)
+	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
 	_show_menu()
 
 
@@ -147,6 +165,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_ui() -> void:
 	theme = _theme
+	_sounds = Sounds.new()
+	add_child(_sounds)
 	_background = ColorRect.new()
 	_background.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_background)
@@ -169,6 +189,7 @@ func _build_ui() -> void:
 	_settings.dark_mode_toggled.connect(_on_dark_mode_toggled)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
+	_settings.sound_toggled.connect(_on_sound_toggled)
 	_settings.back.connect(_show_menu)
 	add_child(_settings)
 
@@ -251,6 +272,7 @@ func _build_ui() -> void:
 	_view.size_flags_vertical = SIZE_EXPAND_FILL
 	_view.custom_minimum_size = Vector2(300, 300)
 	_view.edited.connect(_on_board_edited)
+	_view.marked.connect(_on_marked)
 	column.add_child(_view)
 
 	var actions := HBoxContainer.new()
@@ -292,6 +314,7 @@ func _build_win_overlay() -> void:
 	center.set_anchors_preset(PRESET_FULL_RECT)
 	_win_overlay.add_child(center)
 	var panel := PanelContainer.new()
+	_win_panel = panel
 	_panel_style.set_corner_radius_all(14)
 	panel.add_theme_stylebox_override("panel", _panel_style)
 	center.add_child(panel)
@@ -303,6 +326,9 @@ func _build_win_overlay() -> void:
 	box.add_theme_constant_override("separation", 14)
 	inner.add_child(box)
 
+	_win_crown = CrownIcon.new()
+	_win_crown.custom_minimum_size = Vector2(0, 56)
+	box.add_child(_win_crown)
 	_win_heading = _label("Solved!", 32)
 	_win_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_win_heading)
@@ -313,7 +339,7 @@ func _build_win_overlay() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	box.add_child(buttons)
-	buttons.add_child(_button("Look at board", func() -> void: _win_overlay.visible = false))
+	buttons.add_child(_button("Look at board", _hide_overlay))
 	_win_back_button = _button("Menu", _leave_game)
 	buttons.add_child(_win_back_button)
 	_next_puzzle_button = _button("Next puzzle", _on_next_puzzle)
@@ -321,6 +347,63 @@ func _build_win_overlay() -> void:
 	_win_leaderboard_button = _button("Leaderboard", _show_mode_leaderboard)
 	_win_leaderboard_button.visible = _play_games.available()
 	buttons.add_child(_win_leaderboard_button)
+
+
+## Fades the win (or run over) panel in after `delay` seconds, springing it up to size.
+func _show_overlay(delay: float) -> void:
+	_hide_overlay()
+	_win_overlay.visible = true
+	_win_overlay.modulate.a = 0.0
+	_overlay_tween = create_tween()
+	_overlay_tween.tween_interval(delay)
+	_overlay_tween.tween_callback(func() -> void:
+		_win_panel.pivot_offset = _win_panel.size / 2.0
+		_win_panel.scale = Vector2(0.85, 0.85)
+		_win_crown.hop())
+	_overlay_tween.tween_property(_win_overlay, "modulate:a", 1.0, 0.2)
+	_overlay_tween.parallel().tween_property(_win_panel, "scale", Vector2.ONE, 0.35) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _hide_overlay() -> void:
+	if _overlay_tween:
+		_overlay_tween.kill()
+	_win_overlay.visible = false
+	_win_overlay.modulate.a = 1.0
+	_win_panel.scale = Vector2.ONE
+
+
+func _fade_in(screen: Control) -> void:
+	screen.visible = true
+	screen.modulate.a = 0.0
+	create_tween().tween_property(screen, "modulate:a", 1.0, FADE)
+
+
+func _on_node_added(node: Node) -> void:
+	if node is BaseButton:
+		(node as BaseButton).pressed.connect(_sounds.play.bind("click"))
+
+
+## Sounds for each cell the player changes; auto crosses stay quiet.
+func _on_marked(_cell: Vector2i, old_mark: int, new_mark: int) -> void:
+	match new_mark:
+		Board.Mark.CROWN:
+			_sounds.play("crown")
+		Board.Mark.CROSS:
+			_sounds.play("cross")
+		Board.Mark.EMPTY:
+			if old_mark in [Board.Mark.CROSS, Board.Mark.CROWN]:
+				_sounds.play("erase")
+
+
+## One sound for a batch made outside the board, like an applied hint or Clear.
+func _play_changes(changes: Array) -> void:
+	if changes.any(func(c: Array) -> bool: return c[2] == Board.Mark.CROWN):
+		_sounds.play("crown")
+	elif changes.any(func(c: Array) -> bool: return c[2] == Board.Mark.CROSS):
+		_sounds.play("cross")
+	else:
+		_sounds.play("erase")
 
 
 func _label(text: String, font_size: int) -> Label:
@@ -347,7 +430,7 @@ func _show_menu() -> void:
 	_settings.visible = false
 	_stats.visible = false
 	_archive.visible = false
-	_menu.visible = true
+	_fade_in(_menu)
 	var started := _progress.has_section("last")
 	var today := _today()
 	var best: float = _progress.get_value("best", _daily_key(today), INF)
@@ -389,7 +472,7 @@ func _show_archive() -> void:
 	_archive.first_date = DAILY_FIRST
 	_archive.last_date = _today()
 	_archive.show_month_of(_daily_date if _game_is_archive_daily() else _today())
-	_archive.visible = true
+	_fade_in(_archive)
 
 
 func _game_is_archive_daily() -> bool:
@@ -427,7 +510,7 @@ func _show_stats() -> void:
 	]
 	_stats.set_stats(daily, sizes, climb)
 	_menu.visible = false
-	_stats.visible = true
+	_fade_in(_stats)
 
 
 ## Counts a puzzle's first solve; only solves without hints count towards times.
@@ -472,7 +555,7 @@ func _day_before(date: String) -> String:
 
 func _show_settings() -> void:
 	_menu.visible = false
-	_settings.visible = true
+	_fade_in(_settings)
 
 
 func _on_dark_mode_toggled(enabled: bool) -> void:
@@ -484,6 +567,12 @@ func _on_dark_mode_toggled(enabled: bool) -> void:
 func _on_auto_cross_toggled(enabled: bool) -> void:
 	_view.auto_cross = enabled
 	_progress.set_value("settings", "auto_cross", enabled)
+	_progress.save(save_path)
+
+
+func _on_sound_toggled(enabled: bool) -> void:
+	_sounds.enabled = enabled
+	_progress.set_value("settings", "sound", enabled)
 	_progress.save(save_path)
 
 
@@ -500,21 +589,35 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_theme.set_color("font_color", "Label", colors.text)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		_theme.set_color(state, "CheckButton", colors.text)
-	# Godot's default buttons are translucent dark grey, which vanishes on the dark background.
-	var fills := {"normal": Color("3a3a3e"), "hover": Color("4a4a4f"), "pressed": Color("2a2a2d"),
-			"hover_pressed": Color("2a2a2d"), "disabled": Color("2a2a2d", 0.6)}
+		_theme.set_color(state, "Button", Color.WHITE)
+	_theme.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.5))
+	# Rounded purple buttons; dropdowns pick these up too.
+	var fills: Dictionary = BUTTON_DARK if enabled else BUTTON_LIGHT
 	for state: String in fills:
-		if enabled:
-			var box := StyleBoxFlat.new()
-			box.bg_color = fills[state]
-			box.set_corner_radius_all(3)
-			box.set_content_margin_all(4)
-			_theme.set_stylebox(state, "Button", box)
-			# Keep the toggle switch borderless; it would otherwise inherit the button fill.
-			_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
-		elif _theme.has_stylebox(state, "Button"):
-			_theme.clear_stylebox(state, "Button")
-			_theme.clear_stylebox(state, "CheckButton")
+		var box := StyleBoxFlat.new()
+		box.bg_color = fills[state]
+		box.set_corner_radius_all(10)
+		box.content_margin_left = 12
+		box.content_margin_right = 12
+		box.content_margin_top = 6
+		box.content_margin_bottom = 6
+		_theme.set_stylebox(state, "Button", box)
+		# Keep the toggle switch borderless; it would otherwise inherit the button fill.
+		_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
+	_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	_theme.set_stylebox("focus", "CheckButton", StyleBoxEmpty.new())
+	# The size and difficulty dropdown lists.
+	var menu_panel := StyleBoxFlat.new()
+	menu_panel.bg_color = fills.pressed
+	menu_panel.set_corner_radius_all(10)
+	menu_panel.set_content_margin_all(6)
+	_theme.set_stylebox("panel", "PopupMenu", menu_panel)
+	var menu_hover := StyleBoxFlat.new()
+	menu_hover.bg_color = fills.hover
+	menu_hover.set_corner_radius_all(6)
+	_theme.set_stylebox("hover", "PopupMenu", menu_hover)
+	_theme.set_color("font_color", "PopupMenu", Color.WHITE)
+	_theme.set_color("font_hover_color", "PopupMenu", GOLD)
 	_view.dark = enabled
 
 
@@ -531,7 +634,7 @@ func _start(mode: Mode, date := "") -> void:
 		_new_run()
 	_menu.visible = false
 	_archive.visible = false
-	_game.visible = true
+	_fade_in(_game)
 	var regular := mode == Mode.REGULAR
 	_size_picker.visible = regular
 	_difficulty_picker.visible = regular
@@ -551,7 +654,7 @@ func _new_run() -> void:
 func _load_puzzle() -> void:
 	_save_board()
 	_running = false
-	_win_overlay.visible = false
+	_hide_overlay()
 	# Past dailies aren't on the daily board, which only shows today's times.
 	_win_leaderboard_button.visible = _play_games.available() and (_mode != Mode.DAILY or _daily_live)
 	_view.interactive = false
@@ -657,6 +760,8 @@ func _on_board_edited(changes: Array) -> void:
 			if change[2] == Board.Mark.CROWN and _board.solution[cell.x] != cell.y:
 				_end_run(cell)
 				return
+	if changes.any(func(c: Array) -> bool: return c[2] == Board.Mark.CROWN) and _board.conflicts().has(1):
+		_sounds.play("conflict")
 	_check_win()
 	_save_board()
 
@@ -678,6 +783,7 @@ func _on_undo() -> void:
 	if _undo.is_empty() or not _view.interactive:
 		return
 	_clear_hint()
+	_sounds.play("erase")
 	var changes: Array = _undo.pop_back()
 	for i in range(changes.size() - 1, -1, -1):
 		_board.set_mark(changes[i][0], changes[i][1])
@@ -707,6 +813,7 @@ func _on_hint() -> void:
 		_apply(_hint.changes.duplicate())
 		return
 	_hinted = true
+	_sounds.play("hint")
 	_hint = _find_hint()
 	_hint_label.text = _hint.message
 	_view.hint_focus = _hint.focus
@@ -818,6 +925,7 @@ func _group_names(groups: Array) -> String:
 
 ## Applies an undoable batch of [cell, old, new] changes made outside the board view.
 func _apply(changes: Array) -> void:
+	_play_changes(changes)
 	for change in changes:
 		_board.set_mark(change[0], change[2])
 	if _view.auto_cross:
@@ -834,6 +942,9 @@ func _check_win() -> void:
 		return
 	_running = false
 	_view.interactive = false
+	_view.celebrate()
+	_sounds.play("win")
+	_win_crown.visible = true
 	_win_heading.text = "Solved!"
 	_next_puzzle_button.visible = _mode != Mode.DAILY
 	_next_puzzle_button.text = "Next puzzle"
@@ -850,7 +961,7 @@ func _check_win() -> void:
 		_progress.save(save_path)
 		_win_label.text = "%s solved · %s" % [_puzzles(solved), _format_time(_elapsed)]
 		_update_best()
-		_win_overlay.visible = true
+		_show_win_overlay()
 		return
 	var key := _puzzle_key()
 	var best: float = _progress.get_value("best", key, INF)
@@ -874,7 +985,12 @@ func _check_win() -> void:
 	var note := "  (hints used)" if _hinted else "  (new best!)" if record and best != INF else ""
 	_win_label.text = "Time: %s%s" % [_format_time(_elapsed), note]
 	_update_best()
-	_win_overlay.visible = true
+	_show_win_overlay()
+
+
+## The panel waits for most of the crowns' victory wave first.
+func _show_win_overlay() -> void:
+	_show_overlay(_view.celebration_ms() / 1000.0 * 0.7)
 
 
 ## A wrong crown ends the challenge run.
@@ -890,13 +1006,15 @@ func _end_run(mistake: Vector2i) -> void:
 	if _progress.has_section_key("in_progress", CHALLENGE_KEY):
 		_progress.erase_section_key("in_progress", CHALLENGE_KEY)
 	_progress.save(save_path)
+	_sounds.play("fail")
+	_win_crown.visible = false
 	_win_heading.text = "Out of lives"
 	var note := "  (best run!)" if solved > 0 and solved >= best_run else ""
 	_win_label.text = "That crown doesn't belong there.\n%s solved · %s%s" % [_puzzles(solved), _format_time(_elapsed), note]
 	_next_puzzle_button.visible = true
 	_next_puzzle_button.text = "New run"
 	_update_best()
-	_win_overlay.visible = true
+	_show_overlay(0.4)
 
 
 ## Opens the Play Games board for the mode just played.

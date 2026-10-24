@@ -7,7 +7,8 @@ signal back
 const MONTH_NAMES := ["January", "February", "March", "April", "May", "June", "July", "August",
 		"September", "October", "November", "December"]
 const WEEKDAYS := ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
-const SOLVED_COLOR := Color("8fd694")
+## Solved days are filled green so they stand out from the purple buttons.
+const SOLVED_FILLS := {"normal": Color("3d8a57"), "hover": Color("4a9c65"), "pressed": Color("327349")}
 const TODAY_COLOR := Color("f4c542")
 
 ## Returns {"solved": bool, "best": float (INF if untimed), "started": bool} for a date.
@@ -121,7 +122,11 @@ func _refresh() -> void:
 			if status.solved:
 				solved += 1
 				button.text += "\n" + (_format_time(status.best) if status.best != INF else "✓")
-				_set_font_color(button, SOLVED_COLOR)
+				for state: String in SOLVED_FILLS:
+					var box := StyleBoxFlat.new()
+					box.bg_color = SOLVED_FILLS[state]
+					box.set_corner_radius_all(10)
+					button.add_theme_stylebox_override(state, box)
 			elif status.started:
 				button.text += "\n•"
 			if date == last_date:

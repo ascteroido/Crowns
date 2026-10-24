@@ -1,6 +1,8 @@
 extends Control
 ## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one.
 
+const CrownIcon := preload("res://scripts/crown_icon.gd")
+
 signal continue_chosen
 signal daily_chosen
 signal archive_chosen
@@ -36,6 +38,9 @@ func _ready() -> void:
 	_scale(box, "separation", 10)
 	center.add_child(box)
 
+	var crown := CrownIcon.new()
+	_scale(crown, "height", 64)
+	box.add_child(crown)
 	var title := _label("Crowns", 48)
 	box.add_child(title)
 	var tagline := _label("One crown per row, column and region.", 15)
