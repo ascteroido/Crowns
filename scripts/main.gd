@@ -19,6 +19,8 @@ const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", 
 var save_path := "user://queens_progress.cfg"
 
 var _board: Board
+## Save key of the loaded board; stays put while `_number` or `_size` change for the next load.
+var _board_key := ""
 var _size := DEFAULT_SIZE
 var _number := 1
 ## Playing the daily puzzle for `_daily_date` ("YYYY-MM-DD") instead of the numbered ones.
@@ -60,7 +62,13 @@ func _ready() -> void:
 	_apply_dark_mode(dark)
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false)
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
+	_prune_old_dailies()
 	_show_menu()
+
+
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
+		_save_board()
 
 
 func _process(delta: float) -> void:
@@ -235,6 +243,7 @@ func _button(text: String, on_pressed: Callable) -> Button:
 func _show_menu() -> void:
 	if _generating:
 		return
+	_save_board()
 	_running = false
 	_game.visible = false
 	_settings.visible = false
@@ -315,6 +324,7 @@ func _open_game() -> void:
 
 
 func _load_puzzle() -> void:
+	_save_board()
 	_running = false
 	_win_overlay.visible = false
 	_view.interactive = false
@@ -329,14 +339,20 @@ func _load_puzzle() -> void:
 	rng.seed = hash(["daily", _daily_date]) if _daily else hash([_size, _number])
 	var puzzle := Generator.generate(size, rng)
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
+	_board_key = _puzzle_key()
+	_hinted = false
+	_elapsed = 0.0
+	var saved: Dictionary = _progress.get_value("in_progress", _board_key, {})
+	if saved.get("marks", PackedInt32Array()).size() == _board.marks.size():
+		_board.marks = saved.marks
+		_elapsed = saved.elapsed
+		_hinted = saved.hinted
 	_view.board = _board
 	_view.interactive = true
 	_generating = false
 	_undo.clear()
 	_undo_button.disabled = true
-	_hinted = false
-	_elapsed = 0.0
-	_timer_label.text = _format_time(0.0)
+	_timer_label.text = _format_time(_elapsed)
 	_running = true
 	_puzzle_label.text = "Daily · %s" % _pretty_date(_daily_date) if _daily else "Puzzle #%d" % _number
 	_update_best()
@@ -367,6 +383,29 @@ func _on_board_edited(changes: Array) -> void:
 	_undo.append(changes)
 	_undo_button.disabled = false
 	_check_win()
+	_save_board()
+
+
+## Stores the loaded board's marks and timer, or forgets them once it is solved.
+func _save_board() -> void:
+	if _board == null:
+		return
+	if _board.is_solved():
+		if _progress.has_section_key("in_progress", _board_key):
+			_progress.erase_section_key("in_progress", _board_key)
+	else:
+		_progress.set_value("in_progress", _board_key,
+				{"marks": _board.marks, "elapsed": _elapsed, "hinted": _hinted})
+	_progress.save(save_path)
+
+
+func _prune_old_dailies() -> void:
+	if not _progress.has_section("in_progress"):
+		return
+	for key in _progress.get_section_keys("in_progress"):
+		if key.begins_with("daily_") and key != _daily_key(_today()):
+			_progress.erase_section_key("in_progress", key)
+	_progress.save(save_path)
 
 
 func _on_undo() -> void:
@@ -377,6 +416,7 @@ func _on_undo() -> void:
 		_board.set_mark(changes[i][0], changes[i][1])
 	_undo_button.disabled = _undo.is_empty()
 	_view.queue_redraw()
+	_save_board()
 
 
 func _on_clear() -> void:
