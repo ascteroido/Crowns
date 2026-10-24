@@ -220,6 +220,46 @@ func _run() -> void:
 	main._show_menu()
 	_expect(main._menu._daily_detail.text.begins_with("Solved (hints used)"), "menu shows the daily as solved")
 
+	# The archive: a calendar of past dailies that don't touch the streak.
+	var today: String = main._today()
+	var yesterday: String = main._day_before(today)
+	main._menu.archive_button.pressed.emit()
+	await _frames(2)
+	var archive: Control = main._archive
+	_expect(archive.visible and not main._menu.visible, "archive opens from the menu")
+	_expect(archive.next_button.disabled, "archive can't go past the current month")
+	_expect(_archive_day(archive, today).text.ends_with("✓"), "archive marks today's solved daily")
+	archive.day_chosen.emit(yesterday)
+	await _frames(10)
+	_expect(main._mode == main.Mode.DAILY and main._daily_date == yesterday and main._board.regions != daily.regions,
+			"archive opens a past daily")
+	_expect(main._puzzle_label.text.ends_with(main._pretty_date(yesterday)) and main._back_button.text == "Back",
+			"past daily shows its date and a Back button")
+	await _slow_click(view, Vector2i(0, 0))
+	main._leave_game()
+	await _frames(2)
+	_expect(archive.visible and not main._menu.visible, "leaving a past daily returns to the archive")
+	archive.show_month_of(yesterday)
+	_expect(_archive_day(archive, yesterday).text.ends_with("•"), "archive marks a started daily")
+	archive.day_chosen.emit(yesterday)
+	await _frames(10)
+	_expect(main._board.get_mark(Vector2i(0, 0)) == Board.Mark.CROSS, "past daily progress is kept")
+	var streak_before: int = main._progress.get_value("stats", "streak", 0)
+	_solve_with_hints(main)
+	await _frames(3)
+	_expect(main._win_overlay.visible and main._progress.get_value("solved", main._daily_key(yesterday), false),
+			"past daily can be solved")
+	_expect(main._progress.get_value("stats", "streak", 0) == streak_before
+			and main._progress.get_value("stats", "dailies_solved", 0) == 1, "past dailies don't count towards streaks")
+	main._progress.set_value("best", main._daily_key(yesterday), 95.0)
+	main._leave_game()
+	archive.show_month_of(yesterday)
+	_expect(_archive_day(archive, yesterday).text.ends_with("1:35"), "archive shows a past daily's best time")
+	await _frames(3)
+	_screenshot("archive.png")
+	archive.back.emit()
+	_expect(main._menu.visible and not archive.visible, "archive back returns to the menu")
+
 	main._menu.continue_button.pressed.emit()
 	await _frames(10)
 	_expect(main._mode == main.Mode.REGULAR and main._number == 2 and main._next_button.visible, "continue resumes the regular puzzles")
@@ -488,6 +528,14 @@ func _check_patterns() -> void:
 	await _frames(3)
 	_screenshot("patterns.png")
 	view.queue_free()
+
+
+func _archive_day(archive: Control, date: String) -> Button:
+	var day := str(date.split("-")[2].to_int())
+	for child in archive._grid.get_children():
+		if child is Button and child.text.get_slice("\n", 0) == day:
+			return child
+	return null
 
 
 func _cell_center(view: Control, cell: Vector2i) -> Vector2:

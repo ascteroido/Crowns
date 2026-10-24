@@ -195,7 +195,7 @@ func _draw() -> void:
 				Board.Mark.CROSS:
 					_draw_cross(rect, MARK_COLOR)
 				Board.Mark.AUTO_CROSS:
-					_draw_cross(rect, Color(MARK_COLOR, 0.45))
+					_draw_cross(rect, Color(MARK_COLOR, 0.7))
 				Board.Mark.CROWN:
 					_draw_crown(rect, CONFLICT_COLOR if conflicted else MARK_COLOR)
 			var i := board.index(cell)

@@ -14,8 +14,7 @@
 - [x] The Climb (challenge mode): one life, no hints, puzzles ramp from 5×5 Easy to 10×10 Hard
 - [x] Daily streaks and stats (current/longest streak, solves and average time per size)
 - [ ] Global leaderboards via Google Play Games (built; waiting on Play Console setup and leaderboard IDs)
-- [ ] Share daily result to the clipboard
-- [ ] Daily archive to play past dailies
+- [x] Daily archive to play past dailies
 
 ## Feel and polish
 - [ ] Redo (Ctrl+Shift+Z)

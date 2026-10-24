@@ -8,6 +8,7 @@ const Grader := preload("res://scripts/grader.gd")
 const Menu := preload("res://scripts/menu.gd")
 const Settings := preload("res://scripts/settings.gd")
 const Stats := preload("res://scripts/stats.gd")
+const Archive := preload("res://scripts/archive.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
@@ -21,6 +22,8 @@ const DAILY_SIZES := [7, 8, 9]
 const DEFAULT_DIFFICULTY := Generator.Difficulty.MEDIUM
 const DAILY_DIFFICULTY := Generator.Difficulty.MEDIUM
 const DAILY_UTC_OFFSET := -7 * 3600
+## The first daily puzzle in the archive.
+const DAILY_FIRST := "2026-10-01"
 ## [size, difficulty] for each challenge puzzle; the last one repeats.
 const CHALLENGE_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
@@ -47,6 +50,11 @@ var _difficulty: int = DEFAULT_DIFFICULTY
 var _number := 1
 ## Date ("YYYY-MM-DD") of the daily puzzle being played.
 var _daily_date := ""
+## Opened from the archive, so leaving the game returns there.
+var _from_archive := false
+## Counts towards streaks and the daily leaderboard: today's daily, or one
+## started before the date rolled over.
+var _daily_live := true
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
@@ -68,8 +76,11 @@ var _panel_style := StyleBoxFlat.new()
 var _menu: Menu
 var _settings: Settings
 var _stats: Stats
+var _archive: Archive
 var _play_games: PlayGames
 var _game: Control
+var _back_button: Button
+var _win_back_button: Button
 var _size_picker: OptionButton
 var _difficulty_picker: OptionButton
 var _prev_button: Button
@@ -102,7 +113,6 @@ func _ready() -> void:
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
-	_prune_old_dailies()
 	_show_menu()
 
 
@@ -122,7 +132,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if (_settings.visible or _stats.visible) and event.is_action_pressed("ui_cancel"):
+	if (_settings.visible or _stats.visible or _archive.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
 	if not _game.visible:
@@ -131,7 +141,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_undo()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel"):
-		_show_menu()
+		_leave_game()
 		get_viewport().set_input_as_handled()
 
 
@@ -145,6 +155,7 @@ func _build_ui() -> void:
 	_menu.set_anchors_preset(PRESET_FULL_RECT)
 	_menu.continue_chosen.connect(_start.bind(Mode.REGULAR))
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
+	_menu.archive_chosen.connect(_show_archive)
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.stats_chosen.connect(_show_stats)
 	_menu.leaderboards_chosen.connect(func() -> void: _play_games.show_all())
@@ -167,6 +178,14 @@ func _build_ui() -> void:
 	_stats.back.connect(_show_menu)
 	add_child(_stats)
 
+	_archive = Archive.new()
+	_archive.set_anchors_preset(PRESET_FULL_RECT)
+	_archive.visible = false
+	_archive.status_for = _daily_status
+	_archive.day_chosen.connect(func(date: String) -> void: _start(Mode.DAILY, date))
+	_archive.back.connect(_show_menu)
+	add_child(_archive)
+
 	_play_games = PlayGames.new()
 	add_child(_play_games)
 	_menu.leaderboards_button.visible = _play_games.available()
@@ -188,7 +207,8 @@ func _build_ui() -> void:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	column.add_child(header)
-	header.add_child(_button("Menu", _show_menu))
+	_back_button = _button("Menu", _leave_game)
+	header.add_child(_back_button)
 	var title := _label("Crowns", 34)
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
 	header.add_child(title)
@@ -294,7 +314,8 @@ func _build_win_overlay() -> void:
 	buttons.add_theme_constant_override("separation", 12)
 	box.add_child(buttons)
 	buttons.add_child(_button("Look at board", func() -> void: _win_overlay.visible = false))
-	buttons.add_child(_button("Menu", _show_menu))
+	_win_back_button = _button("Menu", _leave_game)
+	buttons.add_child(_win_back_button)
 	_next_puzzle_button = _button("Next puzzle", _on_next_puzzle)
 	buttons.add_child(_next_puzzle_button)
 	_win_leaderboard_button = _button("Leaderboard", _show_mode_leaderboard)
@@ -325,6 +346,7 @@ func _show_menu() -> void:
 	_game.visible = false
 	_settings.visible = false
 	_stats.visible = false
+	_archive.visible = false
 	_menu.visible = true
 	var started := _progress.has_section("last")
 	var today := _today()
@@ -347,6 +369,37 @@ func _show_menu() -> void:
 	_menu.set_details("Continue" if started else "Play",
 			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number],
 			daily_detail, challenge_detail)
+
+
+## Back to the archive for puzzles opened from it, otherwise to the menu.
+func _leave_game() -> void:
+	if _mode == Mode.DAILY and _from_archive:
+		_show_archive()
+	else:
+		_show_menu()
+
+
+func _show_archive() -> void:
+	if _generating:
+		return
+	_save_board()
+	_running = false
+	_game.visible = false
+	_menu.visible = false
+	_archive.first_date = DAILY_FIRST
+	_archive.last_date = _today()
+	_archive.show_month_of(_daily_date if _game_is_archive_daily() else _today())
+	_archive.visible = true
+
+
+func _game_is_archive_daily() -> bool:
+	return _board != null and _mode == Mode.DAILY and _from_archive
+
+
+func _daily_status(date: String) -> Dictionary:
+	var key := _daily_key(date)
+	return {"solved": _progress.get_value("solved", key, false), "best": _progress.get_value("best", key, INF),
+			"started": _progress.has_section_key("in_progress", key)}
 
 
 func _exit() -> void:
@@ -465,13 +518,19 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_view.dark = enabled
 
 
-func _start(mode: Mode) -> void:
+## `date` picks a past daily from the archive; otherwise the daily is today's.
+func _start(mode: Mode, date := "") -> void:
 	_mode = mode
+	_from_archive = not date.is_empty()
+	_back_button.text = "Back" if _from_archive else "Menu"
+	_win_back_button.text = _back_button.text
 	if mode == Mode.DAILY:
-		_daily_date = _today()
+		_daily_date = date if _from_archive else _today()
+		_daily_live = _daily_date == _today()
 	elif mode == Mode.CHALLENGE and _run.is_empty():
 		_new_run()
 	_menu.visible = false
+	_archive.visible = false
 	_game.visible = true
 	var regular := mode == Mode.REGULAR
 	_size_picker.visible = regular
@@ -493,6 +552,8 @@ func _load_puzzle() -> void:
 	_save_board()
 	_running = false
 	_win_overlay.visible = false
+	# Past dailies aren't on the daily board, which only shows today's times.
+	_win_leaderboard_button.visible = _play_games.available() and (_mode != Mode.DAILY or _daily_live)
 	_view.interactive = false
 	_generating = true
 	_puzzle_label.text = "Generating…"
@@ -610,15 +671,6 @@ func _save_board() -> void:
 	else:
 		_progress.set_value("in_progress", _board_key,
 				{"regions": _board.regions, "marks": _board.marks, "elapsed": _elapsed, "hinted": _hinted})
-	_progress.save(save_path)
-
-
-func _prune_old_dailies() -> void:
-	if not _progress.has_section("in_progress"):
-		return
-	for key in _progress.get_section_keys("in_progress"):
-		if key.begins_with("daily_") and key != _daily_key(_today()):
-			_progress.erase_section_key("in_progress", key)
 	_progress.save(save_path)
 
 
@@ -808,12 +860,14 @@ func _check_win() -> void:
 		_progress.set_value("best", key, _elapsed)
 	if not _progress.get_value("solved", key, false):
 		_record_solve(_board.size, _hinted, _elapsed)
+		# Archive dailies count as solves, but not towards streaks or the daily board.
 		if _mode == Mode.DAILY:
-			_record_daily(_daily_date)
+			if _daily_live:
+				_record_daily(_daily_date)
 		elif not _hinted:
 			_add_stat("puzzles_unhinted", 1)
 			_play_games.submit_solved(_progress.get_value(STATS, "puzzles_unhinted", 0))
-	if _mode == Mode.DAILY and not _hinted:
+	if _mode == Mode.DAILY and _daily_live and not _hinted:
 		_play_games.submit_daily_time(_elapsed)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
