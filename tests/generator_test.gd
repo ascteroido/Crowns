@@ -5,27 +5,33 @@ extends SceneTree
 const Board := preload("res://scripts/board.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Solver := preload("res://scripts/solver.gd")
+const Grader := preload("res://scripts/grader.gd")
 
-const PUZZLES_PER_SIZE := 20
+const PUZZLES_PER_SIZE := 10
 
 var failures := 0
 
 
 func _init() -> void:
-	for size in range(5, 11):
-		var started := Time.get_ticks_msec()
-		var slowest := 0
-		for number in PUZZLES_PER_SIZE:
-			var rng := RandomNumberGenerator.new()
-			rng.seed = hash([size, number])
-			var t := Time.get_ticks_msec()
-			var puzzle := Generator.generate(size, rng)
-			slowest = maxi(slowest, Time.get_ticks_msec() - t)
-			_check_puzzle(size, puzzle, "%dx%d #%d" % [size, size, number])
-		print("%dx%d: %d puzzles, avg %d ms, slowest %d ms" % [size, size, PUZZLES_PER_SIZE,
-				(Time.get_ticks_msec() - started) / PUZZLES_PER_SIZE, slowest])
+	for difficulty in Generator.DIFFICULTY_NAMES.size():
+		var name: String = Generator.DIFFICULTY_NAMES[difficulty]
+		for size in range(5, 11):
+			var started := Time.get_ticks_msec()
+			var slowest := 0
+			for number in PUZZLES_PER_SIZE:
+				var rng := RandomNumberGenerator.new()
+				rng.seed = hash([size, difficulty, number])
+				var t := Time.get_ticks_msec()
+				var puzzle := Generator.generate(size, difficulty, rng)
+				slowest = maxi(slowest, Time.get_ticks_msec() - t)
+				var label := "%s %dx%d #%d" % [name, size, size, number]
+				_check_puzzle(size, puzzle, label)
+				_expect(Grader.grade(size, puzzle.regions) == difficulty + 1, label + " grades as " + name)
+			print("%s %dx%d: %d puzzles, avg %d ms, slowest %d ms" % [name, size, size, PUZZLES_PER_SIZE,
+					(Time.get_ticks_msec() - started) / PUZZLES_PER_SIZE, slowest])
 
 	_check_rules()
+	_check_grader()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
 
@@ -62,6 +68,28 @@ func _check_rules() -> void:
 	flags = board.conflicts()
 	_expect(flags[3] == 1 and flags[11] == 1, "cells in a region with two crowns are flagged")
 	_expect(flags[15] == 0, "cells outside the broken region are not flagged")
+
+
+func _check_grader() -> void:
+	# Regions equal to rows allow many solutions, which logic alone can't pick between.
+	var stripes := PackedInt32Array()
+	for row in 5:
+		for col in 5:
+			stripes.append(row)
+	_expect(Grader.grade(5, stripes) == Grader.STUCK, "a layout with several solutions is stuck")
+
+	# Whenever the grader finishes, it must have found the one real solution.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var finished := 0
+	for i in 150:
+		var size := rng.randi_range(5, 9)
+		var regions: PackedInt32Array = Generator._generate_unique(size, rng, 1.0, 0.4).regions
+		var result := Grader.solve(size, regions)
+		if result.grade != Grader.STUCK:
+			finished += 1
+			_expect(result.solution == Solver.find_solutions(size, regions, 1)[0], "grader solution #%d is the real one" % i)
+	_expect(finished > 100, "grader finishes most unique layouts (%d/150)" % finished)
 
 
 func _is_contiguous(size: int, regions: PackedInt32Array, region: int) -> bool:

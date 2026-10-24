@@ -3,10 +3,10 @@
 ## Gaps
 - [x] Save the board in progress (marks, timer, hints used) per puzzle
 - [x] Touch controls for Android: double tap places a crown
-- [ ] Pause the timer when the window loses focus
+- [x] Pause the timer when the window loses focus
 
 ## Puzzle quality
-- [ ] Difficulty grading: rate puzzles by the deduction steps a logic solver needs; offer Easy/Medium/Hard
+- [x] Difficulty grading: rate puzzles by the deduction steps a logic solver needs; offer Easy/Medium/Hard
 - [ ] Teaching hints: point out the next deduction instead of revealing a crown
 
 ## Daily and progress

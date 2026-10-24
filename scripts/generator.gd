@@ -5,18 +5,36 @@ extends RefCounted
 ## 2. Grow one region from each crown until the grid is filled.
 ## 3. While the solver finds a second solution, move one of that solution's
 ##    crown cells into a neighbouring region, which breaks that solution.
+## 4. Keep only puzzles the grader rates at the requested difficulty.
 
 const Solver := preload("res://scripts/solver.gd")
+const Grader := preload("res://scripts/grader.gd")
+
+enum Difficulty { EASY, MEDIUM, HARD }
+const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard"]
+## Region growth weights per difficulty as [exponent, lowest base]: uneven
+## regions hand out easy deductions, even ones need the deeper rules.
+const REGION_WEIGHTS := [[4.0, 0.05], [2.0, 0.15], [1.0, 0.4]]
 
 const NEIGHBOURS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const REPAIR_STEPS := 80
 
 
-## Returns {"regions": PackedInt32Array, "solution": PackedInt32Array}.
-static func generate(size: int, rng: RandomNumberGenerator) -> Dictionary:
+## Returns {"regions": PackedInt32Array, "solution": PackedInt32Array} for a
+## puzzle whose grader tier is difficulty + 1.
+static func generate(size: int, difficulty: int, rng: RandomNumberGenerator) -> Dictionary:
+	var weights: Array = REGION_WEIGHTS[difficulty]
+	while true:
+		var puzzle := _generate_unique(size, rng, weights[0], weights[1])
+		if Grader.grade(size, puzzle.regions) == difficulty + 1:
+			return puzzle
+	return {}
+
+
+static func _generate_unique(size: int, rng: RandomNumberGenerator, spread: float, low: float) -> Dictionary:
 	while true:
 		var solution := _random_placement(size, rng)
-		var regions := _grow_regions(size, solution, rng)
+		var regions := _grow_regions(size, solution, rng, spread, low)
 		if _repair(size, regions, solution, rng):
 			return {"regions": regions, "solution": solution}
 	return {}
@@ -46,7 +64,7 @@ static func _place_row(size: int, row: int, used_cols: int, cols: PackedInt32Arr
 	return false
 
 
-static func _grow_regions(size: int, solution: PackedInt32Array, rng: RandomNumberGenerator) -> PackedInt32Array:
+static func _grow_regions(size: int, solution: PackedInt32Array, rng: RandomNumberGenerator, spread: float, low: float) -> PackedInt32Array:
 	var regions := PackedInt32Array()
 	regions.resize(size * size)
 	regions.fill(-1)
@@ -58,7 +76,7 @@ static func _grow_regions(size: int, solution: PackedInt32Array, rng: RandomNumb
 	var weights := PackedFloat32Array()
 	for row in size:
 		regions[row * size + solution[row]] = ids[row]
-		weights.append(pow(rng.randf_range(0.15, 1.0), 2.0))
+		weights.append(pow(rng.randf_range(low, 1.0), spread))
 
 	var active: Array = ids.duplicate()
 	var unassigned := size * size - size

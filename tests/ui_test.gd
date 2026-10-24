@@ -4,6 +4,8 @@ extends SceneTree
 ## Saves screenshots when a directory is given and a renderer is available.
 
 const Board := preload("res://scripts/board.gd")
+const Generator := preload("res://scripts/generator.gd")
+const Grader := preload("res://scripts/grader.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
 var failures := 0
@@ -186,10 +188,21 @@ func _run() -> void:
 	_screenshot("game_dark.png")
 	main._on_dark_mode_toggled(false)
 
+	# The timer stops while the window is unfocused or the app is in the background.
+	for pair in [[Node.NOTIFICATION_APPLICATION_FOCUS_OUT, Node.NOTIFICATION_APPLICATION_FOCUS_IN],
+			[Node.NOTIFICATION_APPLICATION_PAUSED, Node.NOTIFICATION_APPLICATION_RESUMED]]:
+		main._notification(pair[0])
+		var paused_at: float = main._elapsed
+		await _frames(5)
+		_expect(main._elapsed == paused_at, "timer pauses on notification %d" % pair[0])
+		main._notification(pair[1])
+		await _frames(5)
+		_expect(main._elapsed > paused_at, "timer resumes on notification %d" % pair[1])
+
 	# The board in progress survives leaving it, switching puzzles and restarting.
 	var solved_one := ConfigFile.new()
 	solved_one.load(TEST_SAVE)
-	_expect(not solved_one.has_section_key("in_progress", "%dx%d_1" % [main._size, main._size]), "solved puzzle keeps no saved board")
+	_expect(not solved_one.has_section_key("in_progress", "%dx%d_medium_1" % [main._size, main._size]), "solved puzzle keeps no saved board")
 	var in_progress: PackedInt32Array = main._board.marks.duplicate()
 	main._elapsed = 42.0
 	main._show_menu()
@@ -215,6 +228,32 @@ func _run() -> void:
 	_expect(reopened._number == 2 and reopened._board.marks == in_progress, "marks restored after a restart")
 	_expect(reopened._elapsed >= 42.0, "timer restored after a restart")
 	reopened.queue_free()
+	await _frames(2)
+
+	# Difficulty picks a graded puzzle and keeps its own boards.
+	var graded: Control = load("res://main.tscn").instantiate()
+	graded.save_path = TEST_SAVE
+	root.add_child(graded)
+	await _frames(3)
+	graded._menu.continue_button.pressed.emit()
+	await _frames(10)
+	var medium_regions: PackedInt32Array = graded._board.regions
+	_expect(graded._difficulty_picker.visible and graded._difficulty == Generator.Difficulty.MEDIUM, "regular puzzles default to Medium")
+	for difficulty in [Generator.Difficulty.EASY, Generator.Difficulty.HARD]:
+		graded._difficulty_picker.select(difficulty)
+		graded._on_difficulty_selected(difficulty)
+		await _frames(10)
+		var b: Board = graded._board
+		_expect(graded._number == 1 and Grader.grade(b.size, b.regions) == difficulty + 1,
+				"%s puzzle grades as %s" % [Generator.DIFFICULTY_NAMES[difficulty], Generator.DIFFICULTY_NAMES[difficulty]])
+		_expect(graded._puzzle_key().contains(Generator.DIFFICULTY_NAMES[difficulty].to_lower()), "save key includes the difficulty")
+	_screenshot("hard.png")
+	graded._show_menu()
+	_expect(graded._menu._continue_detail.text.contains("Hard"), "menu shows the chosen difficulty")
+	graded._menu.daily_button.pressed.emit()
+	await _frames(10)
+	_expect(not graded._difficulty_picker.visible, "daily hides the difficulty picker")
+	graded.queue_free()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)

@@ -13,6 +13,8 @@ const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": 
 const SIZES := [5, 6, 7, 8, 9, 10]
 const DEFAULT_SIZE := 7
 const DAILY_SIZES := [7, 8, 9]
+const DEFAULT_DIFFICULTY := Generator.Difficulty.MEDIUM
+const DAILY_DIFFICULTY := Generator.Difficulty.MEDIUM
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ## Where progress and best times are stored; tests point this elsewhere.
@@ -22,12 +24,15 @@ var _board: Board
 ## Save key of the loaded board; stays put while `_number` or `_size` change for the next load.
 var _board_key := ""
 var _size := DEFAULT_SIZE
+var _difficulty: int = DEFAULT_DIFFICULTY
 var _number := 1
 ## Playing the daily puzzle for `_daily_date` ("YYYY-MM-DD") instead of the numbered ones.
 var _daily := false
 var _daily_date := ""
 var _elapsed := 0.0
 var _running := false
+## The timer only counts while the window has focus.
+var _focused := true
 var _generating := false
 var _hinted := false
 var _undo: Array = []
@@ -40,6 +45,7 @@ var _menu: Menu
 var _settings: Settings
 var _game: Control
 var _size_picker: OptionButton
+var _difficulty_picker: OptionButton
 var _prev_button: Button
 var _next_button: Button
 var _puzzle_label: Label
@@ -56,6 +62,7 @@ func _ready() -> void:
 	_progress.load(save_path)
 	_size = _progress.get_value("last", "size", DEFAULT_SIZE)
 	_number = _progress.get_value("last", "number", 1)
+	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
 	_build_ui()
 	var dark: bool = _progress.get_value("settings", "dark_mode", false)
 	_settings.dark_mode_toggle.set_pressed_no_signal(dark)
@@ -69,10 +76,14 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
 		_save_board()
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
+		_focused = false
+	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
+		_focused = true
 
 
 func _process(delta: float) -> void:
-	if _running:
+	if _running and _focused:
 		_elapsed += delta
 		_timer_label.text = _format_time(_elapsed)
 
@@ -139,6 +150,12 @@ func _build_ui() -> void:
 	_size_picker.select(maxi(0, SIZES.find(_size)))
 	_size_picker.item_selected.connect(_on_size_selected)
 	header.add_child(_size_picker)
+	_difficulty_picker = OptionButton.new()
+	for name: String in Generator.DIFFICULTY_NAMES:
+		_difficulty_picker.add_item(name)
+	_difficulty_picker.select(_difficulty)
+	_difficulty_picker.item_selected.connect(_on_difficulty_selected)
+	header.add_child(_difficulty_picker)
 
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 8)
@@ -251,13 +268,14 @@ func _show_menu() -> void:
 	var started := _progress.has_section("last")
 	var today := _today()
 	var best: float = _progress.get_value("best", _daily_key(today), INF)
-	var daily_detail := "%s · %d×%d" % [_pretty_date(today), _daily_size(today), _daily_size(today)]
+	var daily_detail := "%s · %d×%d · %s" % [_pretty_date(today), _daily_size(today), _daily_size(today),
+			Generator.DIFFICULTY_NAMES[DAILY_DIFFICULTY]]
 	if best != INF:
 		daily_detail = "Solved in %s" % _format_time(best)
 	elif _progress.get_value("solved", _daily_key(today), false):
 		daily_detail = "Solved (hints used)"
 	_menu.set_details("Continue" if started else "Play",
-			"%d×%d · Puzzle #%d" % [_size, _size, _number], daily_detail)
+			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number], daily_detail)
 
 
 func _show_settings() -> void:
@@ -317,6 +335,7 @@ func _open_game() -> void:
 	_menu.visible = false
 	_game.visible = true
 	_size_picker.visible = not _daily
+	_difficulty_picker.visible = not _daily
 	_prev_button.visible = not _daily
 	_next_button.visible = not _daily
 	_next_puzzle_button.visible = not _daily
@@ -335,15 +354,17 @@ func _load_puzzle() -> void:
 	await get_tree().process_frame
 
 	var size := _daily_size(_daily_date) if _daily else _size
+	var difficulty: int = DAILY_DIFFICULTY if _daily else _difficulty
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(["daily", _daily_date]) if _daily else hash([_size, _number])
-	var puzzle := Generator.generate(size, rng)
+	rng.seed = hash(["daily", _daily_date]) if _daily else hash([_size, _difficulty, _number])
+	var puzzle := Generator.generate(size, difficulty, rng)
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
 	_board_key = _puzzle_key()
 	_hinted = false
 	_elapsed = 0.0
 	var saved: Dictionary = _progress.get_value("in_progress", _board_key, {})
-	if saved.get("marks", PackedInt32Array()).size() == _board.marks.size():
+	# Only restore onto the same layout, in case puzzle generation has changed since.
+	if saved.get("regions", PackedInt32Array()) == _board.regions:
 		_board.marks = saved.marks
 		_elapsed = saved.elapsed
 		_hinted = saved.hinted
@@ -360,6 +381,7 @@ func _load_puzzle() -> void:
 	if not _daily:
 		_progress.set_value("last", "size", _size)
 		_progress.set_value("last", "number", _number)
+		_progress.set_value("last", "difficulty", _difficulty)
 		_progress.save(save_path)
 
 
@@ -375,6 +397,15 @@ func _on_size_selected(index: int) -> void:
 		_size_picker.select(SIZES.find(_size))
 		return
 	_size = SIZES[index]
+	_number = 1
+	_load_puzzle()
+
+
+func _on_difficulty_selected(index: int) -> void:
+	if _generating:
+		_difficulty_picker.select(_difficulty)
+		return
+	_difficulty = index
 	_number = 1
 	_load_puzzle()
 
@@ -395,7 +426,7 @@ func _save_board() -> void:
 			_progress.erase_section_key("in_progress", _board_key)
 	else:
 		_progress.set_value("in_progress", _board_key,
-				{"marks": _board.marks, "elapsed": _elapsed, "hinted": _hinted})
+				{"regions": _board.regions, "marks": _board.marks, "elapsed": _elapsed, "hinted": _hinted})
 	_progress.save(save_path)
 
 
@@ -486,7 +517,9 @@ func _update_best() -> void:
 
 
 func _puzzle_key() -> String:
-	return _daily_key(_daily_date) if _daily else "%dx%d_%d" % [_size, _size, _number]
+	if _daily:
+		return _daily_key(_daily_date)
+	return "%dx%d_%s_%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty].to_lower(), _number]
 
 
 func _daily_key(date: String) -> String:
