@@ -178,7 +178,7 @@ func _build_ui() -> void:
 	actions.add_child(_button("Hint", _on_hint))
 
 	var help := _label("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.\n"
-			+ "Click: empty → × → crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo.", 14)
+			+ "Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo.", 14)
 	help.modulate = Color(1, 1, 1, 0.65)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

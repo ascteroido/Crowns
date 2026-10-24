@@ -2,7 +2,7 @@
 
 ## Gaps
 - [x] Save the board in progress (marks, timer, hints used) per puzzle
-- [ ] Touch controls for Android: long-press or a ×/crown mode toggle to place crowns
+- [x] Touch controls for Android: double tap places a crown
 - [ ] Pause the timer when the window loses focus
 
 ## Puzzle quality

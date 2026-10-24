@@ -55,14 +55,33 @@ func _run() -> void:
 	var board: Board = main._board
 	_expect(board != null and view.interactive, "puzzle generated and board accepts input")
 
-	# Click empty -> cross -> crown -> empty.
+	# Slow clicks cycle empty -> cross -> crown -> empty.
 	var target := Vector2i(0, (board.solution[0] + 2) % board.size)
-	await _click(view, target)
+	await _slow_click(view, target)
 	_expect(board.get_mark(target) == Board.Mark.CROSS, "first click crosses")
-	await _click(view, target)
+	await _slow_click(view, target)
 	_expect(board.get_mark(target) == Board.Mark.CROWN, "second click places a crown")
-	await _click(view, target)
+	await _slow_click(view, target)
 	_expect(board.get_mark(target) == Board.Mark.EMPTY, "third click empties")
+
+	# A double tap places a crown whatever the cell held.
+	await _slow_click(view, target)
+	await _click(view, target)
+	_expect(board.get_mark(target) == Board.Mark.CROWN, "double tap on empty places a crown")
+	await _slow_click(view, target)
+	await _slow_click(view, target)
+	_expect(board.get_mark(target) == Board.Mark.CROSS, "slow taps keep cycling")
+	await _slow_click(view, target)
+	await _click(view, target)
+	_expect(board.get_mark(target) == Board.Mark.CROWN, "double tap on a cross places a crown")
+	await _click(view, target)
+	_expect(board.get_mark(target) == Board.Mark.EMPTY, "a third quick tap cycles normally")
+	view._tap_time = -view.DOUBLE_TAP_MS
+	await _touch(view, target)
+	_expect(board.get_mark(target) == Board.Mark.CROSS, "a touchscreen tap crosses")
+	await _touch(view, target)
+	_expect(board.get_mark(target) == Board.Mark.CROWN, "a touchscreen double tap places a crown")
+	main._on_clear()
 
 	# Drag across the bottom row crosses every cell in one undo step.
 	var undo_before: int = main._undo.size()
@@ -72,6 +91,7 @@ func _run() -> void:
 	_expect(main._undo.size() == undo_before + 1, "drag is a single undo step")
 
 	# Dragging from a cross erases every cross it passes, also in one undo step.
+	# Pressing the drag's first cell right after a drag is not a double tap.
 	await _drag_row(view, last)
 	_expect(_count_row(board, last, Board.Mark.EMPTY) == board.size, "drag from a cross erased the row")
 	_expect(main._undo.size() == undo_before + 2, "erase drag is a single undo step")
@@ -243,6 +263,21 @@ func _count_row(board: Board, row: int, mark: int) -> int:
 		if board.get_mark(Vector2i(row, col)) == mark:
 			count += 1
 	return count
+
+
+func _touch(view: Control, cell: Vector2i) -> void:
+	for pressed in [true, false]:
+		var event := InputEventScreenTouch.new()
+		event.pressed = pressed
+		event.position = view.get_global_transform() * _cell_center(view, cell)
+		Input.parse_input_event(event)
+		await _frames(1)
+
+
+## A click long enough after the previous one that it can't count as a double tap.
+func _slow_click(view: Control, cell: Vector2i) -> void:
+	view._tap_time = -view.DOUBLE_TAP_MS
+	await _click(view, cell)
 
 
 func _right_click(view: Control, cell: Vector2i) -> void:

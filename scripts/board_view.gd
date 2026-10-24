@@ -3,7 +3,8 @@ extends Control
 ##
 ## Left click cycles empty -> cross -> crown -> empty. Dragging from an empty
 ## cell crosses out every empty cell it passes; dragging from a cross erases
-## every cross it passes. Right click toggles a crown.
+## every cross it passes. Double click (or double tap) places a crown. Right
+## click toggles a crown.
 
 const Board := preload("res://scripts/board.gd")
 
@@ -20,6 +21,7 @@ const LINE_COLOR := Color(0.1, 0.1, 0.1, 0.35)
 const BORDER_COLOR := Color("1e1e1e")
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
+const DOUBLE_TAP_MS := 400
 
 var board: Board:
 	set(value):
@@ -41,6 +43,9 @@ var _erasing := false
 ## Cross pressed to start a possible erase stroke; becomes a crown if the
 ## press is released without leaving it.
 var _press_cell := Vector2i(-1, -1)
+## Cell and time of the last press that stayed on its cell, for spotting double taps.
+var _tap_cell := Vector2i(-1, -1)
+var _tap_time := -DOUBLE_TAP_MS
 
 
 func _ready() -> void:
@@ -57,7 +62,13 @@ func _gui_input(event: InputEvent) -> void:
 		if button.pressed and cell.x >= 0:
 			if button.button_index == MOUSE_BUTTON_LEFT:
 				var old := board.get_mark(cell)
-				if board.is_cross(cell):
+				var now := Time.get_ticks_msec()
+				var double_tap := cell == _tap_cell and now - _tap_time < DOUBLE_TAP_MS
+				_tap_cell = Vector2i(-1, -1) if double_tap else cell
+				_tap_time = now
+				if double_tap:
+					_change(cell, Board.Mark.CROWN)
+				elif board.is_cross(cell):
 					_erasing = true
 					_press_cell = cell
 				else:
@@ -72,12 +83,15 @@ func _gui_input(event: InputEvent) -> void:
 			_finish_stroke()
 	elif event is InputEventMouseMotion and _painting:
 		var cell := _cell_at((event as InputEventMouseMotion).position)
+		if cell != _tap_cell:
+			_tap_cell = Vector2i(-1, -1)
 		if cell.x >= 0 and board.get_mark(cell) == Board.Mark.EMPTY:
 			_change(cell, Board.Mark.CROSS)
 		accept_event()
 	elif event is InputEventMouseMotion and _erasing:
 		var cell := _cell_at((event as InputEventMouseMotion).position)
 		if cell.x >= 0 and cell != _press_cell:
+			_tap_cell = Vector2i(-1, -1)
 			_change(_press_cell, Board.Mark.EMPTY)
 			if board.is_cross(cell):
 				_change(cell, Board.Mark.EMPTY)
