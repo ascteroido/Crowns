@@ -17,7 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GodotPlayGameServices="*res://addons/GodotPlayGameServices/scripts/autoloads/godot_play_game_services.gd"
+GodotPlayGameServices="*uid://dhmktlr0jlrgf"
 
 [display]
 
@@ -25,6 +25,7 @@ window/size/viewport_width=640
 window/size/viewport_height=860
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [editor_plugins]
 
@@ -37,3 +38,4 @@ enabled=PackedStringArray("res://addons/GodotPlayGameServices/plugin.cfg")
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+textures/vram_compression/import_etc2_astc=true
