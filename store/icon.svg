@@ -1,66 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-<rect x="0.0" y="0.0" width="128.0" height="128.0" fill="#bba3e2"/>
-<rect x="128.0" y="0.0" width="128.0" height="128.0" fill="#bba3e2"/>
-<rect x="256.0" y="0.0" width="128.0" height="128.0" fill="#ffc992"/>
-<rect x="384.0" y="0.0" width="128.0" height="128.0" fill="#ffc992"/>
-<rect x="0.0" y="128.0" width="128.0" height="128.0" fill="#bba3e2"/>
-<rect x="128.0" y="128.0" width="128.0" height="128.0" fill="#96beff"/>
-<rect x="256.0" y="128.0" width="128.0" height="128.0" fill="#ffc992"/>
-<rect x="384.0" y="128.0" width="128.0" height="128.0" fill="#ffc992"/>
-<rect x="0.0" y="256.0" width="128.0" height="128.0" fill="#b3dfa0"/>
-<rect x="128.0" y="256.0" width="128.0" height="128.0" fill="#96beff"/>
-<rect x="256.0" y="256.0" width="128.0" height="128.0" fill="#96beff"/>
-<rect x="384.0" y="256.0" width="128.0" height="128.0" fill="#ffc992"/>
-<rect x="0.0" y="384.0" width="128.0" height="128.0" fill="#b3dfa0"/>
-<rect x="128.0" y="384.0" width="128.0" height="128.0" fill="#b3dfa0"/>
-<rect x="256.0" y="384.0" width="128.0" height="128.0" fill="#96beff"/>
-<rect x="384.0" y="384.0" width="128.0" height="128.0" fill="#96beff"/>
-<g opacity="0.35" stroke="#1e1e1e" stroke-width="3">
-<line x1="128.0" y1="0.0" x2="128.0" y2="128.0"/>
-<line x1="0.0" y1="128.0" x2="128.0" y2="128.0"/>
-<line x1="384.0" y1="0.0" x2="384.0" y2="128.0"/>
-<line x1="256.0" y1="128.0" x2="384.0" y2="128.0"/>
-<line x1="384.0" y1="128.0" x2="512.0" y2="128.0"/>
-<line x1="128.0" y1="256.0" x2="256.0" y2="256.0"/>
-<line x1="384.0" y1="128.0" x2="384.0" y2="256.0"/>
-<line x1="384.0" y1="256.0" x2="512.0" y2="256.0"/>
-<line x1="0.0" y1="384.0" x2="128.0" y2="384.0"/>
-<line x1="256.0" y1="256.0" x2="256.0" y2="384.0"/>
-<line x1="256.0" y1="384.0" x2="384.0" y2="384.0"/>
-<line x1="128.0" y1="384.0" x2="128.0" y2="512.0"/>
-<line x1="384.0" y1="384.0" x2="384.0" y2="512.0"/>
-</g>
-<g stroke="#1e1e1e" stroke-width="12" stroke-linecap="square">
-<line x1="256.0" y1="0.0" x2="256.0" y2="128.0"/>
-<line x1="128.0" y1="128.0" x2="256.0" y2="128.0"/>
-<line x1="128.0" y1="128.0" x2="128.0" y2="256.0"/>
-<line x1="0.0" y1="256.0" x2="128.0" y2="256.0"/>
-<line x1="256.0" y1="128.0" x2="256.0" y2="256.0"/>
-<line x1="256.0" y1="256.0" x2="384.0" y2="256.0"/>
-<line x1="128.0" y1="256.0" x2="128.0" y2="384.0"/>
-<line x1="128.0" y1="384.0" x2="256.0" y2="384.0"/>
-<line x1="384.0" y1="256.0" x2="384.0" y2="384.0"/>
-<line x1="384.0" y1="384.0" x2="512.0" y2="384.0"/>
-<line x1="256.0" y1="384.0" x2="256.0" y2="512.0"/>
-</g>
-<polygon points="156.2,89.6 149.8,41.0 174.1,64.0 192.0,30.7 209.9,64.0 234.2,41.0 227.8,89.6" fill="#1e1e1e"/>
-<rect x="156.2" y="94.7" width="71.7" height="10.2" fill="#1e1e1e"/>
-<circle cx="149.8" cy="38.4" r="5.8" fill="#1e1e1e"/>
-<circle cx="192.0" cy="26.9" r="5.8" fill="#1e1e1e"/>
-<circle cx="234.2" cy="38.4" r="5.8" fill="#1e1e1e"/>
-<polygon points="412.2,217.6 405.8,169.0 430.1,192.0 448.0,158.7 465.9,192.0 490.2,169.0 483.8,217.6" fill="#1e1e1e"/>
-<rect x="412.2" y="222.7" width="71.7" height="10.2" fill="#1e1e1e"/>
-<circle cx="405.8" cy="166.4" r="5.8" fill="#1e1e1e"/>
-<circle cx="448.0" cy="154.9" r="5.8" fill="#1e1e1e"/>
-<circle cx="490.2" cy="166.4" r="5.8" fill="#1e1e1e"/>
-<polygon points="28.2,345.6 21.8,297.0 46.1,320.0 64.0,286.7 81.9,320.0 106.2,297.0 99.8,345.6" fill="#1e1e1e"/>
-<rect x="28.2" y="350.7" width="71.7" height="10.2" fill="#1e1e1e"/>
-<circle cx="21.8" cy="294.4" r="5.8" fill="#1e1e1e"/>
-<circle cx="64.0" cy="282.9" r="5.8" fill="#1e1e1e"/>
-<circle cx="106.2" cy="294.4" r="5.8" fill="#1e1e1e"/>
-<polygon points="284.2,473.6 277.8,425.0 302.1,448.0 320.0,414.7 337.9,448.0 362.2,425.0 355.8,473.6" fill="#1e1e1e"/>
-<rect x="284.2" y="478.7" width="71.7" height="10.2" fill="#1e1e1e"/>
-<circle cx="277.8" cy="422.4" r="5.8" fill="#1e1e1e"/>
-<circle cx="320.0" cy="410.9" r="5.8" fill="#1e1e1e"/>
-<circle cx="362.2" cy="422.4" r="5.8" fill="#1e1e1e"/>
+<defs><radialGradient id="g" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#5b4a9e"/><stop offset="1" stop-color="#4a3b87"/></radialGradient></defs>
+<rect width="512" height="512" rx="0" fill="url(#g)"/>
+<polygon points="124.0,343.2 100.4,164.1 190.0,248.9 256.0,126.4 322.0,248.9 411.6,164.1 388.0,343.2" fill="#f4c542"/>
+<rect x="124.0" y="362.1" width="264.0" height="37.7" fill="#d9a521"/>
+<circle cx="100.4" cy="154.6" r="21.2" fill="#f4c542"/>
+<circle cx="256.0" cy="112.2" r="21.2" fill="#f4c542"/>
+<circle cx="411.6" cy="154.6" r="21.2" fill="#f4c542"/>
 </svg>
