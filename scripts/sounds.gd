@@ -1,7 +1,7 @@
 extends Node
-## Sound effects, synthesised at startup so the game ships no audio files.
-## Bubble pops for crosses, an eraser smudge for erasing, wooden ticks for
-## buttons and marimba notes for crowns and wins.
+## Sound effects. Crosses, erasing and the win play recordings from sounds/;
+## the rest are synthesised at startup: wooden ticks for buttons and marimba
+## notes for crowns, hints and conflicts.
 
 ## Plenty for soft percussion, and half the startup work of 44.1 kHz.
 const RATE := 22050
@@ -23,8 +23,9 @@ func _ready() -> void:
 		add_child(player)
 		_players.append(player)
 	_streams.click = _render(0.05, func(t: float) -> float: return _knock(t, 1700.0, 0.006) * 0.22)
-	_streams.cross = _render(0.1, func(t: float) -> float: return _bubble(t, 280.0, 850.0, 0.03) * 0.5)
-	_streams.erase = _render(0.16, _smudge(0.16, 0.55))
+	_streams.cross = load("res://sounds/create_X.ogg")
+	_streams.erase = load("res://sounds/remove_x.mp3")
+	_streams.win = load("res://sounds/complete_puzzle.wav")
 	# Two rising notes, a fifth apart.
 	_streams.crown = _render(0.8, func(t: float) -> float:
 		return ((_marimba(t, _note(72), 0.18) * 0.8 + _marimba(t - 0.08, _note(79), 0.34)) * 0.45
@@ -33,13 +34,6 @@ func _ready() -> void:
 		return (_marimba(t, _note(52), 0.16) + _marimba(t, _note(53), 0.16)) * 0.24)
 	_streams.hint = _render(0.6, func(t: float) -> float:
 		return (_marimba(t, _note(79), 0.22) + _marimba(t - 0.09, _note(84), 0.28)) * 0.3)
-	# A rising arpeggio that settles on a chord.
-	_streams.win = _render(1.6, func(t: float) -> float:
-		var notes := [[0.0, 72], [0.09, 76], [0.18, 79], [0.3, 84]]
-		var sum := 0.0
-		for n: Array in notes:
-			sum += _marimba(t - n[0], _note(n[1]), 0.5)
-		return sum * 0.28)
 	_streams.fail = _render(1.0, func(t: float) -> float:
 		var notes := [[0.0, 67], [0.16, 63], [0.32, 60]]
 		var sum := 0.0
@@ -77,33 +71,6 @@ func _knock(t: float, freq: float, decay: float) -> float:
 	return attack * (sin(TAU * freq * t) * exp(-t / decay)
 			+ 0.5 * sin(TAU * freq * 2.76 * t) * exp(-t / (decay * 0.6))
 			+ 0.25 * sin(TAU * freq * 5.4 * t) * exp(-t / (decay * 0.35)))
-
-
-## A bubble pop: a pure tone that sweeps quickly upward as it dies away.
-func _bubble(t: float, from_freq: float, to_freq: float, sweep: float) -> float:
-	if t < 0.0:
-		return 0.0
-	# Phase of an exponential sweep from `from_freq` to `to_freq` over `sweep` seconds, then held.
-	var ratio := to_freq / from_freq
-	var k := log(ratio) / sweep
-	var phase := from_freq * (exp(k * minf(t, sweep)) - 1.0) / k + to_freq * maxf(0.0, t - sweep)
-	var attack := minf(1.0, t / 0.002)
-	return attack * sin(TAU * phase) * exp(-t / 0.022)
-
-
-## An eraser rubbing: noise through a band-pass filter whose centre slides down
-## as it swells and fades. Returns a wave for _render, which keeps the filter state.
-func _smudge(seconds: float, gain: float) -> Callable:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	var filter := {"fast": 0.0, "slow": 0.0}
-	var slow_coefficient := 1.0 - exp(-TAU * 300.0 / RATE)
-	return func(t: float) -> float:
-		var u := clampf(t / seconds, 0.0, 1.0)
-		var fast_coefficient := 1.0 - exp(-TAU * lerpf(2400.0, 900.0, u) / RATE)
-		filter.fast += fast_coefficient * (rng.randf_range(-1.0, 1.0) - filter.fast)
-		filter.slow += slow_coefficient * (filter.fast - filter.slow)
-		return (filter.fast - filter.slow) * pow(sin(PI * u), 1.5) * gain
 
 
 ## A marimba note: the fundamental plus the bar's bright fourth harmonic, which fades first.
