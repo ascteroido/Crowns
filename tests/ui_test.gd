@@ -7,6 +7,7 @@ const Board := preload("res://scripts/board.gd")
 const BoardViewScript := preload("res://scripts/board_view.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
+const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
 var failures := 0
@@ -342,6 +343,8 @@ func _run() -> void:
 	await _check_stats()
 	await _frames(2)
 	await _check_patterns()
+	await _frames(2)
+	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
@@ -528,6 +531,51 @@ func _check_patterns() -> void:
 	await _frames(3)
 	_screenshot("patterns.png")
 	view.queue_free()
+
+
+func _check_languages() -> void:
+	_expect(FileAccess.get_file_as_string("res://translations/crowns.pot") == UpdatePot.build(),
+			"translations/crowns.pot is up to date (run tools/update_pot.gd)")
+
+	var german := Translation.new()
+	german.locale = "de"
+	german.add_message("English", "Deutsch", "language name")
+	german.add_message("Dark mode", "Dunkelmodus")
+	german.add_plural_message("%d puzzle", PackedStringArray(["%d Rätsel", "%d Rätsel"]))
+	TranslationServer.add_translation(german)
+
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var picker: OptionButton = game._settings.language_picker
+	var items := []
+	for i in picker.item_count:
+		items.append(picker.get_item_text(i))
+	_expect(items == ["Device language", "English", "Deutsch"], "language picker lists the languages by their own names")
+	_expect(picker.selected == 0, "language follows the device by default")
+
+	picker.select(2)
+	picker.item_selected.emit(2)
+	await _frames(3)
+	var fresh: Control = root.get_children().filter(func(node: Node) -> bool:
+		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
+	_expect(fresh != null and not is_instance_valid(game), "choosing a language rebuilds the game")
+	_expect(fresh._settings.visible and fresh._settings.dark_mode_toggle.text == "Dunkelmodus",
+			"the rebuilt game shows Settings in the new language")
+	_expect(fresh._puzzles(2) == "2 Rätsel" and fresh._settings.language_picker.selected == 2, "plurals and the picker follow the language")
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "language", "") == "de", "language choice is saved")
+
+	fresh._settings.language_picker.item_selected.emit(0)
+	await _frames(3)
+	var english: Control = root.get_children().filter(func(node: Node) -> bool:
+		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
+	_expect(english._settings.dark_mode_toggle.text == "Dark mode", "device language switches back")
+	english.queue_free()
+	TranslationServer.remove_translation(german)
+	await _frames(2)
 
 
 func _archive_day(archive: Control, date: String) -> Button:

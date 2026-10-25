@@ -12,6 +12,7 @@ const Archive := preload("res://scripts/archive.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
 const CrownIcon := preload("res://scripts/crown_icon.gd")
+const Language := preload("res://scripts/language.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -45,10 +46,11 @@ const CHALLENGE_STAGES := [
 const CHALLENGE_KEY := "challenge"
 ## Save section for streaks and per-size totals.
 const STATS := "stats"
-const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 ## Where progress and best times are stored; tests point this elsewhere.
 var save_path := "user://queens_progress.cfg"
+## Opens on Settings instead of the menu, for the rebuild after a language change.
+var open_settings := false
 
 var _board: Board
 ## Save key of the loaded board; stays put while `_number` or `_size` change for
@@ -119,6 +121,9 @@ func _ready() -> void:
 	_number = _progress.get_value("last", "number", 1)
 	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
 	_run = _progress.get_value(CHALLENGE_KEY, "run", {})
+	Language.apply(_progress.get_value("settings", "language", ""))
+	# Text is translated with tr() as it's set, so Godot mustn't translate it again.
+	auto_translate_mode = AUTO_TRANSLATE_MODE_DISABLED
 	# Every button, whenever it's made, clicks when pressed.
 	get_tree().node_added.connect(_on_node_added)
 	_build_ui()
@@ -131,7 +136,13 @@ func _ready() -> void:
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
 	_sounds.enabled = _progress.get_value("settings", "sound", true)
 	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
+	var names := {}
+	for locale in Language.locales():
+		names[locale] = Language.native_name(locale)
+	_settings.set_languages(names, _progress.get_value("settings", "language", ""))
 	_show_menu()
+	if open_settings:
+		_show_settings()
 
 
 func _notification(what: int) -> void:
@@ -190,6 +201,7 @@ func _build_ui() -> void:
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
+	_settings.language_chosen.connect(_on_language_chosen)
 	_settings.back.connect(_show_menu)
 	add_child(_settings)
 
@@ -228,7 +240,7 @@ func _build_ui() -> void:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	column.add_child(header)
-	_back_button = _button("Menu", _leave_game)
+	_back_button = _button(tr("Menu"), _leave_game)
 	header.add_child(_back_button)
 	var title := _label("Crowns", 34)
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -240,8 +252,8 @@ func _build_ui() -> void:
 	_size_picker.item_selected.connect(_on_size_selected)
 	header.add_child(_size_picker)
 	_difficulty_picker = OptionButton.new()
-	for name: String in Generator.DIFFICULTY_NAMES:
-		_difficulty_picker.add_item(name)
+	for difficulty in Generator.DIFFICULTY_NAMES.size():
+		_difficulty_picker.add_item(_difficulty_name(difficulty))
 	_difficulty_picker.select(_difficulty)
 	_difficulty_picker.item_selected.connect(_on_difficulty_selected)
 	header.add_child(_difficulty_picker)
@@ -249,13 +261,13 @@ func _build_ui() -> void:
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 8)
 	column.add_child(nav)
-	_prev_button = _button("Prev", func() -> void: _go_to(_number - 1))
+	_prev_button = _button(tr("Prev"), func() -> void: _go_to(_number - 1))
 	nav.add_child(_prev_button)
 	_puzzle_label = _label("", 20)
 	_puzzle_label.custom_minimum_size.x = 120
 	_puzzle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nav.add_child(_puzzle_label)
-	_next_button = _button("Next", func() -> void: _go_to(_number + 1))
+	_next_button = _button(tr("Next"), func() -> void: _go_to(_number + 1))
 	nav.add_child(_next_button)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -279,10 +291,10 @@ func _build_ui() -> void:
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	actions.add_theme_constant_override("separation", 12)
 	column.add_child(actions)
-	_undo_button = _button("Undo", _on_undo)
+	_undo_button = _button(tr("Undo"), _on_undo)
 	actions.add_child(_undo_button)
-	actions.add_child(_button("Clear", _on_clear))
-	_hint_button = _button("Hint", _on_hint)
+	actions.add_child(_button(tr("Clear"), _on_clear))
+	_hint_button = _button(tr("Hint"), _on_hint)
 	_hint_button.custom_minimum_size.x = 120
 	actions.add_child(_hint_button)
 
@@ -293,8 +305,8 @@ func _build_ui() -> void:
 	_hint_label.custom_minimum_size.y = 46
 	column.add_child(_hint_label)
 
-	var help := _label("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.\n"
-			+ "Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo.", 14)
+	var help := _label(tr("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.")
+			+ "\n" + tr("Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."), 14)
 	help.modulate = Color(1, 1, 1, 0.65)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -329,7 +341,7 @@ func _build_win_overlay() -> void:
 	_win_crown = CrownIcon.new()
 	_win_crown.custom_minimum_size = Vector2(0, 56)
 	box.add_child(_win_crown)
-	_win_heading = _label("Solved!", 32)
+	_win_heading = _label(tr("Solved!"), 32)
 	_win_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_win_heading)
 	_win_label = _label("", 18)
@@ -339,12 +351,12 @@ func _build_win_overlay() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	box.add_child(buttons)
-	buttons.add_child(_button("Look at board", _hide_overlay))
-	_win_back_button = _button("Menu", _leave_game)
+	buttons.add_child(_button(tr("Look at board"), _hide_overlay))
+	_win_back_button = _button(tr("Menu"), _leave_game)
 	buttons.add_child(_win_back_button)
-	_next_puzzle_button = _button("Next puzzle", _on_next_puzzle)
+	_next_puzzle_button = _button(tr("Next puzzle"), _on_next_puzzle)
 	buttons.add_child(_next_puzzle_button)
-	_win_leaderboard_button = _button("Leaderboard", _show_mode_leaderboard)
+	_win_leaderboard_button = _button(tr("Leaderboard"), _show_mode_leaderboard)
 	_win_leaderboard_button.visible = _play_games.available()
 	buttons.add_child(_win_leaderboard_button)
 
@@ -435,22 +447,22 @@ func _show_menu() -> void:
 	var today := _today()
 	var best: float = _progress.get_value("best", _daily_key(today), INF)
 	var daily_detail := "%s · %d×%d · %s" % [_pretty_date(today), _daily_size(today), _daily_size(today),
-			Generator.DIFFICULTY_NAMES[DAILY_DIFFICULTY]]
+			_difficulty_name(DAILY_DIFFICULTY)]
 	if best != INF:
-		daily_detail = "Solved in %s" % _format_time(best)
+		daily_detail = tr("Solved in %s") % _format_time(best)
 	elif _progress.get_value("solved", _daily_key(today), false):
-		daily_detail = "Solved (hints used)"
+		daily_detail = tr("Solved (hints used)")
 	var streak := _current_streak()
 	if streak > 0:
-		daily_detail += " · %s streak" % _days(streak)
+		daily_detail += " · " + tr_n("%d day streak", "%d days streak", streak) % streak
 	var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
-	var challenge_detail := "One life, no hints"
+	var challenge_detail := tr("One life, no hints")
 	if not _run.is_empty():
-		challenge_detail = "Run in progress · Puzzle %d" % _run.level
+		challenge_detail = tr("Run in progress · Puzzle %d") % _run.level
 	elif best_run > 0:
-		challenge_detail = "Best run: %s" % _puzzles(best_run)
-	_menu.set_details("Continue" if started else "Play",
-			"%d×%d · %s · Puzzle #%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty], _number],
+		challenge_detail = tr("Best run: %s") % _puzzles(best_run)
+	_menu.set_details(tr("Continue") if started else tr("Play"),
+			"%d×%d · %s · %s" % [_size, _size, _difficulty_name(_difficulty), tr("Puzzle #%d") % _number],
 			daily_detail, challenge_detail)
 
 
@@ -492,9 +504,9 @@ func _exit() -> void:
 
 func _show_stats() -> void:
 	var daily := [
-		["Current streak", _days(_current_streak())],
-		["Longest streak", _days(_progress.get_value(STATS, "longest_streak", 0))],
-		["Dailies solved", _progress.get_value(STATS, "dailies_solved", 0)],
+		[tr("Current streak"), _days(_current_streak())],
+		[tr("Longest streak"), _days(_progress.get_value(STATS, "longest_streak", 0))],
+		[tr("Dailies solved"), _progress.get_value(STATS, "dailies_solved", 0)],
 	]
 	var sizes := []
 	for size: int in SIZES:
@@ -504,9 +516,9 @@ func _show_stats() -> void:
 		sizes.append(["%d×%d" % [size, size], _progress.get_value(STATS, "solved_%d" % size, 0),
 				_format_time(total / timed) if timed > 0 else "–", _format_time(best) if best != INF else "–"])
 	var climb := [
-		["Best run", _puzzles(_progress.get_value(CHALLENGE_KEY, "best", 0))],
-		["Runs played", _progress.get_value(STATS, "climb_runs", 0)],
-		["Puzzles cleared", _progress.get_value(STATS, "climb_solved", 0)],
+		[tr("Best run"), _puzzles(_progress.get_value(CHALLENGE_KEY, "best", 0))],
+		[tr("Runs played"), _progress.get_value(STATS, "climb_runs", 0)],
+		[tr("Puzzles cleared"), _progress.get_value(STATS, "climb_solved", 0)],
 	]
 	_stats.set_stats(daily, sizes, climb)
 	_menu.visible = false
@@ -582,6 +594,21 @@ func _on_patterns_toggled(enabled: bool) -> void:
 	_progress.save(save_path)
 
 
+## Saves the choice, then rebuilds every screen in the new language, back on Settings.
+func _on_language_chosen(locale: String) -> void:
+	_progress.set_value("settings", "language", locale)
+	_save_board()
+	_progress.save(save_path)
+	Language.apply(locale)
+	var fresh: Control = load(scene_file_path).instantiate()
+	fresh.save_path = save_path
+	fresh.open_settings = true
+	add_sibling(fresh)
+	if get_tree().current_scene == self:
+		get_tree().current_scene = fresh
+	queue_free()
+
+
 func _apply_dark_mode(enabled: bool) -> void:
 	var colors: Dictionary = DARK if enabled else LIGHT
 	_background.color = colors.background
@@ -625,7 +652,7 @@ func _apply_dark_mode(enabled: bool) -> void:
 func _start(mode: Mode, date := "") -> void:
 	_mode = mode
 	_from_archive = not date.is_empty()
-	_back_button.text = "Back" if _from_archive else "Menu"
+	_back_button.text = tr("Back") if _from_archive else tr("Menu")
 	_win_back_button.text = _back_button.text
 	if mode == Mode.DAILY:
 		_daily_date = date if _from_archive else _today()
@@ -659,7 +686,7 @@ func _load_puzzle() -> void:
 	_win_leaderboard_button.visible = _play_games.available() and (_mode != Mode.DAILY or _daily_live)
 	_view.interactive = false
 	_generating = true
-	_puzzle_label.text = "Generating…"
+	_puzzle_label.text = tr("Generating…")
 	# Let the label paint before the larger sizes block for a moment.
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -698,11 +725,11 @@ func _load_puzzle() -> void:
 	_running = true
 	match _mode:
 		Mode.REGULAR:
-			_puzzle_label.text = "Puzzle #%d" % _number
+			_puzzle_label.text = tr("Puzzle #%d") % _number
 		Mode.DAILY:
-			_puzzle_label.text = "Daily · %s" % _pretty_date(_daily_date)
+			_puzzle_label.text = tr("Daily · %s") % _pretty_date(_daily_date)
 		Mode.CHALLENGE:
-			_puzzle_label.text = "The Climb #%d · %s" % [_run.level, Generator.DIFFICULTY_NAMES[difficulty]]
+			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(difficulty)]
 	_update_best()
 
 	if _mode == Mode.REGULAR:
@@ -818,7 +845,7 @@ func _on_hint() -> void:
 	_hint_label.text = _hint.message
 	_view.hint_focus = _hint.focus
 	_view.hint_targets = _hint.targets
-	_hint_button.text = "Apply hint"
+	_hint_button.text = tr("Apply hint")
 
 
 func _clear_hint() -> void:
@@ -826,7 +853,7 @@ func _clear_hint() -> void:
 	_hint_label.text = ""
 	_view.hint_focus = PackedInt32Array()
 	_view.hint_targets = PackedInt32Array()
-	_hint_button.text = "Hint"
+	_hint_button.text = tr("Hint")
 
 
 ## Points out a mistake if there is one, otherwise the easiest deduction left.
@@ -834,11 +861,11 @@ func _find_hint() -> Dictionary:
 	var n := _board.size
 	for cell in _board.crowns():
 		if _board.solution[cell.x] != cell.y:
-			return _make_hint("This crown isn't part of the solution.", [cell], [[cell, Board.Mark.CROWN, Board.Mark.EMPTY]])
+			return _make_hint(tr("This crown isn't part of the solution."), [cell], [[cell, Board.Mark.CROWN, Board.Mark.EMPTY]])
 	for row in n:
 		var cell := Vector2i(row, _board.solution[row])
 		if _board.is_cross(cell):
-			return _make_hint("This cell is crossed out, but it needs a crown.", [cell],
+			return _make_hint(tr("This cell is crossed out, but it needs a crown."), [cell],
 					[[cell, _board.get_mark(cell), Board.Mark.EMPTY]])
 
 	var step := Grader.next_step(n, _board.regions, _board.marks)
@@ -846,7 +873,7 @@ func _find_hint() -> Dictionary:
 		for row in n:
 			var cell := Vector2i(row, _board.solution[row])
 			if _board.get_mark(cell) != Board.Mark.CROWN:
-				return _make_hint("There's no simple deduction from here, so here's a crown.", [cell],
+				return _make_hint(tr("There's no simple deduction from here, so here's a crown."), [cell],
 						[[cell, _board.get_mark(cell), Board.Mark.CROWN]])
 	var changes := []
 	var targets: Array[Vector2i] = []
@@ -870,25 +897,30 @@ func _make_hint(message: String, targets: Array, changes: Array) -> Dictionary:
 	return {"message": message, "focus": indices, "targets": indices, "changes": changes}
 
 
+## The deduction behind a hint, as a sentence. Groups are named by _group_name(s),
+## like "row 3" or "the purple and blue regions".
 func _explain(step: Dictionary) -> String:
+	return _upper_first(_explain_step(step))
+
+
+func _explain_step(step: Dictionary) -> String:
 	var from: Array = step.from
 	match step.rule:
 		"single":
-			return "%s has only one cell left that can hold its crown." % _upper_first(_group_name(from[0]))
+			# TRANSLATORS: {group} is a row, column or region, e.g. "row 3" or "the purple region".
+			return tr("{group} has only one cell left that can hold its crown.").format({"group": _group_name(from[0])})
 		"blocker":
 			var cell: int = step.cross[0]
-			return "A crown in row %d, column %d would rule out every open cell left in %s, so cross it out." \
-					% [cell / _board.size + 1, cell % _board.size + 1, _group_name(from[0])]
+			return tr("A crown in row {row}, column {column} would rule out every open cell left in {group}, so cross it out.") \
+					.format({"row": cell / _board.size + 1, "column": cell % _board.size + 1, "group": _group_name(from[0])})
 	var to: Array = step.to
 	if from.size() == 1:
-		var a := _group_name(from[0])
-		var b := _group_name(to[0])
-		return "%s's open cells all lie in %s, so %s's crown must come from %s. Cross out the rest of %s." \
-				% [_upper_first(a), b, b, a, b]
-	var a := _group_names(from)
-	var b := _group_names(to)
-	return "%s only have open cells in %s, so their %d crowns fill %s. Cross out everything else in %s." \
-			% [_upper_first(a), b, from.size(), b, b]
+		# TRANSLATORS: {a} and {b} are a row, column or region, e.g. "the purple region".
+		return tr("{a}'s open cells all lie in {b}, so {b}'s crown must come from {a}. Cross out the rest of {b}.") \
+				.format({"a": _group_name(from[0]), "b": _group_name(to[0])})
+	# TRANSLATORS: {a} and {b} are several rows, columns or regions, e.g. "rows 2 and 3"; {count} is at least 2.
+	return tr("{a} only have open cells in {b}, so their {count} crowns fill {b}. Cross out everything else in {b}.") \
+			.format({"a": _group_names(from), "b": _group_names(to), "count": from.size()})
 
 
 func _upper_first(text: String) -> String:
@@ -899,10 +931,11 @@ func _group_name(group: int) -> String:
 	var index := Grader.group_index(_board.size, group)
 	match Grader.group_kind(_board.size, group):
 		Grader.Kind.ROW:
-			return "row %d" % (index + 1)
+			return tr("row %d") % (index + 1)
 		Grader.Kind.COLUMN:
-			return "column %d" % (index + 1)
-	return "the %s region" % BoardView.REGION_NAMES[index % BoardView.REGION_NAMES.size()]
+			return tr("column %d") % (index + 1)
+	# TRANSLATORS: %s is a region colour, e.g. "purple".
+	return tr("the %s region") % _view.region_name(index)
 
 
 ## "rows 2 and 3", "the purple, blue and green regions".
@@ -911,16 +944,19 @@ func _group_names(groups: Array) -> String:
 	for group: int in groups:
 		var index := Grader.group_index(_board.size, group)
 		if Grader.group_kind(_board.size, group) == Grader.Kind.REGION:
-			parts.append(BoardView.REGION_NAMES[index % BoardView.REGION_NAMES.size()])
+			parts.append(_view.region_name(index))
 		else:
 			parts.append(str(index + 1))
-	var listed := ", ".join(parts.slice(0, -1)) + " and " + parts[-1]
+	# TRANSLATORS: Joins a list, e.g. "2, 3 and 4": {items} is all but the last item, joined by the list separator.
+	var listed := tr("{items} and {last}").format({"items": tr(", ", "list separator").join(parts.slice(0, -1)),
+			"last": parts[-1]})
 	match Grader.group_kind(_board.size, groups[0]):
 		Grader.Kind.ROW:
-			return "rows " + listed
+			return tr("rows %s") % listed
 		Grader.Kind.COLUMN:
-			return "columns " + listed
-	return "the %s regions" % listed
+			return tr("columns %s") % listed
+	# TRANSLATORS: %s lists region colours, e.g. "purple and blue".
+	return tr("the %s regions") % listed
 
 
 ## Applies an undoable batch of [cell, old, new] changes made outside the board view.
@@ -945,9 +981,9 @@ func _check_win() -> void:
 	_view.celebrate()
 	_sounds.play("win")
 	_win_crown.visible = true
-	_win_heading.text = "Solved!"
+	_win_heading.text = tr("Solved!")
 	_next_puzzle_button.visible = _mode != Mode.DAILY
-	_next_puzzle_button.text = "Next puzzle"
+	_next_puzzle_button.text = tr("Next puzzle")
 	if _mode == Mode.CHALLENGE:
 		var solved: int = _run.level
 		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
@@ -959,7 +995,7 @@ func _check_win() -> void:
 		_add_stat("climb_solved", 1)
 		_play_games.submit_climb(solved)
 		_progress.save(save_path)
-		_win_label.text = "%s solved · %s" % [_puzzles(solved), _format_time(_elapsed)]
+		_win_label.text = _run_summary(solved)
 		_update_best()
 		_show_win_overlay()
 		return
@@ -982,8 +1018,8 @@ func _check_win() -> void:
 		_play_games.submit_daily_time(_elapsed)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
-	var note := "  (hints used)" if _hinted else "  (new best!)" if record and best != INF else ""
-	_win_label.text = "Time: %s%s" % [_format_time(_elapsed), note]
+	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
+	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
 	_update_best()
 	_show_win_overlay()
 
@@ -1008,13 +1044,18 @@ func _end_run(mistake: Vector2i) -> void:
 	_progress.save(save_path)
 	_sounds.play("fail")
 	_win_crown.visible = false
-	_win_heading.text = "Out of lives"
-	var note := "  (best run!)" if solved > 0 and solved >= best_run else ""
-	_win_label.text = "That crown doesn't belong there.\n%s solved · %s%s" % [_puzzles(solved), _format_time(_elapsed), note]
+	_win_heading.text = tr("Out of lives")
+	var note := "  " + tr("(best run!)") if solved > 0 and solved >= best_run else ""
+	_win_label.text = tr("That crown doesn't belong there.") + "\n" + _run_summary(solved) + note
 	_next_puzzle_button.visible = true
-	_next_puzzle_button.text = "New run"
+	_next_puzzle_button.text = tr("New run")
 	_update_best()
 	_show_overlay(0.4)
+
+
+## "3 puzzles solved · 4:05" for The Climb's panels.
+func _run_summary(solved: int) -> String:
+	return tr_n("%d puzzle solved", "%d puzzles solved", solved) % solved + " · " + _format_time(_elapsed)
 
 
 ## Opens the Play Games board for the mode just played.
@@ -1031,10 +1072,10 @@ func _show_mode_leaderboard() -> void:
 func _update_best() -> void:
 	if _mode == Mode.CHALLENGE:
 		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
-		_best_label.text = "" if best_run == 0 else "Best run %d" % best_run
+		_best_label.text = "" if best_run == 0 else tr("Best run %d") % best_run
 		return
 	var best: float = _progress.get_value("best", _puzzle_key(), INF)
-	_best_label.text = "" if best == INF else "Best %s" % _format_time(best)
+	_best_label.text = "" if best == INF else tr("Best %s") % _format_time(best)
 
 
 func _puzzle_key() -> String:
@@ -1063,15 +1104,25 @@ func _today() -> String:
 ## "2026-10-23" -> "Oct 23".
 func _pretty_date(date: String) -> String:
 	var parts := date.split("-")
-	return "%s %d" % [MONTHS[parts[1].to_int() - 1], parts[2].to_int()]
+	var months: Array[String] = [tr("Jan", "short month"), tr("Feb", "short month"), tr("Mar", "short month"),
+			tr("Apr", "short month"), tr("May", "short month"), tr("Jun", "short month"), tr("Jul", "short month"),
+			tr("Aug", "short month"), tr("Sep", "short month"), tr("Oct", "short month"), tr("Nov", "short month"),
+			tr("Dec", "short month")]
+	# TRANSLATORS: A short date, e.g. "Oct 23".
+	return tr("{month} {day}", "short date").format({"month": months[parts[1].to_int() - 1], "day": parts[2].to_int()})
+
+
+## Difficulty names as shown; Generator.DIFFICULTY_NAMES stay English for save keys.
+func _difficulty_name(difficulty: int) -> String:
+	return [tr("Easy"), tr("Medium"), tr("Hard")][difficulty]
 
 
 func _puzzles(count: int) -> String:
-	return "%d puzzle%s" % [count, "" if count == 1 else "s"]
+	return tr_n("%d puzzle", "%d puzzles", count) % count
 
 
 func _days(count: int) -> String:
-	return "%d day%s" % [count, "" if count == 1 else "s"]
+	return tr_n("%d day", "%d days", count) % count
 
 
 func _format_time(seconds: float) -> String:

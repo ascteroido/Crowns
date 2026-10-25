@@ -16,7 +16,7 @@ func _ready() -> void:
 	_box.add_theme_constant_override("separation", 12)
 	center.add_child(_box)
 
-	var title := _label("Stats", 40)
+	var title := _label(tr("Stats"), 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_box.add_child(title)
 	_content = VBoxContainer.new()
@@ -24,7 +24,7 @@ func _ready() -> void:
 	_box.add_child(_content)
 
 	var back_button := Button.new()
-	back_button.text = "Back"
+	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
@@ -36,20 +36,20 @@ func _ready() -> void:
 func set_stats(daily: Array, sizes: Array, climb: Array) -> void:
 	for child in _content.get_children():
 		child.queue_free()
-	_section("Daily", _pairs(daily))
+	_section(tr("Daily"), _pairs(daily))
 	var table := GridContainer.new()
 	table.columns = 4
 	table.add_theme_constant_override("h_separation", 24)
 	table.add_theme_constant_override("v_separation", 4)
-	for heading in ["Size", "Solved", "Average", "Best"]:
+	for heading in [tr("Size"), tr("Solved"), tr("Average"), tr("Best")]:
 		var cell := _table_cell(heading, 15, table.get_child_count())
 		cell.modulate = Color(1, 1, 1, 0.6)
 		table.add_child(cell)
 	for row: Array in sizes:
 		for value in row:
 			table.add_child(_table_cell(str(value), 17, table.get_child_count()))
-	_section("Puzzles", table)
-	_section("The Climb", _pairs(climb))
+	_section(tr("Puzzles"), table)
+	_section(tr("The Climb"), _pairs(climb))
 
 
 func _section(heading: String, body: Control) -> void:

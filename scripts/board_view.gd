@@ -21,8 +21,6 @@ const REGION_COLORS: Array[Color] = [
 	Color("e6f388"), Color("dfa0bf"), Color("a3d2d8"), Color("b9b29e"), Color("7fd1ae"),
 	Color("f4a99b"), Color("e8c55e"), Color("a9bd72"), Color("a9b0f0"),
 ]
-const REGION_NAMES := ["purple", "orange", "blue", "green", "grey", "yellow", "pink", "teal", "tan", "mint",
-		"salmon", "gold", "olive", "periwinkle"]
 const LINE_COLOR := Color(0.1, 0.1, 0.1, 0.35)
 const HINT_COLOR := Color("2f6fde")
 const HINT_DIM := Color(0, 0, 0, 0.3)
@@ -116,6 +114,14 @@ func celebrate() -> void:
 ## How long celebrate() runs on the current board.
 func celebration_ms() -> float:
 	return (board.size - 1) * WAVE_STEP_MS + HOP_MS if board else 0.0
+
+
+## The name hints use for a region's colour, matching REGION_COLORS.
+func region_name(region: int) -> String:
+	# TRANSLATORS: Region colours, used in hints like "the purple region".
+	var names: Array[String] = [tr("purple"), tr("orange"), tr("blue"), tr("green"), tr("grey"), tr("yellow"),
+			tr("pink"), tr("teal"), tr("tan"), tr("mint"), tr("salmon"), tr("gold"), tr("olive"), tr("periwinkle")]
+	return names[region % names.size()]
 
 
 func _gui_input(event: InputEvent) -> void:

@@ -4,9 +4,6 @@ extends Control
 signal day_chosen(date: String)
 signal back
 
-const MONTH_NAMES := ["January", "February", "March", "April", "May", "June", "July", "August",
-		"September", "October", "November", "December"]
-const WEEKDAYS := ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
 ## Solved days are filled green so they stand out from the purple buttons.
 const SOLVED_FILLS := {"normal": Color("3d8a57"), "hover": Color("4a9c65"), "pressed": Color("327349")}
 const TODAY_COLOR := Color("f4c542")
@@ -35,7 +32,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 12)
 	center.add_child(box)
 
-	var title := _label("Archive", 40)
+	var title := _label(tr("Archive"), 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 
@@ -62,7 +59,7 @@ func _ready() -> void:
 	box.add_child(_summary)
 
 	var back_button := Button.new()
-	back_button.text = "Back"
+	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
@@ -92,12 +89,13 @@ func _refresh() -> void:
 	for child in _grid.get_children():
 		_grid.remove_child(child)
 		child.queue_free()
-	_month_label.text = "%s %d" % [MONTH_NAMES[_month - 1], _year]
+	# TRANSLATORS: The archive's heading, e.g. "October 2026".
+	_month_label.text = tr("{month} {year}").format({"month": _month_names()[_month - 1], "year": _year})
 	var first := "%04d-%02d-01" % [_year, _month]
 	prev_button.disabled = first <= first_date
 	next_button.disabled = "%04d-%02d-31" % [_year, _month] >= last_date
 
-	for day in WEEKDAYS:
+	for day in _weekdays():
 		var heading := _label(day, 15)
 		heading.modulate = Color(1, 1, 1, 0.6)
 		heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -133,7 +131,19 @@ func _refresh() -> void:
 				_set_font_color(button, TODAY_COLOR)
 			button.pressed.connect(day_chosen.emit.bind(date))
 		_grid.add_child(button)
-	_summary.text = "Solved %d of %d this month" % [solved, playable] if playable > 0 else ""
+	_summary.text = tr("Solved {solved} of {total} this month").format({"solved": solved, "total": playable}) \
+			if playable > 0 else ""
+
+
+func _month_names() -> Array[String]:
+	return [tr("January"), tr("February"), tr("March"), tr("April"), tr("May"), tr("June"),
+			tr("July"), tr("August"), tr("September"), tr("October"), tr("November"), tr("December")]
+
+
+## Column headings, starting on Sunday.
+func _weekdays() -> Array[String]:
+	# TRANSLATORS: Two-letter weekday abbreviations for the archive calendar's columns.
+	return [tr("Su"), tr("Mo"), tr("Tu"), tr("We"), tr("Th"), tr("Fr"), tr("Sa")]
 
 
 func _days_in_month() -> int:

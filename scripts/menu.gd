@@ -43,12 +43,12 @@ func _ready() -> void:
 	box.add_child(crown)
 	var title := _label("Crowns", 48)
 	box.add_child(title)
-	var tagline := _label("One crown per row, column and region.", 15)
+	var tagline := _label(tr("One crown per row, column and region."), 15)
 	tagline.modulate = Color(1, 1, 1, 0.65)
 	box.add_child(tagline)
 	box.add_child(_gap(24))
 
-	continue_button = _button("Continue", continue_chosen.emit)
+	continue_button = _button(tr("Continue"), continue_chosen.emit)
 	box.add_child(continue_button)
 	_continue_detail = _label("", 14)
 	_continue_detail.modulate = Color(1, 1, 1, 0.6)
@@ -58,10 +58,10 @@ func _ready() -> void:
 	var daily_row := HBoxContainer.new()
 	_scale(daily_row, "separation", 10)
 	box.add_child(daily_row)
-	daily_button = _button("Daily puzzle", daily_chosen.emit)
+	daily_button = _button(tr("Daily puzzle"), daily_chosen.emit)
 	daily_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	daily_row.add_child(daily_button)
-	archive_button = _button("Archive", archive_chosen.emit)
+	archive_button = _button(tr("Archive"), archive_chosen.emit)
 	_scale(archive_button, "width", 110)
 	daily_row.add_child(archive_button)
 	_daily_detail = _label("", 14)
@@ -69,26 +69,26 @@ func _ready() -> void:
 	box.add_child(_daily_detail)
 	box.add_child(_gap(8))
 
-	challenge_button = _button("The Climb", challenge_chosen.emit)
+	challenge_button = _button(tr("The Climb"), challenge_chosen.emit)
 	box.add_child(challenge_button)
 	_challenge_detail = _label("", 14)
 	_challenge_detail.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(_challenge_detail)
 	box.add_child(_gap(8))
 
-	stats_button = _button("Stats", stats_chosen.emit)
+	stats_button = _button(tr("Stats"), stats_chosen.emit)
 	box.add_child(stats_button)
 
 	# Shown only where Google Play Games is available.
-	leaderboards_button = _button("Leaderboards", leaderboards_chosen.emit)
+	leaderboards_button = _button(tr("Leaderboards"), leaderboards_chosen.emit)
 	leaderboards_button.visible = false
 	box.add_child(leaderboards_button)
 
-	settings_button = _button("Settings", settings_chosen.emit)
+	settings_button = _button(tr("Settings"), settings_chosen.emit)
 	box.add_child(settings_button)
 
 	# Phones and browsers leave closing apps to the system.
-	exit_button = _button("Exit", exit_chosen.emit)
+	exit_button = _button(tr("Exit"), exit_chosen.emit)
 	exit_button.visible = OS.has_feature("pc")
 	box.add_child(exit_button)
 	_fit()
