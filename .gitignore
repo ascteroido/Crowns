@@ -5,3 +5,6 @@
 
 # Signing keys
 *.keystore
+
+# Compiled translations; the game reads the .po files
+*.mo
