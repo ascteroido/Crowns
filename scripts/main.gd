@@ -15,6 +15,9 @@ const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
+## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
+## system fonts, but browsers can't, so the web build needs them bundled.
+const SYMBOLS := preload("res://fonts/DejaVuSans-symbols.ttf")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -134,6 +137,9 @@ var _win_leaderboard_button: Button
 
 func _ready() -> void:
 	_progress.load(save_path)
+	var font := ThemeDB.fallback_font
+	if SYMBOLS not in font.fallbacks:
+		font.fallbacks.append(SYMBOLS)
 	_size = _progress.get_value("last", "size", DEFAULT_SIZE)
 	_number = _progress.get_value("last", "number", 1)
 	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)

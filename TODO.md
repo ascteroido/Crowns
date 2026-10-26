@@ -23,7 +23,7 @@
 - [x] Cloud save: stats, streaks and boards in progress follow the player to a new phone
 
 ## Reach
-- [ ] Web build for itch, playable in the browser
+- [x] Web build for itch, playable in the browser
 - [ ] Puzzle codes: share or enter a seed so friends can play the same board
 - [ ] Right-to-left layout for Arabic and Hebrew translations
 
