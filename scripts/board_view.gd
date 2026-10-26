@@ -21,12 +21,16 @@ const REGION_COLORS: Array[Color] = [
 	Color("e6f388"), Color("dfa0bf"), Color("a3d2d8"), Color("b9b29e"), Color("7fd1ae"),
 	Color("f4a99b"), Color("e8c55e"), Color("a9bd72"), Color("a9b0f0"),
 ]
-const LINE_COLOR := Color(0.1, 0.1, 0.1, 0.35)
+## The tray the tiles sit on, showing through the gaps between them.
+const TRAY_LIGHT := Color("d9d2c3")
+const TRAY_DARK := Color("121214")
+## Gap between tiles and tile corner radius, as fractions of a cell.
+const GAP := 0.07
+const RADIUS := 0.16
 const HINT_COLOR := Color("2f6fde")
 const HINT_DIM := Color(0, 0, 0, 0.3)
 const PATTERN_INK := Color(0, 0, 0, 0.2)
 const PATTERN_COUNT := 14
-const BORDER_COLOR := Color("1e1e1e")
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
 const CONFLICT_BAND := Color("a8221d")
@@ -229,17 +233,23 @@ func _draw() -> void:
 		wave = -1.0
 	var pulse := 0.65 + 0.35 * sin(now / 1000.0 * TAU * 1.2)
 
+	# The tray behind the tiles, its edge as wide as the gaps between them.
+	draw_style_box(_rounded(TRAY_DARK if dark else TRAY_LIGHT, cs * RADIUS * 1.3),
+			Rect2(origin, Vector2(cs, cs) * n).grow(cs * GAP / 2.0))
 	for row in n:
 		for col in n:
 			var cell := Vector2i(row, col)
+			# The cell's square on the board; marks are sized to it, the tile sits inside it.
 			var rect := Rect2(origin + Vector2(col, row) * cs, Vector2(cs, cs))
+			var tile := rect.grow(-cs * GAP / 2.0)
+			var outline := _tile_outline(tile, cs * RADIUS)
 			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
-			draw_rect(rect, fill.darkened(0.18) if dark else fill)
+			draw_style_box(_rounded(fill.darkened(0.18) if dark else fill, cs * RADIUS), tile)
 			if patterns:
-				_draw_pattern(rect, board.region_at(cell))
+				_draw_pattern(tile, board.region_at(cell), outline)
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
 			if conflicted:
-				_draw_stripes(rect)
+				_draw_stripes(tile, outline)
 			var i := board.index(cell)
 			var mark := board.get_mark(cell)
 			var mark_rect := rect
@@ -263,35 +273,48 @@ func _draw() -> void:
 					else:
 						CrownArt.draw(self, mark_rect)
 			if not hint_focus.is_empty() and not hint_focus.has(i):
-				draw_rect(rect, HINT_DIM)
+				draw_style_box(_rounded(HINT_DIM, cs * RADIUS), tile)
 			if hint_targets.has(i):
-				var inset := cs * 0.1
-				draw_rect(rect.grow(-inset), Color(HINT_COLOR, pulse), false, maxf(2.0, cs * 0.07))
+				var ring := _rounded(Color.TRANSPARENT, cs * RADIUS)
+				ring.draw_center = false
+				ring.border_color = Color(HINT_COLOR, pulse)
+				ring.set_border_width_all(roundi(maxf(2.0, cs * 0.07)))
+				draw_style_box(ring, tile)
 
-	# Thin lines between all cells, thick ones where regions meet.
-	var thin := maxf(1.0, cs * 0.02)
-	var thick := maxf(2.0, cs * 0.07)
-	for row in n:
-		for col in n:
-			var cell := Vector2i(row, col)
-			var top_left := origin + Vector2(col, row) * cs
-			if col < n - 1:
-				var right_differs := board.region_at(cell) != board.region_at(Vector2i(row, col + 1))
-				var x := top_left.x + cs
-				draw_line(Vector2(x, top_left.y), Vector2(x, top_left.y + cs),
-						BORDER_COLOR if right_differs else LINE_COLOR, thick if right_differs else thin)
-			if row < n - 1:
-				var below_differs := board.region_at(cell) != board.region_at(Vector2i(row + 1, col))
-				var y := top_left.y + cs
-				draw_line(Vector2(top_left.x, y), Vector2(top_left.x + cs, y),
-						BORDER_COLOR if below_differs else LINE_COLOR, thick if below_differs else thin)
-	draw_rect(Rect2(origin, Vector2(cs, cs) * n), BORDER_COLOR, false, thick)
+
+## A rounded box in `color`, for tiles and the tray behind them.
+func _rounded(color: Color, radius: float) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(roundi(radius))
+	box.corner_detail = 8
+	box.anti_aliasing = true
+	return box
+
+
+## The tile's rounded outline as a polygon, to keep patterns and hatching inside it.
+func _tile_outline(tile: Rect2, radius: float) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	var r := roundf(radius)
+	var corners := [tile.position + Vector2(r, r), Vector2(tile.end.x - r, tile.position.y + r),
+			tile.end - Vector2(r, r), Vector2(tile.position.x + r, tile.end.y - r)]
+	for k in 4:
+		for step in 7:
+			var angle := PI + k * PI / 2.0 + step * PI / 12.0
+			points.append(corners[k] + Vector2(cos(angle), sin(angle)) * r)
+	return points
+
+
+## A line kept inside `outline`, so it doesn't poke past a tile's rounded corners.
+func _clipped_line(a: Vector2, b: Vector2, outline: PackedVector2Array, color: Color, width: float) -> void:
+	for part: PackedVector2Array in Geometry2D.intersect_polyline_with_polygon(PackedVector2Array([a, b]), outline):
+		draw_polyline(part, color, width)
 
 
 ## One of PATTERN_COUNT faint textures, repeating every third or quarter of a
 ## cell so neighbouring cells of a region join up. None of them look like a
 ## cross, and the only diagonal lines run the opposite way to conflict hatching.
-func _draw_pattern(rect: Rect2, region: int) -> void:
+func _draw_pattern(rect: Rect2, region: int, outline: PackedVector2Array) -> void:
 	var s := rect.size.x
 	var p := rect.position
 	var w := maxf(1.0, s * 0.035)
@@ -314,7 +337,7 @@ func _draw_pattern(rect: Rect2, region: int) -> void:
 				var c := k * s / 3.0
 				var a := Vector2(maxf(0.0, c), maxf(0.0, -c))
 				var b := Vector2(minf(s, s + c), minf(s, s - c))
-				draw_line(p + a, p + b, ink, w)
+				_clipped_line(p + a, p + b, outline, ink, w)
 		4: # grid
 			for k in 2:
 				var t := (k + 0.5) * s / 2.0
@@ -361,7 +384,11 @@ func _draw_pattern(rect: Rect2, region: int) -> void:
 			for i in 4:
 				for j in 4:
 					if (i + j) % 2 == 0:
-						draw_rect(Rect2(p + Vector2(i, j) * s / 4.0, Vector2.ONE * s / 4.0), Color(ink, ink.a * 0.6))
+						var square := Rect2(p + Vector2(i, j) * s / 4.0, Vector2.ONE * s / 4.0)
+						var corners := PackedVector2Array([square.position, Vector2(square.end.x, square.position.y),
+								square.end, Vector2(square.position.x, square.end.y)])
+						for part in Geometry2D.intersect_polygons(corners, outline):
+							draw_colored_polygon(part, Color(ink, ink.a * 0.6))
 		12: # fine dots
 			for i in 4:
 				for j in 4:
@@ -376,7 +403,7 @@ func _draw_pattern(rect: Rect2, region: int) -> void:
 
 
 ## Red diagonal hatching over a cell that breaks a rule.
-func _draw_stripes(rect: Rect2) -> void:
+func _draw_stripes(rect: Rect2, outline: PackedVector2Array) -> void:
 	var s := rect.size.x
 	var gap := s / 5.0
 	var color := Color(CONFLICT_COLOR, 0.55)
@@ -385,7 +412,7 @@ func _draw_stripes(rect: Rect2) -> void:
 		# Segment of the line x + y = c inside the square.
 		var a := rect.position + Vector2(maxf(0.0, c - s), minf(c, s))
 		var b := rect.position + Vector2(minf(c, s), maxf(0.0, c - s))
-		draw_line(a, b, color, maxf(1.5, s * 0.05))
+		_clipped_line(a, b, outline, color, maxf(1.5, s * 0.05))
 		c += gap
 
 

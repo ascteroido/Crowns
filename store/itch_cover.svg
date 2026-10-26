@@ -16,77 +16,32 @@
 <circle cx="193.6" cy="58.0" r="5.4" fill="#f4c542"/>
 <text x="216" y="122" font-family="Fira Sans" font-weight="800" font-size="96" fill="#ffffff">Crowns</text>
 <g filter="url(#shadow)" transform="rotate(-4 315 320)">
-<rect x="175" y="180" width="280" height="280" rx="14" fill="#fbfaf7"/>
-<rect x="185.0" y="190.0" width="52.0" height="52.0" fill="#bba3e2"/>
-<rect x="237.0" y="190.0" width="52.0" height="52.0" fill="#bba3e2"/>
-<rect x="289.0" y="190.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="341.0" y="190.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="393.0" y="190.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="185.0" y="242.0" width="52.0" height="52.0" fill="#bba3e2"/>
-<rect x="237.0" y="242.0" width="52.0" height="52.0" fill="#96beff"/>
-<rect x="289.0" y="242.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="341.0" y="242.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="393.0" y="242.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="185.0" y="294.0" width="52.0" height="52.0" fill="#96beff"/>
-<rect x="237.0" y="294.0" width="52.0" height="52.0" fill="#96beff"/>
-<rect x="289.0" y="294.0" width="52.0" height="52.0" fill="#96beff"/>
-<rect x="341.0" y="294.0" width="52.0" height="52.0" fill="#b3dfa0"/>
-<rect x="393.0" y="294.0" width="52.0" height="52.0" fill="#ffc992"/>
-<rect x="185.0" y="346.0" width="52.0" height="52.0" fill="#96beff"/>
-<rect x="237.0" y="346.0" width="52.0" height="52.0" fill="#b3dfa0"/>
-<rect x="289.0" y="346.0" width="52.0" height="52.0" fill="#b3dfa0"/>
-<rect x="341.0" y="346.0" width="52.0" height="52.0" fill="#b3dfa0"/>
-<rect x="393.0" y="346.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<rect x="185.0" y="398.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<rect x="237.0" y="398.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<rect x="289.0" y="398.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<rect x="341.0" y="398.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<rect x="393.0" y="398.0" width="52.0" height="52.0" fill="#f4a99b"/>
-<g opacity="0.35" stroke="#1e1e1e" stroke-width="2">
-<line x1="237.0" y1="190.0" x2="237.0" y2="242.0"/>
-<line x1="185.0" y1="242.0" x2="237.0" y2="242.0"/>
-<line x1="341.0" y1="190.0" x2="341.0" y2="242.0"/>
-<line x1="289.0" y1="242.0" x2="341.0" y2="242.0"/>
-<line x1="393.0" y1="190.0" x2="393.0" y2="242.0"/>
-<line x1="341.0" y1="242.0" x2="393.0" y2="242.0"/>
-<line x1="393.0" y1="242.0" x2="445.0" y2="242.0"/>
-<line x1="237.0" y1="294.0" x2="289.0" y2="294.0"/>
-<line x1="341.0" y1="242.0" x2="341.0" y2="294.0"/>
-<line x1="393.0" y1="242.0" x2="393.0" y2="294.0"/>
-<line x1="393.0" y1="294.0" x2="445.0" y2="294.0"/>
-<line x1="237.0" y1="294.0" x2="237.0" y2="346.0"/>
-<line x1="185.0" y1="346.0" x2="237.0" y2="346.0"/>
-<line x1="289.0" y1="294.0" x2="289.0" y2="346.0"/>
-<line x1="341.0" y1="346.0" x2="393.0" y2="346.0"/>
-<line x1="289.0" y1="346.0" x2="289.0" y2="398.0"/>
-<line x1="341.0" y1="346.0" x2="341.0" y2="398.0"/>
-<line x1="393.0" y1="398.0" x2="445.0" y2="398.0"/>
-<line x1="237.0" y1="398.0" x2="237.0" y2="450.0"/>
-<line x1="289.0" y1="398.0" x2="289.0" y2="450.0"/>
-<line x1="341.0" y1="398.0" x2="341.0" y2="450.0"/>
-<line x1="393.0" y1="398.0" x2="393.0" y2="450.0"/>
-</g>
-<g stroke="#1e1e1e" stroke-width="5" stroke-linecap="square">
-<line x1="289.0" y1="190.0" x2="289.0" y2="242.0"/>
-<line x1="237.0" y1="242.0" x2="289.0" y2="242.0"/>
-<line x1="237.0" y1="242.0" x2="237.0" y2="294.0"/>
-<line x1="185.0" y1="294.0" x2="237.0" y2="294.0"/>
-<line x1="289.0" y1="242.0" x2="289.0" y2="294.0"/>
-<line x1="289.0" y1="294.0" x2="341.0" y2="294.0"/>
-<line x1="341.0" y1="294.0" x2="393.0" y2="294.0"/>
-<line x1="237.0" y1="346.0" x2="289.0" y2="346.0"/>
-<line x1="341.0" y1="294.0" x2="341.0" y2="346.0"/>
-<line x1="289.0" y1="346.0" x2="341.0" y2="346.0"/>
-<line x1="393.0" y1="294.0" x2="393.0" y2="346.0"/>
-<line x1="393.0" y1="346.0" x2="445.0" y2="346.0"/>
-<line x1="237.0" y1="346.0" x2="237.0" y2="398.0"/>
-<line x1="185.0" y1="398.0" x2="237.0" y2="398.0"/>
-<line x1="237.0" y1="398.0" x2="289.0" y2="398.0"/>
-<line x1="289.0" y1="398.0" x2="341.0" y2="398.0"/>
-<line x1="393.0" y1="346.0" x2="393.0" y2="398.0"/>
-<line x1="341.0" y1="398.0" x2="393.0" y2="398.0"/>
-</g>
-<rect x="185" y="190" width="260" height="260" fill="none" stroke="#1e1e1e" stroke-width="5"/>
+<rect x="183.2" y="188.2" width="263.6" height="263.6" rx="10.8" fill="#d9d2c3"/>
+<rect x="186.8" y="191.8" width="48.4" height="48.4" rx="8.3" fill="#bba3e2"/>
+<rect x="238.8" y="191.8" width="48.4" height="48.4" rx="8.3" fill="#bba3e2"/>
+<rect x="290.8" y="191.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="342.8" y="191.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="394.8" y="191.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="186.8" y="243.8" width="48.4" height="48.4" rx="8.3" fill="#bba3e2"/>
+<rect x="238.8" y="243.8" width="48.4" height="48.4" rx="8.3" fill="#96beff"/>
+<rect x="290.8" y="243.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="342.8" y="243.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="394.8" y="243.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="186.8" y="295.8" width="48.4" height="48.4" rx="8.3" fill="#96beff"/>
+<rect x="238.8" y="295.8" width="48.4" height="48.4" rx="8.3" fill="#96beff"/>
+<rect x="290.8" y="295.8" width="48.4" height="48.4" rx="8.3" fill="#96beff"/>
+<rect x="342.8" y="295.8" width="48.4" height="48.4" rx="8.3" fill="#b3dfa0"/>
+<rect x="394.8" y="295.8" width="48.4" height="48.4" rx="8.3" fill="#ffc992"/>
+<rect x="186.8" y="347.8" width="48.4" height="48.4" rx="8.3" fill="#96beff"/>
+<rect x="238.8" y="347.8" width="48.4" height="48.4" rx="8.3" fill="#b3dfa0"/>
+<rect x="290.8" y="347.8" width="48.4" height="48.4" rx="8.3" fill="#b3dfa0"/>
+<rect x="342.8" y="347.8" width="48.4" height="48.4" rx="8.3" fill="#b3dfa0"/>
+<rect x="394.8" y="347.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
+<rect x="186.8" y="399.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
+<rect x="238.8" y="399.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
+<rect x="290.8" y="399.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
+<rect x="342.8" y="399.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
+<rect x="394.8" y="399.8" width="48.4" height="48.4" rx="8.3" fill="#f4a99b"/>
 <polygon points="248.4,226.4 245.8,206.6 255.7,216.0 263.0,202.5 270.3,216.0 280.2,206.6 277.6,226.4" fill="#1e1e1e" stroke="#1e1e1e" stroke-width="3.6" stroke-linejoin="round"/>
 <rect x="246.6" y="226.7" width="32.8" height="7.8" fill="#1e1e1e"/>
 <circle cx="245.8" cy="205.6" r="4.2" fill="#1e1e1e"/>

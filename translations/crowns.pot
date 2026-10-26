@@ -112,64 +112,64 @@ msgid "Sa"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "purple"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "orange"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "blue"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "green"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "grey"
 msgstr ""
 
 #. Region colours, used in hints like "the purple region".
-#: scripts/board_view.gd:122
+#: scripts/board_view.gd:126
 msgid "yellow"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "pink"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "teal"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "tan"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "mint"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "salmon"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "gold"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "olive"
 msgstr ""
 
-#: scripts/board_view.gd:123
+#: scripts/board_view.gd:127
 msgid "periwinkle"
 msgstr ""
 
