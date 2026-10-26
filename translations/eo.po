@@ -191,7 +191,7 @@ msgstr "Menuo"
 
 #: scripts/main.gd:264
 msgid "Prev"
-msgstr "antaŭa"
+msgstr "Antaŭa"
 
 #: scripts/main.gd:270
 msgid "Next"
@@ -215,7 +215,7 @@ msgid ""
 "Place one crown in every row, column and colour region. Crowns may not "
 "touch, even diagonally."
 msgstr ""
-"Metu unu kronon en ĉiun vicon, kolonon kaj koloran regionon. Kronoj ne "
+"Metu unu kronon en ĉiun vicon, kolumnon kaj koloran regionon. Kronoj ne "
 "rajtas tuŝi unu la alian, eĉ diagonale."
 
 #: scripts/main.gd:309
@@ -255,14 +255,12 @@ msgid "Solved (hints used)"
 msgstr "Solvita (aludoj uzitaj)"
 
 #: scripts/main.gd:457
-#, fuzzy
 msgid "%d day streak"
 msgid_plural "%d days streak"
-msgstr[0] "%d-taga "
-msgstr[1] ""
+msgstr[0] "%d-taga serio"
+msgstr[1] "%d-tagaj serioj"
 
 #: scripts/main.gd:459
-#, fuzzy
 msgid "One life, no hints"
 msgstr "Unu vivo, neniuj aludoj"
 
@@ -284,7 +282,7 @@ msgstr ""
 
 #: scripts/main.gd:465 scripts/main.gd:728
 msgid "Puzzle #%d"
-msgstr ""
+msgstr "Puzlo #%d"
 
 #: scripts/main.gd:507
 msgid "Current streak"
@@ -292,7 +290,7 @@ msgstr ""
 
 #: scripts/main.gd:508
 msgid "Longest streak"
-msgstr ""
+msgstr "Plej longa serio"
 
 #: scripts/main.gd:509
 msgid "Dailies solved"
@@ -316,11 +314,11 @@ msgstr ""
 
 #: scripts/main.gd:730
 msgid "Daily · %s"
-msgstr ""
+msgstr "Tage · %s"
 
 #: scripts/main.gd:732
 msgid "The Climb #%d · %s"
-msgstr ""
+msgstr "La Supreniro #%d · %s"
 
 #: scripts/main.gd:848
 msgid "Apply hint"
@@ -328,11 +326,11 @@ msgstr ""
 
 #: scripts/main.gd:864
 msgid "This crown isn't part of the solution."
-msgstr ""
+msgstr "Ĉi tiu krono ne estas parto de la solvo."
 
 #: scripts/main.gd:868
 msgid "This cell is crossed out, but it needs a crown."
-msgstr ""
+msgstr "Ĉi tiu fako estas "
 
 #: scripts/main.gd:876
 msgid "There's no simple deduction from here, so here's a crown."

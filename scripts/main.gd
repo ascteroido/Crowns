@@ -345,7 +345,7 @@ func _build_ui() -> void:
 	column.add_child(_hint_label)
 
 	var help := _label(tr("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.")
-			+ "\n" + tr("Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."), 14)
+			+ "\n" + tr("Tap: × or clear.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."), 14)
 	help.modulate = Color(1, 1, 1, 0.65)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1096,7 +1096,8 @@ func _check_win() -> void:
 	_sounds.play("win")
 	_win_crown.visible = true
 	_win_heading.text = tr("Solved!")
-	_next_puzzle_button.visible = _mode == Mode.REGULAR
+	# The daily and weekly are one puzzle each, so only they have no next one.
+	_next_puzzle_button.visible = _mode in [Mode.REGULAR, Mode.CHALLENGE]
 	_next_puzzle_button.text = tr("Next puzzle")
 	if _mode == Mode.CHALLENGE:
 		var solved: int = _run.level

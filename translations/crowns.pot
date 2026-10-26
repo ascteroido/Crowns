@@ -202,7 +202,7 @@ msgid "Place one crown in every row, column and colour region. Crowns may not to
 msgstr ""
 
 #: scripts/main.gd:348
-msgid "Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."
+msgid "Tap: × or clear.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."
 msgstr ""
 
 #: scripts/main.gd:383 scripts/main.gd:1098
@@ -213,7 +213,7 @@ msgstr ""
 msgid "Look at board"
 msgstr ""
 
-#: scripts/main.gd:396 scripts/main.gd:1100
+#: scripts/main.gd:396 scripts/main.gd:1101
 msgid "Next puzzle"
 msgstr ""
 
@@ -394,133 +394,133 @@ msgstr ""
 msgid "the %s regions"
 msgstr ""
 
-#: scripts/main.gd:1148
+#: scripts/main.gd:1149
 msgid "(hints used)"
 msgstr ""
 
-#: scripts/main.gd:1148
+#: scripts/main.gd:1149
 msgid "(new best!)"
 msgstr ""
 
-#: scripts/main.gd:1149
+#: scripts/main.gd:1150
 msgid "Time: %s"
 msgstr ""
 
-#: scripts/main.gd:1174
+#: scripts/main.gd:1175
 msgid "Out of lives"
 msgstr ""
 
-#: scripts/main.gd:1175
+#: scripts/main.gd:1176
 msgid "(best run!)"
 msgstr ""
 
-#: scripts/main.gd:1176
+#: scripts/main.gd:1177
 msgid "That crown doesn't belong there."
 msgstr ""
 
-#: scripts/main.gd:1178
+#: scripts/main.gd:1179
 msgid "New run"
 msgstr ""
 
-#: scripts/main.gd:1185
+#: scripts/main.gd:1186
 msgid "%d puzzle solved"
 msgid_plural "%d puzzles solved"
 msgstr[0] ""
 msgstr[1] ""
 
-#: scripts/main.gd:1295
+#: scripts/main.gd:1296
 msgid "Best run %d"
 msgstr ""
 
-#: scripts/main.gd:1298
+#: scripts/main.gd:1299
 msgid "Best %s"
 msgstr ""
 
-#: scripts/main.gd:1351
+#: scripts/main.gd:1352
 msgctxt "short month"
 msgid "Jan"
 msgstr ""
 
-#: scripts/main.gd:1351
+#: scripts/main.gd:1352
 msgctxt "short month"
 msgid "Feb"
 msgstr ""
 
-#: scripts/main.gd:1351
+#: scripts/main.gd:1352
 msgctxt "short month"
 msgid "Mar"
 msgstr ""
 
-#: scripts/main.gd:1352
+#: scripts/main.gd:1353
 msgctxt "short month"
 msgid "Apr"
 msgstr ""
 
-#: scripts/main.gd:1352
+#: scripts/main.gd:1353
 msgctxt "short month"
 msgid "May"
 msgstr ""
 
-#: scripts/main.gd:1352
+#: scripts/main.gd:1353
 msgctxt "short month"
 msgid "Jun"
 msgstr ""
 
-#: scripts/main.gd:1352
+#: scripts/main.gd:1353
 msgctxt "short month"
 msgid "Jul"
 msgstr ""
 
-#: scripts/main.gd:1353
+#: scripts/main.gd:1354
 msgctxt "short month"
 msgid "Aug"
 msgstr ""
 
-#: scripts/main.gd:1353
+#: scripts/main.gd:1354
 msgctxt "short month"
 msgid "Sep"
 msgstr ""
 
-#: scripts/main.gd:1353
+#: scripts/main.gd:1354
 msgctxt "short month"
 msgid "Oct"
 msgstr ""
 
-#: scripts/main.gd:1353
+#: scripts/main.gd:1354
 msgctxt "short month"
 msgid "Nov"
 msgstr ""
 
-#: scripts/main.gd:1354
+#: scripts/main.gd:1355
 msgctxt "short month"
 msgid "Dec"
 msgstr ""
 
 #. A short date, e.g. "Oct 23".
-#: scripts/main.gd:1356
+#: scripts/main.gd:1357
 msgctxt "short date"
 msgid "{month} {day}"
 msgstr ""
 
-#: scripts/main.gd:1361
+#: scripts/main.gd:1362
 msgid "Easy"
 msgstr ""
 
-#: scripts/main.gd:1361
+#: scripts/main.gd:1362
 msgid "Medium"
 msgstr ""
 
-#: scripts/main.gd:1361
+#: scripts/main.gd:1362
 msgid "Hard"
 msgstr ""
 
-#: scripts/main.gd:1365
+#: scripts/main.gd:1366
 msgid "%d puzzle"
 msgid_plural "%d puzzles"
 msgstr[0] ""
 msgstr[1] ""
 
-#: scripts/main.gd:1369
+#: scripts/main.gd:1370
 msgid "%d day"
 msgid_plural "%d days"
 msgstr[0] ""

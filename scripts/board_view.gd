@@ -1,10 +1,10 @@
 extends Control
 ## Draws a board and turns clicks and drags into mark changes.
 ##
-## Left click cycles empty -> cross -> crown -> empty. Dragging from an empty
-## cell crosses out every empty cell it passes; dragging from a cross erases
-## every cross it passes. Double click (or double tap) places a crown. Right
-## click toggles a crown.
+## Left click crosses out an empty cell and clears a cross or crown. Double click
+## (or double tap) places a crown. Dragging from an empty cell crosses out every
+## empty cell it passes; dragging from a cross erases every cross it passes.
+## Right click toggles a crown.
 
 const Board := preload("res://scripts/board.gd")
 const CrownArt := preload("res://scripts/crown_art.gd")
@@ -147,7 +147,7 @@ func _gui_input(event: InputEvent) -> void:
 					_erasing = true
 					_press_cell = cell
 				else:
-					var next := (old + 1) % 3
+					var next := Board.Mark.CROSS if old == Board.Mark.EMPTY else Board.Mark.EMPTY
 					_change(cell, next)
 					_painting = next == Board.Mark.CROSS
 			elif button.button_index == MOUSE_BUTTON_RIGHT:
@@ -184,8 +184,9 @@ func _change(cell: Vector2i, mark: int) -> void:
 
 
 func _finish_stroke() -> void:
+	# A cross tapped without dragging is cleared; a quick second tap then crowns it.
 	if _erasing and _stroke.is_empty():
-		_change(_press_cell, Board.Mark.CROWN)
+		_change(_press_cell, Board.Mark.EMPTY)
 	_painting = false
 	_erasing = false
 	_press_cell = Vector2i(-1, -1)

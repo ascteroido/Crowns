@@ -63,14 +63,15 @@ func _run() -> void:
 	var board: Board = main._board
 	_expect(board != null and view.interactive, "puzzle generated and board accepts input")
 
-	# Slow clicks cycle empty -> cross -> crown -> empty.
+	# A slow click crosses out an empty cell and clears anything else.
 	var target := Vector2i(0, (board.solution[0] + 2) % board.size)
 	await _slow_click(view, target)
 	_expect(board.get_mark(target) == Board.Mark.CROSS, "first click crosses")
 	await _slow_click(view, target)
-	_expect(board.get_mark(target) == Board.Mark.CROWN, "second click places a crown")
+	_expect(board.get_mark(target) == Board.Mark.EMPTY, "a slow click on a cross clears it")
+	await _right_click(view, target)
 	await _slow_click(view, target)
-	_expect(board.get_mark(target) == Board.Mark.EMPTY, "third click empties")
+	_expect(board.get_mark(target) == Board.Mark.EMPTY, "a slow click on a crown clears it")
 
 	# A double tap places a crown whatever the cell held.
 	await _slow_click(view, target)
@@ -78,7 +79,7 @@ func _run() -> void:
 	_expect(board.get_mark(target) == Board.Mark.CROWN, "double tap on empty places a crown")
 	await _slow_click(view, target)
 	await _slow_click(view, target)
-	_expect(board.get_mark(target) == Board.Mark.CROSS, "slow taps keep cycling")
+	_expect(board.get_mark(target) == Board.Mark.CROSS, "slow taps clear the crown, then cross")
 	await _slow_click(view, target)
 	await _click(view, target)
 	_expect(board.get_mark(target) == Board.Mark.CROWN, "double tap on a cross places a crown")
@@ -400,6 +401,8 @@ func _check_challenge() -> void:
 		await _right_click(view, Vector2i(row, board.solution[row]))
 	await _frames(2)
 	_expect(game._win_overlay.visible and game._run.level == 2, "solving moves the run to puzzle 2")
+	_expect(game._next_puzzle_button.visible and game._next_puzzle_button.text == "Next puzzle",
+			"a cleared Climb puzzle offers the next one")
 	_expect(game._progress.get_value("challenge", "best", 0) == 1, "best run counts the solved puzzle")
 	game._elapsed = 30.0
 	game._run.elapsed = 30.0
