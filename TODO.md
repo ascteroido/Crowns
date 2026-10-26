@@ -19,8 +19,8 @@
 - [x] Weekly challenge: one harder puzzle a week with its own leaderboard
 
 ## Google Play Games
-- [ ] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints
-- [ ] Cloud save: stats, streaks and boards in progress follow the player to a new phone
+- [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints
+- [x] Cloud save: stats, streaks and boards in progress follow the player to a new phone
 
 ## Reach
 - [ ] Web build for itch, playable in the browser

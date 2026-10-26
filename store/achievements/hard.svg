@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs><radialGradient id="bg" cx="50%" cy="40%" r="65%"><stop offset="0" stop-color="#5b4a9e"/><stop offset="1" stop-color="#3f3278"/></radialGradient></defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<circle cx="256" cy="256" r="232" fill="none" stroke="#f4c542" stroke-width="10" opacity="0.8"/>
+<polygon points="194.4,194.0 183.4,110.4 225.2,150.0 256.0,92.8 286.8,150.0 328.6,110.4 317.6,194.0" fill="#1e1e1e" stroke="#1e1e1e" stroke-width="15.4" stroke-linejoin="round"/>
+<rect x="186.7" y="195.1" width="138.6" height="33.0" fill="#1e1e1e"/>
+<circle cx="183.4" cy="106.0" r="17.6" fill="#1e1e1e"/>
+<circle cx="256.0" cy="86.2" r="17.6" fill="#1e1e1e"/>
+<circle cx="328.6" cy="106.0" r="17.6" fill="#1e1e1e"/>
+<polygon points="194.4,194.0 183.4,110.4 225.2,150.0 256.0,92.8 286.8,150.0 328.6,110.4 317.6,194.0" fill="#f4c542"/>
+<rect x="194.4" y="202.8" width="123.2" height="17.6" fill="#d9a521"/>
+<circle cx="183.4" cy="106.0" r="9.9" fill="#f4c542"/>
+<circle cx="256.0" cy="86.2" r="9.9" fill="#f4c542"/>
+<circle cx="328.6" cy="106.0" r="9.9" fill="#f4c542"/>
+<polygon points="166.0,320.0 179.8,353.1 215.5,355.9 188.3,379.2 196.6,414.1 166.0,395.4 135.4,414.1 143.7,379.2 116.5,355.9 152.2,353.1" fill="none" stroke="#1e1e1e" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="166.0,320.0 179.8,353.1 215.5,355.9 188.3,379.2 196.6,414.1 166.0,395.4 135.4,414.1 143.7,379.2 116.5,355.9 152.2,353.1" fill="#f4c542"/>
+<polygon points="256.0,320.0 269.8,353.1 305.5,355.9 278.3,379.2 286.6,414.1 256.0,395.4 225.4,414.1 233.7,379.2 206.5,355.9 242.2,353.1" fill="none" stroke="#1e1e1e" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="256.0,320.0 269.8,353.1 305.5,355.9 278.3,379.2 286.6,414.1 256.0,395.4 225.4,414.1 233.7,379.2 206.5,355.9 242.2,353.1" fill="#f4c542"/>
+<polygon points="346.0,320.0 359.8,353.1 395.5,355.9 368.3,379.2 376.6,414.1 346.0,395.4 315.4,414.1 323.7,379.2 296.5,355.9 332.2,353.1" fill="none" stroke="#1e1e1e" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="346.0,320.0 359.8,353.1 395.5,355.9 368.3,379.2 376.6,414.1 346.0,395.4 315.4,414.1 323.7,379.2 296.5,355.9 332.2,353.1" fill="#f4c542"/>
+</svg>

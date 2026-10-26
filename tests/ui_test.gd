@@ -8,6 +8,7 @@ const BoardViewScript := preload("res://scripts/board_view.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
 const Language := preload("res://scripts/language.gd")
+const CloudSave := preload("res://scripts/cloud_save.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -345,6 +346,9 @@ func _run() -> void:
 	await _frames(2)
 	await _check_reminder()
 	await _frames(2)
+	_check_cloud_save()
+	await _check_achievements()
+	await _frames(2)
 	await _check_stats()
 	await _frames(2)
 	await _check_patterns()
@@ -511,6 +515,97 @@ func _check_reminder() -> void:
 	var next: int = game._next_daily_time()
 	_expect(next > now and next - now <= 86400 and Time.get_date_string_from_unix_time(next - 7 * 3600) != game._today()
 			and Time.get_datetime_dict_from_unix_time(next - 7 * 3600).hour == 0, "the next daily comes out at midnight UTC-7")
+	game.queue_free()
+
+
+func _check_cloud_save() -> void:
+	var local := ConfigFile.new()
+	local.set_value("settings", "dark_mode", true)
+	local.set_value("solved", "7x7_medium_1", true)
+	local.set_value("best", "7x7_medium_1", 50.0)
+	local.set_value("best", "daily_2026-10-20", 80.0)
+	local.set_value("stats", "solved_7", 3)
+	local.set_value("stats", "timed_7", 2)
+	local.set_value("stats", "time_7", 100.0)
+	local.set_value("stats", "best_7", 40.0)
+	local.set_value("stats", "streak", 2)
+	local.set_value("stats", "last_daily", "2026-10-20")
+	local.set_value("stats", "longest_streak", 2)
+	local.set_value("in_progress", "8x8_easy_2", {"marks": "here"})
+	local.set_value("challenge", "best", 3)
+
+	var remote := ConfigFile.new()
+	remote.set_value("settings", "dark_mode", false)
+	remote.set_value("solved", "9x9_hard_1", true)
+	remote.set_value("best", "7x7_medium_1", 70.0)
+	remote.set_value("best", "daily_2026-10-20", 60.0)
+	remote.set_value("stats", "solved_7", 1)
+	remote.set_value("stats", "timed_7", 5)
+	remote.set_value("stats", "time_7", 400.0)
+	remote.set_value("stats", "best_7", 45.0)
+	remote.set_value("stats", "streak", 6)
+	remote.set_value("stats", "last_daily", "2026-10-22")
+	remote.set_value("stats", "longest_streak", 6)
+	remote.set_value("stats", "weeklies_solved", 1)
+	remote.set_value("in_progress", "8x8_easy_2", {"marks": "there"})
+	remote.set_value("in_progress", "9x9_hard_1", {"marks": "solved already"})
+	remote.set_value("in_progress", "6x6_easy_4", {"marks": "new"})
+	remote.set_value("challenge", "best", 8)
+	remote.set_value("challenge", "run", {"level": 4})
+
+	var packed := CloudSave.pack(remote)
+	var unpacked := CloudSave.unpack(packed)
+	_expect(unpacked != null and not unpacked.has_section("settings")
+			and unpacked.get_value("stats", "time_7") == 400.0, "the cloud save round-trips without settings")
+	_expect(CloudSave.unpack(PackedByteArray()) == null, "an empty cloud save is ignored")
+
+	CloudSave.merge(local, unpacked)
+	_expect(local.get_value("solved", "7x7_medium_1") and local.get_value("solved", "9x9_hard_1"), "solves from both devices are kept")
+	_expect(local.get_value("best", "7x7_medium_1") == 50.0 and local.get_value("best", "daily_2026-10-20") == 60.0,
+			"the faster best time wins")
+	_expect(local.get_value("stats", "solved_7") == 3 and local.get_value("stats", "weeklies_solved") == 1,
+			"counts keep the higher value")
+	_expect(local.get_value("stats", "timed_7") == 5 and local.get_value("stats", "time_7") == 400.0
+			and local.get_value("stats", "best_7") == 40.0, "timed totals move together and the best size time wins")
+	_expect(local.get_value("stats", "streak") == 6 and local.get_value("stats", "last_daily") == "2026-10-22"
+			and local.get_value("stats", "longest_streak") == 6, "the most recent streak wins")
+	_expect(local.get_value("in_progress", "8x8_easy_2").marks == "here"
+			and local.get_value("in_progress", "6x6_easy_4").marks == "new"
+			and not local.has_section_key("in_progress", "9x9_hard_1"), "boards in progress merge, skipping solved ones")
+	_expect(local.get_value("challenge", "best") == 8 and local.get_value("challenge", "run").level == 4,
+			"The Climb's best and a run from the other device carry over")
+	_expect(local.get_value("settings", "dark_mode") == true, "settings stay with the device")
+	_expect(CloudSave.solved_count(local) == 2, "the save's progress counts solves")
+
+
+func _check_achievements() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(not game._stats.achievements_button.visible, "the achievements button is hidden off Android")
+	var names: Array = game._earned_achievements().keys()
+	names.sort()
+	var ids: Array = game.PlayGames.ACHIEVEMENTS.keys()
+	ids.sort()
+	_expect(names == ids, "every achievement has an ID slot")
+
+	var progress := ConfigFile.new()
+	game._progress = progress
+	var earned: Dictionary = game._earned_achievements()
+	_expect(earned.values().all(func(value: bool) -> bool: return not value), "a fresh save has no achievements")
+	progress.set_value("solved", "5x5_easy_1", true)
+	progress.set_value("best", "7x7_hard_2", 200.0)
+	progress.set_value("best", "daily_2026-10-01", 59.0)
+	progress.set_value("stats", "longest_streak", 7)
+	progress.set_value("challenge", "best", 25)
+	earned = game._earned_achievements()
+	_expect(earned.first_crown and earned.unaided and earned.hard and earned.quick and earned.streak_7
+			and earned.climb_10 and earned.climb_25 and earned.big_board, "achievements follow the saved progress")
+	_expect(not earned.streak_30 and not earned.weekly and not earned.century, "unearned achievements stay locked")
+	for i in 99:
+		progress.set_value("solved", "puzzle_%d" % i, true)
+	_expect(game._earned_achievements().century, "100 solves earn Hundred Crowns")
 	game.queue_free()
 
 

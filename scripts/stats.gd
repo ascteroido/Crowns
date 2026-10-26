@@ -2,9 +2,12 @@ extends Control
 ## Stats screen: daily streaks and weekly solves, solves and times per size, and The Climb.
 
 signal back
+signal achievements_chosen
 
 var _box: VBoxContainer
 var _content: VBoxContainer
+## Shown only where Google Play Games is available.
+var achievements_button: Button
 
 
 func _ready() -> void:
@@ -22,6 +25,14 @@ func _ready() -> void:
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 8)
 	_box.add_child(_content)
+
+	achievements_button = Button.new()
+	achievements_button.text = tr("Achievements")
+	achievements_button.custom_minimum_size = Vector2(0, 52)
+	achievements_button.add_theme_font_size_override("font_size", 20)
+	achievements_button.pressed.connect(achievements_chosen.emit)
+	achievements_button.visible = false
+	_box.add_child(achievements_button)
 
 	var back_button := Button.new()
 	back_button.text = tr("Back")

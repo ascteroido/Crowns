@@ -14,6 +14,7 @@ const Sounds := preload("res://scripts/sounds.gd")
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
+const CloudSave := preload("res://scripts/cloud_save.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -103,6 +104,9 @@ var _stats: Stats
 var _archive: Archive
 var _play_games: PlayGames
 var _reminder: Reminder
+## Set once the cloud save has been fetched and merged; uploads wait for it, so
+## a fresh install never overwrites progress saved from another device.
+var _cloud_ready := false
 var _sounds: Sounds
 var _game: Control
 var _back_button: Button
@@ -165,6 +169,8 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
 		_save_board()
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		_upload_progress()
 	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT]:
 		_focused = false
 	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
@@ -229,6 +235,7 @@ func _build_ui() -> void:
 	_stats.set_anchors_preset(PRESET_FULL_RECT)
 	_stats.visible = false
 	_stats.back.connect(_show_menu)
+	_stats.achievements_chosen.connect(func() -> void: _play_games.show_achievements())
 	add_child(_stats)
 
 	_archive = Archive.new()
@@ -245,6 +252,9 @@ func _build_ui() -> void:
 	add_child(_reminder)
 	_reminder.permission_answered.connect(_on_reminder_permission)
 	_menu.leaderboards_button.visible = _play_games.available()
+	_stats.achievements_button.visible = _play_games.available()
+	_play_games.signed_in.connect(_on_signed_in)
+	_play_games.cloud_loaded.connect(_on_cloud_loaded)
 
 	_game = Control.new()
 	_game.set_anchors_preset(PRESET_FULL_RECT)
@@ -1093,6 +1103,7 @@ func _check_win() -> void:
 		_add_stat("climb_solved", 1)
 		_play_games.submit_climb(solved)
 		_progress.save(save_path)
+		_on_progress_made()
 		_win_label.text = _run_summary(solved)
 		_update_best()
 		_show_win_overlay()
@@ -1127,6 +1138,7 @@ func _check_win() -> void:
 	if _mode == Mode.DAILY:
 		# No reminder for today's daily once it's solved.
 		_update_reminder()
+	_on_progress_made()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
 	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
 	_update_best()
@@ -1165,6 +1177,86 @@ func _end_run(mistake: Vector2i) -> void:
 ## "3 puzzles solved · 4:05" for The Climb's panels.
 func _run_summary(solved: int) -> String:
 	return tr_n("%d puzzle solved", "%d puzzles solved", solved) % solved + " · " + _format_time(_elapsed)
+
+
+## Achievements and the cloud save catch up after a solve.
+func _on_progress_made() -> void:
+	_check_achievements()
+	_upload_progress()
+
+
+func _on_signed_in() -> void:
+	# Earlier progress counts too, e.g. achievements earned before they existed.
+	_check_achievements()
+	_play_games.load_cloud()
+
+
+## Merges the cloud save into this device's progress, then uploads the result.
+func _on_cloud_loaded(data: PackedByteArray) -> void:
+	var remote := CloudSave.unpack(data)
+	if remote:
+		var had_last := _progress.has_section("last")
+		CloudSave.merge(_progress, remote)
+		_progress.save(save_path)
+		# A first start on this device carries on where the other one was.
+		if not had_last and _progress.has_section("last"):
+			_size = _progress.get_value("last", "size", DEFAULT_SIZE)
+			_number = _progress.get_value("last", "number", 1)
+			_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
+		if _run.is_empty():
+			_run = _progress.get_value(CHALLENGE_KEY, "run", {})
+		if _menu.visible:
+			_show_menu()
+		elif _board != null:
+			_update_best()
+		_check_achievements()
+	_cloud_ready = true
+	_upload_progress()
+
+
+func _upload_progress() -> void:
+	if not _cloud_ready:
+		return
+	var solved := CloudSave.solved_count(_progress)
+	_play_games.save_cloud(CloudSave.pack(_progress), _puzzles(solved), solved)
+
+
+## Unlocks every achievement the saved progress has earned. Play Games ignores
+## repeats, so this simply runs after each solve and at sign-in.
+func _check_achievements() -> void:
+	var earned := _earned_achievements()
+	for name: String in earned:
+		if earned[name]:
+			_play_games.unlock(name)
+
+
+## Achievement name -> whether the progress has earned it. Best times are only
+## kept for solves without hints, which several of these rely on.
+func _earned_achievements() -> Dictionary:
+	var bests := _progress.get_section_keys("best") if _progress.has_section("best") else PackedStringArray()
+	var climb_best: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
+	var longest: int = _progress.get_value(STATS, "longest_streak", 0)
+	var hard := false
+	var quick := false
+	for key in bests:
+		# The weekly challenge is always Hard.
+		hard = hard or key.contains("_hard_") or key.begins_with("weekly_")
+		quick = quick or (key.begins_with("daily_") and _progress.get_value("best", key) < 60.0)
+	var solved := CloudSave.solved_count(_progress)
+	return {
+		"first_crown": solved > 0,
+		"unaided": not bests.is_empty() or climb_best > 0,
+		"hard": hard,
+		# The Climb's 15th puzzle is a 10×10.
+		"big_board": _progress.get_value(STATS, "solved_10", 0) > 0 or climb_best >= 15,
+		"weekly": _progress.get_value(STATS, "weeklies_solved", 0) > 0,
+		"streak_7": longest >= 7,
+		"streak_30": longest >= 30,
+		"climb_10": climb_best >= 10,
+		"climb_25": climb_best >= 25,
+		"quick": quick,
+		"century": solved >= 100,
+	}
 
 
 ## Whether the mode being played has a Play Games board to open from the win panel.
