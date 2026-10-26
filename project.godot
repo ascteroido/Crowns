@@ -30,7 +30,7 @@ window/handheld/orientation=1
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/GodotPlayGameServices/plugin.cfg")
+enabled=PackedStringArray("res://addons/DailyReminder/plugin.cfg", "res://addons/GodotPlayGameServices/plugin.cfg")
 
 [physics]
 

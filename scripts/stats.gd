@@ -1,5 +1,5 @@
 extends Control
-## Stats screen: daily streaks, solves and times per size, and The Climb.
+## Stats screen: daily streaks and weekly solves, solves and times per size, and The Climb.
 
 signal back
 
@@ -36,7 +36,7 @@ func _ready() -> void:
 func set_stats(daily: Array, sizes: Array, climb: Array) -> void:
 	for child in _content.get_children():
 		child.queue_free()
-	_section(tr("Daily"), _pairs(daily))
+	_section(tr("Daily and weekly"), _pairs(daily))
 	var table := GridContainer.new()
 	table.columns = 4
 	table.add_theme_constant_override("h_separation", 24)

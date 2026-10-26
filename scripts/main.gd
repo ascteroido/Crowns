@@ -13,6 +13,7 @@ const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
+const Reminder := preload("res://scripts/reminder.gd")
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -22,10 +23,13 @@ const BUTTON_LIGHT := {"normal": Color("5b4a9e"), "hover": Color("6b59b3"), "pre
 const BUTTON_DARK := {"normal": Color("46397f"), "hover": Color("554794"), "pressed": Color("372c66"),
 		"hover_pressed": Color("372c66"), "disabled": Color("46397f", 0.45)}
 const GOLD := Color("f4c542")
+## Toggle switch tracks when off; when on they take the button purple.
+const SWITCH_OFF_LIGHT := Color("bdb6a8")
+const SWITCH_OFF_DARK := Color("55545b")
 ## Screens fade in over this many seconds.
 const FADE := 0.15
 
-enum Mode { REGULAR, DAILY, CHALLENGE }
+enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY }
 
 const SIZES := [5, 6, 7, 8, 9, 10]
 const DEFAULT_SIZE := 7
@@ -35,6 +39,9 @@ const DAILY_DIFFICULTY := Generator.Difficulty.MEDIUM
 const DAILY_UTC_OFFSET := -7 * 3600
 ## The first daily puzzle in the archive.
 const DAILY_FIRST := "2026-10-01"
+## The weekly challenge: one large, hard puzzle for everyone each week.
+const WEEKLY_SIZE := 10
+const WEEKLY_DIFFICULTY := Generator.Difficulty.HARD
 ## [size, difficulty] for each challenge puzzle; the last one repeats.
 const CHALLENGE_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
@@ -44,6 +51,9 @@ const CHALLENGE_STAGES := [
 	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
 ]
 const CHALLENGE_KEY := "challenge"
+## Hours the daily reminder can be set to, in local time.
+const REMINDER_HOURS := [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+const DEFAULT_REMINDER_HOUR := 19
 ## Save section for streaks and per-size totals.
 const STATS := "stats"
 
@@ -67,6 +77,8 @@ var _from_archive := false
 ## Counts towards streaks and the daily leaderboard: today's daily, or one
 ## started before the date rolled over.
 var _daily_live := true
+## First day ("YYYY-MM-DD", a Sunday) of the weekly challenge being played.
+var _week := ""
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
@@ -90,6 +102,7 @@ var _settings: Settings
 var _stats: Stats
 var _archive: Archive
 var _play_games: PlayGames
+var _reminder: Reminder
 var _sounds: Sounds
 var _game: Control
 var _back_button: Button
@@ -140,6 +153,10 @@ func _ready() -> void:
 	for locale in Language.locales():
 		names[locale] = Language.native_name(locale)
 	_settings.set_languages(names, _progress.get_value("settings", "language", ""))
+	_settings.set_reminder(_reminder.available(), _progress.get_value("settings", "reminder", false), REMINDER_HOURS,
+			_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR))
+	# Again on every start: this refreshes the text's language and the alarm after an update.
+	_update_reminder()
 	_show_menu()
 	if open_settings:
 		_show_settings()
@@ -187,6 +204,7 @@ func _build_ui() -> void:
 	_menu.continue_chosen.connect(_start.bind(Mode.REGULAR))
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
 	_menu.archive_chosen.connect(_show_archive)
+	_menu.weekly_chosen.connect(_start.bind(Mode.WEEKLY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.stats_chosen.connect(_show_stats)
 	_menu.leaderboards_chosen.connect(func() -> void: _play_games.show_all())
@@ -201,6 +219,8 @@ func _build_ui() -> void:
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
+	_settings.reminder_toggled.connect(_on_reminder_toggled)
+	_settings.reminder_hour_chosen.connect(_on_reminder_hour_chosen)
 	_settings.language_chosen.connect(_on_language_chosen)
 	_settings.back.connect(_show_menu)
 	add_child(_settings)
@@ -221,6 +241,9 @@ func _build_ui() -> void:
 
 	_play_games = PlayGames.new()
 	add_child(_play_games)
+	_reminder = Reminder.new()
+	add_child(_reminder)
+	_reminder.permission_answered.connect(_on_reminder_permission)
 	_menu.leaderboards_button.visible = _play_games.available()
 
 	_game = Control.new()
@@ -455,6 +478,17 @@ func _show_menu() -> void:
 	var streak := _current_streak()
 	if streak > 0:
 		daily_detail += " · " + tr_n("%d day streak", "%d days streak", streak) % streak
+	var week := _week_start()
+	var days_left := 7 - _weekday()
+	var weekly_best: float = _progress.get_value("best", _weekly_key(week), INF)
+	# TRANSLATORS: %s is a short date, the Sunday the weekly challenge starts, e.g. "Oct 25".
+	var weekly_detail := "%s · %d×%d · %s" % [tr("Week of %s") % _pretty_date(week), WEEKLY_SIZE, WEEKLY_SIZE,
+			_difficulty_name(WEEKLY_DIFFICULTY)]
+	if weekly_best != INF:
+		weekly_detail = tr("Solved in %s") % _format_time(weekly_best)
+	elif _progress.get_value("solved", _weekly_key(week), false):
+		weekly_detail = tr("Solved (hints used)")
+	weekly_detail += " · " + tr_n("%d day left", "%d days left", days_left) % days_left
 	var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
 	var challenge_detail := tr("One life, no hints")
 	if not _run.is_empty():
@@ -463,7 +497,7 @@ func _show_menu() -> void:
 		challenge_detail = tr("Best run: %s") % _puzzles(best_run)
 	_menu.set_details(tr("Continue") if started else tr("Play"),
 			"%d×%d · %s · %s" % [_size, _size, _difficulty_name(_difficulty), tr("Puzzle #%d") % _number],
-			daily_detail, challenge_detail)
+			daily_detail, weekly_detail, challenge_detail)
 
 
 ## Back to the archive for puzzles opened from it, otherwise to the menu.
@@ -507,6 +541,7 @@ func _show_stats() -> void:
 		[tr("Current streak"), _days(_current_streak())],
 		[tr("Longest streak"), _days(_progress.get_value(STATS, "longest_streak", 0))],
 		[tr("Dailies solved"), _progress.get_value(STATS, "dailies_solved", 0)],
+		[tr("Weeklies solved"), _progress.get_value(STATS, "weeklies_solved", 0)],
 	]
 	var sizes := []
 	for size: int in SIZES:
@@ -588,6 +623,45 @@ func _on_sound_toggled(enabled: bool) -> void:
 	_progress.save(save_path)
 
 
+func _on_reminder_toggled(enabled: bool) -> void:
+	# Android 13 and up ask first; the answer arrives in _on_reminder_permission.
+	if enabled and not _reminder.request_permission():
+		_settings.show_reminder_enabled(false)
+		return
+	_set_reminder(enabled)
+
+
+func _on_reminder_permission(granted: bool) -> void:
+	_settings.show_reminder_enabled(granted)
+	if granted:
+		_set_reminder(true)
+
+
+func _set_reminder(enabled: bool) -> void:
+	_settings.show_reminder_enabled(enabled)
+	_progress.set_value("settings", "reminder", enabled)
+	_progress.save(save_path)
+	_update_reminder()
+
+
+func _on_reminder_hour_chosen(hour: int) -> void:
+	_progress.set_value("settings", "reminder_hour", hour)
+	_progress.save(save_path)
+	_update_reminder()
+
+
+## Sets the reminder's alarm, skipping today once today's daily is solved.
+func _update_reminder() -> void:
+	if not _progress.get_value("settings", "reminder", false):
+		_reminder.cancel()
+		return
+	var not_before := 0
+	if _progress.get_value("solved", _daily_key(_today()), false):
+		not_before = _next_daily_time()
+	_reminder.schedule(_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR), 0, not_before,
+			tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
+
+
 func _on_patterns_toggled(enabled: bool) -> void:
 	_view.patterns = enabled
 	_progress.set_value("settings", "patterns", enabled)
@@ -633,6 +707,14 @@ func _apply_dark_mode(enabled: bool) -> void:
 		_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
 	_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	_theme.set_stylebox("focus", "CheckButton", StyleBoxEmpty.new())
+	# Switches drawn to match, so they read clearly on or off against either background.
+	var off: Color = SWITCH_OFF_DARK if enabled else SWITCH_OFF_LIGHT
+	for mirrored in [false, true]:
+		var suffix := "_mirrored" if mirrored else ""
+		_theme.set_icon("checked" + suffix, "CheckButton", _switch_icon(fills.normal, not mirrored))
+		_theme.set_icon("unchecked" + suffix, "CheckButton", _switch_icon(off, mirrored))
+		_theme.set_icon("checked_disabled" + suffix, "CheckButton", _switch_icon(fills.disabled, not mirrored))
+		_theme.set_icon("unchecked_disabled" + suffix, "CheckButton", _switch_icon(Color(off, 0.45), mirrored))
 	# The size and difficulty dropdown lists.
 	var menu_panel := StyleBoxFlat.new()
 	menu_panel.bg_color = fills.pressed
@@ -648,6 +730,15 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_view.dark = enabled
 
 
+## A toggle switch: a rounded `track` with a white knob at the right or left end.
+func _switch_icon(track: Color, knob_right: bool) -> DPITexture:
+	var svg := ("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='24'>"
+			+ "<rect width='44' height='24' rx='12' fill='#%s' fill-opacity='%.2f'/>"
+			+ "<circle cx='%d' cy='12' r='9' fill='#ffffff' fill-opacity='%.2f'/></svg>") % [
+			track.to_html(false), track.a, 32 if knob_right else 12, 0.6 + 0.4 * track.a]
+	return DPITexture.create_from_string(svg)
+
+
 ## `date` picks a past daily from the archive; otherwise the daily is today's.
 func _start(mode: Mode, date := "") -> void:
 	_mode = mode
@@ -657,6 +748,8 @@ func _start(mode: Mode, date := "") -> void:
 	if mode == Mode.DAILY:
 		_daily_date = date if _from_archive else _today()
 		_daily_live = _daily_date == _today()
+	elif mode == Mode.WEEKLY:
+		_week = _week_start()
 	elif mode == Mode.CHALLENGE and _run.is_empty():
 		_new_run()
 	_menu.visible = false
@@ -682,8 +775,7 @@ func _load_puzzle() -> void:
 	_save_board()
 	_running = false
 	_hide_overlay()
-	# Past dailies aren't on the daily board, which only shows today's times.
-	_win_leaderboard_button.visible = _play_games.available() and (_mode != Mode.DAILY or _daily_live)
+	_win_leaderboard_button.visible = _has_mode_leaderboard()
 	_view.interactive = false
 	_generating = true
 	_puzzle_label.text = tr("Generating…")
@@ -699,6 +791,10 @@ func _load_puzzle() -> void:
 		size = _daily_size(_daily_date)
 		difficulty = DAILY_DIFFICULTY
 		rng.seed = hash(["daily", _daily_date])
+	elif _mode == Mode.WEEKLY:
+		size = WEEKLY_SIZE
+		difficulty = WEEKLY_DIFFICULTY
+		rng.seed = hash(["weekly", _week])
 	elif _mode == Mode.CHALLENGE:
 		var stage: Array = _challenge_stage()
 		size = stage[0]
@@ -728,6 +824,8 @@ func _load_puzzle() -> void:
 			_puzzle_label.text = tr("Puzzle #%d") % _number
 		Mode.DAILY:
 			_puzzle_label.text = tr("Daily · %s") % _pretty_date(_daily_date)
+		Mode.WEEKLY:
+			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week)
 		Mode.CHALLENGE:
 			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(difficulty)]
 	_update_best()
@@ -982,7 +1080,7 @@ func _check_win() -> void:
 	_sounds.play("win")
 	_win_crown.visible = true
 	_win_heading.text = tr("Solved!")
-	_next_puzzle_button.visible = _mode != Mode.DAILY
+	_next_puzzle_button.visible = _mode == Mode.REGULAR
 	_next_puzzle_button.text = tr("Next puzzle")
 	if _mode == Mode.CHALLENGE:
 		var solved: int = _run.level
@@ -1007,17 +1105,28 @@ func _check_win() -> void:
 		_progress.set_value("best", key, _elapsed)
 	if not _progress.get_value("solved", key, false):
 		_record_solve(_board.size, _hinted, _elapsed)
-		# Archive dailies count as solves, but not towards streaks or the daily board.
-		if _mode == Mode.DAILY:
-			if _daily_live:
-				_record_daily(_daily_date)
-		elif not _hinted:
-			_add_stat("puzzles_unhinted", 1)
-			_play_games.submit_solved(_progress.get_value(STATS, "puzzles_unhinted", 0))
-	if _mode == Mode.DAILY and _daily_live and not _hinted:
-		_play_games.submit_daily_time(_elapsed)
+		match _mode:
+			Mode.DAILY:
+				# Archive dailies count as solves, but not towards streaks or the daily board.
+				if _daily_live:
+					_record_daily(_daily_date)
+			Mode.WEEKLY:
+				_add_stat("weeklies_solved", 1)
+			_:
+				if not _hinted:
+					_add_stat("puzzles_unhinted", 1)
+					_play_games.submit_solved(_progress.get_value(STATS, "puzzles_unhinted", 0))
+	if not _hinted:
+		if _mode == Mode.DAILY and _daily_live:
+			_play_games.submit_daily_time(_elapsed)
+		elif _mode == Mode.WEEKLY and _week == _week_start():
+			# Once the week has turned over, the board only holds the new week's times.
+			_play_games.submit_weekly_time(_elapsed)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
+	if _mode == Mode.DAILY:
+		# No reminder for today's daily once it's solved.
+		_update_reminder()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
 	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
 	_update_best()
@@ -1058,11 +1167,24 @@ func _run_summary(solved: int) -> String:
 	return tr_n("%d puzzle solved", "%d puzzles solved", solved) % solved + " · " + _format_time(_elapsed)
 
 
+## Whether the mode being played has a Play Games board to open from the win panel.
+func _has_mode_leaderboard() -> bool:
+	match _mode:
+		Mode.DAILY:
+			# Past dailies aren't on the daily board, which only shows today's times.
+			return _play_games.available() and _daily_live
+		Mode.WEEKLY:
+			return _play_games.has_weekly()
+	return _play_games.available()
+
+
 ## Opens the Play Games board for the mode just played.
 func _show_mode_leaderboard() -> void:
 	match _mode:
 		Mode.DAILY:
 			_play_games.show_daily()
+		Mode.WEEKLY:
+			_play_games.show_weekly()
 		Mode.CHALLENGE:
 			_play_games.show_climb()
 		_:
@@ -1082,6 +1204,8 @@ func _puzzle_key() -> String:
 	match _mode:
 		Mode.DAILY:
 			return _daily_key(_daily_date)
+		Mode.WEEKLY:
+			return _weekly_key(_week)
 		Mode.CHALLENGE:
 			return CHALLENGE_KEY
 	return "%dx%d_%s_%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty].to_lower(), _number]
@@ -1089,6 +1213,10 @@ func _puzzle_key() -> String:
 
 func _daily_key(date: String) -> String:
 	return "daily_" + date
+
+
+func _weekly_key(week: String) -> String:
+	return "weekly_" + week
 
 
 func _daily_size(date: String) -> int:
@@ -1099,6 +1227,24 @@ func _daily_size(date: String) -> int:
 ## moment Google Play Games resets its daily leaderboards.
 func _today() -> String:
 	return Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET)
+
+
+## The weekly challenge's first day: the latest Sunday on the daily calendar, so
+## weeks turn over with Play Games' weekly leaderboards, Saturday midnight UTC−7.
+func _week_start() -> String:
+	var now := int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET
+	return Time.get_date_string_from_unix_time(now - _weekday() * 86400)
+
+
+## Unix time when the next daily puzzle comes out: midnight UTC−7.
+func _next_daily_time() -> int:
+	var now := int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET
+	return (now / 86400 + 1) * 86400 - DAILY_UTC_OFFSET
+
+
+## Today's day of the week on the daily calendar, from 0 for Sunday to 6 for Saturday.
+func _weekday() -> int:
+	return Time.get_datetime_dict_from_unix_time(int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET).weekday
 
 
 ## "2026-10-23" -> "Oct 23".

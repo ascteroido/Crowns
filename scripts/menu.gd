@@ -1,11 +1,13 @@
 extends Control
-## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one.
+## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one,
+## this week's weekly challenge or The Climb.
 
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 
 signal continue_chosen
 signal daily_chosen
 signal archive_chosen
+signal weekly_chosen
 signal challenge_chosen
 signal stats_chosen
 signal leaderboards_chosen
@@ -15,6 +17,7 @@ signal exit_chosen
 var continue_button: Button
 var daily_button: Button
 var archive_button: Button
+var weekly_button: Button
 var challenge_button: Button
 var stats_button: Button
 var leaderboards_button: Button
@@ -22,6 +25,7 @@ var settings_button: Button
 var exit_button: Button
 var _continue_detail: Label
 var _daily_detail: Label
+var _weekly_detail: Label
 var _challenge_detail: Label
 var _box: VBoxContainer
 ## [control, property, size at the desktop window's height], scaled up on taller screens.
@@ -69,6 +73,13 @@ func _ready() -> void:
 	box.add_child(_daily_detail)
 	box.add_child(_gap(8))
 
+	weekly_button = _button(tr("Weekly challenge"), weekly_chosen.emit)
+	box.add_child(weekly_button)
+	_weekly_detail = _label("", 14)
+	_weekly_detail.modulate = Color(1, 1, 1, 0.6)
+	box.add_child(_weekly_detail)
+	box.add_child(_gap(8))
+
 	challenge_button = _button(tr("The Climb"), challenge_chosen.emit)
 	box.add_child(challenge_button)
 	_challenge_detail = _label("", 14)
@@ -76,16 +87,21 @@ func _ready() -> void:
 	box.add_child(_challenge_detail)
 	box.add_child(_gap(8))
 
-	stats_button = _button(tr("Stats"), stats_chosen.emit)
-	box.add_child(stats_button)
-
 	# Shown only where Google Play Games is available.
 	leaderboards_button = _button(tr("Leaderboards"), leaderboards_chosen.emit)
 	leaderboards_button.visible = false
 	box.add_child(leaderboards_button)
 
+	# Side by side, so the menu still fits the desktop window.
+	var options_row := HBoxContainer.new()
+	_scale(options_row, "separation", 10)
+	box.add_child(options_row)
+	stats_button = _button(tr("Stats"), stats_chosen.emit)
+	stats_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	options_row.add_child(stats_button)
 	settings_button = _button(tr("Settings"), settings_chosen.emit)
-	box.add_child(settings_button)
+	settings_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	options_row.add_child(settings_button)
 
 	# Phones and browsers leave closing apps to the system.
 	exit_button = _button(tr("Exit"), exit_chosen.emit)
@@ -123,10 +139,12 @@ func _scale(control: Control, property: String, base: int) -> void:
 	_scaled.append([control, property, base])
 
 
-func set_details(continue_title: String, continue_detail: String, daily_detail: String, challenge_detail: String) -> void:
+func set_details(continue_title: String, continue_detail: String, daily_detail: String, weekly_detail: String,
+		challenge_detail: String) -> void:
 	continue_button.text = continue_title
 	_continue_detail.text = continue_detail
 	_daily_detail.text = daily_detail
+	_weekly_detail.text = weekly_detail
 	_challenge_detail.text = challenge_detail
 
 

@@ -7,6 +7,7 @@ const Board := preload("res://scripts/board.gd")
 const BoardViewScript := preload("res://scripts/board_view.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
+const Language := preload("res://scripts/language.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -340,6 +341,10 @@ func _run() -> void:
 	await _frames(2)
 	await _check_challenge()
 	await _frames(2)
+	await _check_weekly()
+	await _frames(2)
+	await _check_reminder()
+	await _frames(2)
 	await _check_stats()
 	await _frames(2)
 	await _check_patterns()
@@ -431,6 +436,84 @@ func _check_challenge() -> void:
 	game.queue_free()
 
 
+func _check_weekly() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var week: String = game._week_start()
+	var start := Time.get_unix_time_from_datetime_string(week)
+	var today := Time.get_unix_time_from_datetime_string(game._today())
+	_expect(Time.get_datetime_dict_from_unix_time(start).weekday == Time.WEEKDAY_SUNDAY
+			and today - start == game._weekday() * 86400, "the weekly challenge starts on the latest Sunday")
+	var days_left: int = 7 - game._weekday()
+	_expect(game._menu._weekly_detail.text.begins_with("Week of " + game._pretty_date(week))
+			and game._menu._weekly_detail.text.ends_with("%d day%s left" % [days_left, "" if days_left == 1 else "s"]),
+			"menu shows the week and the days left")
+
+	game._menu.weekly_button.pressed.emit()
+	await _frames(10)
+	var board: Board = game._board
+	_expect(game._mode == game.Mode.WEEKLY and board.size == game.WEEKLY_SIZE
+			and Grader.grade(board.size, board.regions) == Generator.Difficulty.HARD + 1, "the weekly is a hard 10x10")
+	_expect(game._hint_button.visible and not game._size_picker.visible and not game._next_button.visible,
+			"the weekly allows hints and hides puzzle pickers")
+	_expect(game._puzzle_label.text == "Weekly · " + game._pretty_date(week), "weekly label shows the week")
+	_screenshot("weekly.png")
+	await _click(game._view, Vector2i(0, 0))
+	game._show_menu()
+	game._menu.weekly_button.pressed.emit()
+	await _frames(10)
+	_expect(game._board.regions == board.regions and game._board.get_mark(Vector2i(0, 0)) == Board.Mark.CROSS,
+			"the weekly is the same puzzle when reopened, with its progress")
+
+	var unhinted: int = game._progress.get_value("stats", "puzzles_unhinted", 0)
+	board = game._board
+	game._elapsed = 300.0
+	for row in board.size:
+		await _right_click(game._view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	_expect(game._win_overlay.visible and not game._next_puzzle_button.visible, "weekly win has no next puzzle")
+	_expect(game._progress.get_value("best", game._weekly_key(week), INF) < 301.0
+			and game._progress.get_value("stats", "weeklies_solved", 0) == 1, "the weekly time and solve are recorded")
+	_expect(game._progress.get_value("stats", "puzzles_unhinted", 0) == unhinted,
+			"the weekly doesn't count towards the numbered puzzles' leaderboard")
+	game._show_menu()
+	_expect(game._menu._weekly_detail.text.begins_with("Solved in 5:00"), "menu shows the weekly as solved")
+	await _frames(3)
+	_screenshot("menu_weekly.png")
+	game.queue_free()
+
+
+func _check_reminder() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var settings: Control = game._settings
+	# Notifications need the Android plugin, so here the settings stay hidden and calls do nothing.
+	_expect(not game._reminder.available() and not settings.reminder_toggle.visible and not settings._reminder_row.visible,
+			"reminder settings are hidden off Android")
+	_expect(settings._hour_name(7) == "7:00 AM" and settings._hour_name(12) == "12:00 PM"
+			and settings._hour_name(19) == "7:00 PM", "reminder times use a 12-hour clock in English")
+	_expect(settings.reminder_hour_picker.get_item_text(settings.reminder_hour_picker.selected) == "7:00 PM",
+			"the reminder defaults to 7 PM")
+	settings.reminder_toggle.button_pressed = true
+	_expect(game._progress.get_value("settings", "reminder", false) and not settings.reminder_hour_picker.disabled,
+			"turning the reminder on saves it and enables the time")
+	settings.reminder_hour_picker.select(1)
+	settings.reminder_hour_picker.item_selected.emit(1)
+	_expect(game._progress.get_value("settings", "reminder_hour", 0) == game.REMINDER_HOURS[1], "the reminder time is saved")
+	settings.reminder_toggle.button_pressed = false
+	_expect(not game._progress.get_value("settings", "reminder", true) and settings.reminder_hour_picker.disabled,
+			"turning the reminder off saves it and disables the time")
+	var now := int(Time.get_unix_time_from_system())
+	var next: int = game._next_daily_time()
+	_expect(next > now and next - now <= 86400 and Time.get_date_string_from_unix_time(next - 7 * 3600) != game._today()
+			and Time.get_datetime_dict_from_unix_time(next - 7 * 3600).hour == 0, "the next daily comes out at midnight UTC-7")
+	game.queue_free()
+
+
 func _check_stats() -> void:
 	var game: Control = load("res://main.tscn").instantiate()
 	game.save_path = TEST_SAVE
@@ -493,6 +576,7 @@ func _check_stats() -> void:
 	for label in game._stats.find_children("*", "Label", true, false):
 		texts.append(label.text)
 	_expect(texts.has("5×5") and texts.has("0:40") and texts.has("5 days"), "stats screen shows sizes, times and streaks")
+	_expect(texts.has("Weeklies solved"), "stats screen counts weekly solves")
 	_screenshot("stats.png")
 	game._stats.back.emit()
 	_expect(game._menu.visible and not game._stats.visible, "back returns from stats")
@@ -552,18 +636,21 @@ func _check_languages() -> void:
 	var items := []
 	for i in picker.item_count:
 		items.append(picker.get_item_text(i))
-	_expect(items == ["Device language", "English", "Deutsch"], "language picker lists the languages by their own names")
+	# The shipped translations are listed too, so only the test's German is checked by name.
+	var german_index := items.find("Deutsch")
+	_expect(items.slice(0, 2) == ["Device language", "English"] and german_index > 1
+			and items.size() == Language.locales().size() + 1, "language picker lists the languages by their own names")
 	_expect(picker.selected == 0, "language follows the device by default")
 
-	picker.select(2)
-	picker.item_selected.emit(2)
+	picker.select(german_index)
+	picker.item_selected.emit(german_index)
 	await _frames(3)
 	var fresh: Control = root.get_children().filter(func(node: Node) -> bool:
 		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
 	_expect(fresh != null and not is_instance_valid(game), "choosing a language rebuilds the game")
 	_expect(fresh._settings.visible and fresh._settings.dark_mode_toggle.text == "Dunkelmodus",
 			"the rebuilt game shows Settings in the new language")
-	_expect(fresh._puzzles(2) == "2 Rätsel" and fresh._settings.language_picker.selected == 2, "plurals and the picker follow the language")
+	_expect(fresh._puzzles(2) == "2 Rätsel" and fresh._settings.language_picker.selected == german_index, "plurals and the picker follow the language")
 	var saved := ConfigFile.new()
 	saved.load(TEST_SAVE)
 	_expect(saved.get_value("settings", "language", "") == "de", "language choice is saved")
