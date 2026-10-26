@@ -1,0 +1,609 @@
+# Translation template for Crowns. See translations/README.md.
+msgid ""
+msgstr ""
+"Project-Id-Version: Crowns\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: eo\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.10\n"
+
+#. Your language's name, written in your language (e.g. Deutsch, Français).
+msgctxt "language name"
+msgid "English"
+msgstr "Esperanto"
+
+#: scripts/archive.gd:35 scripts/menu.gd:64
+msgid "Archive"
+msgstr "Arkivo"
+
+#: scripts/archive.gd:62 scripts/main.gd:655 scripts/settings.gd:74
+#: scripts/stats.gd:27
+msgid "Back"
+msgstr "Reen"
+
+#. The archive's heading, e.g. "October 2026".
+#: scripts/archive.gd:93
+msgid "{month} {year}"
+msgstr "{month} {year}"
+
+#: scripts/archive.gd:134
+msgid "Solved {solved} of {total} this month"
+msgstr "Solvis {solved} de {total} ĉi-matene"
+
+#: scripts/archive.gd:139
+msgid "January"
+msgstr "januario"
+
+#: scripts/archive.gd:139
+msgid "February"
+msgstr "februaro"
+
+#: scripts/archive.gd:139
+msgid "March"
+msgstr "marto"
+
+#: scripts/archive.gd:139
+msgid "April"
+msgstr "aprilo"
+
+#: scripts/archive.gd:139
+msgid "May"
+msgstr "majo"
+
+#: scripts/archive.gd:139
+msgid "June"
+msgstr "junio"
+
+#: scripts/archive.gd:140
+msgid "July"
+msgstr "julio"
+
+#: scripts/archive.gd:140
+msgid "August"
+msgstr "aŭgusto"
+
+#: scripts/archive.gd:140
+msgid "September"
+msgstr "septembro"
+
+#: scripts/archive.gd:140
+msgid "October"
+msgstr "oktobro"
+
+#: scripts/archive.gd:140
+msgid "November"
+msgstr "novembro"
+
+#: scripts/archive.gd:140
+msgid "December"
+msgstr "decembro"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Su"
+msgstr "dim"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Mo"
+msgstr "lun"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Tu"
+msgstr "mar"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "We"
+msgstr "merk"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Th"
+msgstr "ĵaŭ"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Fr"
+msgstr "vend"
+
+#. Two-letter weekday abbreviations for the archive calendar's columns.
+#: scripts/archive.gd:146
+msgid "Sa"
+msgstr "sab"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "purple"
+msgstr "purpura"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "orange"
+msgstr "oranĝa"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "blue"
+msgstr "blua"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "green"
+msgstr "verda"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "grey"
+msgstr "griza"
+
+#. Region colours, used in hints like "the purple region".
+#: scripts/board_view.gd:122
+msgid "yellow"
+msgstr "flava"
+
+#: scripts/board_view.gd:123
+msgid "pink"
+msgstr "rosa"
+
+#: scripts/board_view.gd:123
+msgid "teal"
+msgstr "verdblua"
+
+#: scripts/board_view.gd:123
+msgid "tan"
+msgstr "brunflava"
+
+#: scripts/board_view.gd:123
+#, fuzzy
+msgid "mint"
+msgstr "mentkolora"
+
+#: scripts/board_view.gd:123
+#, fuzzy
+msgid "salmon"
+msgstr "salmokolora"
+
+#: scripts/board_view.gd:123
+msgid "gold"
+msgstr "ora"
+
+#: scripts/board_view.gd:123
+#, fuzzy
+msgid "olive"
+msgstr "olivkolora"
+
+#: scripts/board_view.gd:123
+#, fuzzy
+msgid "periwinkle"
+msgstr "vinkkolora"
+
+#: scripts/main.gd:243 scripts/main.gd:355 scripts/main.gd:655
+msgid "Menu"
+msgstr "Menuo"
+
+#: scripts/main.gd:264
+msgid "Prev"
+msgstr "antaŭa"
+
+#: scripts/main.gd:270
+msgid "Next"
+msgstr "Sekva"
+
+#: scripts/main.gd:294
+msgid "Undo"
+msgstr "Malfari"
+
+#: scripts/main.gd:296
+msgid "Clear"
+msgstr "Senigi"
+
+#: scripts/main.gd:297 scripts/main.gd:856
+#, fuzzy
+msgid "Hint"
+msgstr "Aludo"
+
+#: scripts/main.gd:308
+msgid ""
+"Place one crown in every row, column and colour region. Crowns may not "
+"touch, even diagonally."
+msgstr ""
+"Metu unu kronon en ĉiun vicon, kolonon kaj koloran regionon. Kronoj ne "
+"rajtas tuŝi unu la alian, eĉ diagonale."
+
+#: scripts/main.gd:309
+msgid ""
+"Tap: empty → × → crown.  Double tap: crown.  Drag from empty to cross out, "
+"from × to erase.  Right click: crown.  Ctrl+Z: undo."
+msgstr ""
+"Alklako: malpleno → × → krono. Duobla alklako: krono. Trenado de malpleno "
+"por forstreki, de × por forigi. Dekstra alklako: krono. Ctrl+Z: malfari."
+
+#: scripts/main.gd:344 scripts/main.gd:984
+msgid "Solved!"
+msgstr "Solvita!"
+
+#: scripts/main.gd:354
+#, fuzzy
+msgid "Look at board"
+msgstr "Rigardi la tabulon"
+
+#: scripts/main.gd:357 scripts/main.gd:986
+msgid "Next puzzle"
+msgstr "Sekva puzlo"
+
+#: scripts/main.gd:359
+#, fuzzy
+msgid "Leaderboard"
+msgstr "Ranglisto"
+
+#: scripts/main.gd:452
+#, fuzzy
+msgid "Solved in %s"
+msgstr "Solvita je %s"
+
+#: scripts/main.gd:454
+#, fuzzy
+msgid "Solved (hints used)"
+msgstr "Solvita (aludoj uzitaj)"
+
+#: scripts/main.gd:457
+#, fuzzy
+msgid "%d day streak"
+msgid_plural "%d days streak"
+msgstr[0] "%d-taga "
+msgstr[1] ""
+
+#: scripts/main.gd:459
+#, fuzzy
+msgid "One life, no hints"
+msgstr "Unu vivo, neniuj aludoj"
+
+#: scripts/main.gd:461
+msgid "Run in progress · Puzzle %d"
+msgstr ""
+
+#: scripts/main.gd:463
+msgid "Best run: %s"
+msgstr ""
+
+#: scripts/main.gd:464 scripts/menu.gd:51
+msgid "Continue"
+msgstr ""
+
+#: scripts/main.gd:464
+msgid "Play"
+msgstr ""
+
+#: scripts/main.gd:465 scripts/main.gd:728
+msgid "Puzzle #%d"
+msgstr ""
+
+#: scripts/main.gd:507
+msgid "Current streak"
+msgstr ""
+
+#: scripts/main.gd:508
+msgid "Longest streak"
+msgstr ""
+
+#: scripts/main.gd:509
+msgid "Dailies solved"
+msgstr ""
+
+#: scripts/main.gd:519
+msgid "Best run"
+msgstr ""
+
+#: scripts/main.gd:520
+msgid "Runs played"
+msgstr ""
+
+#: scripts/main.gd:521
+msgid "Puzzles cleared"
+msgstr ""
+
+#: scripts/main.gd:689
+msgid "Generating…"
+msgstr ""
+
+#: scripts/main.gd:730
+msgid "Daily · %s"
+msgstr ""
+
+#: scripts/main.gd:732
+msgid "The Climb #%d · %s"
+msgstr ""
+
+#: scripts/main.gd:848
+msgid "Apply hint"
+msgstr ""
+
+#: scripts/main.gd:864
+msgid "This crown isn't part of the solution."
+msgstr ""
+
+#: scripts/main.gd:868
+msgid "This cell is crossed out, but it needs a crown."
+msgstr ""
+
+#: scripts/main.gd:876
+msgid "There's no simple deduction from here, so here's a crown."
+msgstr ""
+
+#. {group} is a row, column or region, e.g. "row 3" or "the purple region".
+#: scripts/main.gd:911
+msgid "{group} has only one cell left that can hold its crown."
+msgstr ""
+
+#: scripts/main.gd:914
+msgid ""
+"A crown in row {row}, column {column} would rule out every open cell left in "
+"{group}, so cross it out."
+msgstr ""
+
+#. {a} and {b} are a row, column or region, e.g. "the purple region".
+#: scripts/main.gd:919
+msgid ""
+"{a}'s open cells all lie in {b}, so {b}'s crown must come from {a}. Cross "
+"out the rest of {b}."
+msgstr ""
+
+#. {a} and {b} are several rows, columns or regions, e.g. "rows 2 and 3"; {count} is at least 2.
+#: scripts/main.gd:922
+msgid ""
+"{a} only have open cells in {b}, so their {count} crowns fill {b}. Cross out "
+"everything else in {b}."
+msgstr ""
+
+#: scripts/main.gd:934
+msgid "row %d"
+msgstr ""
+
+#: scripts/main.gd:936
+msgid "column %d"
+msgstr ""
+
+#. %s is a region colour, e.g. "purple".
+#: scripts/main.gd:938
+msgid "the %s region"
+msgstr ""
+
+#. Joins a list, e.g. "2, 3 and 4": {items} is all but the last item, joined by the list separator.
+#: scripts/main.gd:951
+msgid "{items} and {last}"
+msgstr ""
+
+#. Joins a list, e.g. "2, 3 and 4": {items} is all but the last item, joined by the list separator.
+#: scripts/main.gd:951
+msgctxt "list separator"
+msgid ", "
+msgstr ""
+
+#: scripts/main.gd:955
+msgid "rows %s"
+msgstr ""
+
+#: scripts/main.gd:957
+msgid "columns %s"
+msgstr ""
+
+#. %s lists region colours, e.g. "purple and blue".
+#: scripts/main.gd:959
+msgid "the %s regions"
+msgstr ""
+
+#: scripts/main.gd:1021
+msgid "(hints used)"
+msgstr ""
+
+#: scripts/main.gd:1021
+msgid "(new best!)"
+msgstr ""
+
+#: scripts/main.gd:1022
+msgid "Time: %s"
+msgstr ""
+
+#: scripts/main.gd:1047
+msgid "Out of lives"
+msgstr ""
+
+#: scripts/main.gd:1048
+msgid "(best run!)"
+msgstr ""
+
+#: scripts/main.gd:1049
+msgid "That crown doesn't belong there."
+msgstr ""
+
+#: scripts/main.gd:1051
+msgid "New run"
+msgstr ""
+
+#: scripts/main.gd:1058
+msgid "%d puzzle solved"
+msgid_plural "%d puzzles solved"
+msgstr[0] ""
+msgstr[1] ""
+
+#: scripts/main.gd:1075
+msgid "Best run %d"
+msgstr ""
+
+#: scripts/main.gd:1078
+msgid "Best %s"
+msgstr ""
+
+#: scripts/main.gd:1107
+msgctxt "short month"
+msgid "Jan"
+msgstr ""
+
+#: scripts/main.gd:1107
+msgctxt "short month"
+msgid "Feb"
+msgstr ""
+
+#: scripts/main.gd:1107
+msgctxt "short month"
+msgid "Mar"
+msgstr ""
+
+#: scripts/main.gd:1108
+msgctxt "short month"
+msgid "Apr"
+msgstr ""
+
+#: scripts/main.gd:1108
+msgctxt "short month"
+msgid "May"
+msgstr ""
+
+#: scripts/main.gd:1108
+msgctxt "short month"
+msgid "Jun"
+msgstr ""
+
+#: scripts/main.gd:1108
+msgctxt "short month"
+msgid "Jul"
+msgstr ""
+
+#: scripts/main.gd:1109
+msgctxt "short month"
+msgid "Aug"
+msgstr ""
+
+#: scripts/main.gd:1109
+msgctxt "short month"
+msgid "Sep"
+msgstr ""
+
+#: scripts/main.gd:1109
+msgctxt "short month"
+msgid "Oct"
+msgstr ""
+
+#: scripts/main.gd:1109
+msgctxt "short month"
+msgid "Nov"
+msgstr ""
+
+#: scripts/main.gd:1110
+msgctxt "short month"
+msgid "Dec"
+msgstr ""
+
+#. A short date, e.g. "Oct 23".
+#: scripts/main.gd:1112
+msgctxt "short date"
+msgid "{month} {day}"
+msgstr ""
+
+#: scripts/main.gd:1117
+msgid "Easy"
+msgstr ""
+
+#: scripts/main.gd:1117
+msgid "Medium"
+msgstr ""
+
+#: scripts/main.gd:1117
+msgid "Hard"
+msgstr ""
+
+#: scripts/main.gd:1121
+msgid "%d puzzle"
+msgid_plural "%d puzzles"
+msgstr[0] ""
+msgstr[1] ""
+
+#: scripts/main.gd:1125
+msgid "%d day"
+msgid_plural "%d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: scripts/menu.gd:46
+msgid "One crown per row, column and region."
+msgstr ""
+
+#: scripts/menu.gd:61
+msgid "Daily puzzle"
+msgstr ""
+
+#: scripts/menu.gd:72 scripts/stats.gd:52
+msgid "The Climb"
+msgstr ""
+
+#: scripts/menu.gd:79 scripts/stats.gd:19
+msgid "Stats"
+msgstr ""
+
+#: scripts/menu.gd:83
+msgid "Leaderboards"
+msgstr ""
+
+#: scripts/menu.gd:87 scripts/settings.gd:31
+msgid "Settings"
+msgstr ""
+
+#: scripts/menu.gd:91
+msgid "Exit"
+msgstr ""
+
+#: scripts/settings.gd:37
+msgid "Dark mode"
+msgstr ""
+
+#: scripts/settings.gd:43
+msgid "Auto-place × around crowns"
+msgstr ""
+
+#: scripts/settings.gd:49
+msgid "Region patterns"
+msgstr ""
+
+#: scripts/settings.gd:55
+msgid "Sound effects"
+msgstr ""
+
+#: scripts/settings.gd:64
+msgid "Language"
+msgstr ""
+
+#: scripts/settings.gd:85
+msgid "Device language"
+msgstr ""
+
+#: scripts/stats.gd:39
+msgid "Daily"
+msgstr ""
+
+#: scripts/stats.gd:44
+msgid "Size"
+msgstr ""
+
+#: scripts/stats.gd:44
+msgid "Solved"
+msgstr ""
+
+#: scripts/stats.gd:44
+msgid "Average"
+msgstr ""
+
+#: scripts/stats.gd:44
+msgid "Best"
+msgstr ""
+
+#: scripts/stats.gd:51
+msgid "Puzzles"
+msgstr ""
