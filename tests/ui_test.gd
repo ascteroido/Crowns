@@ -1014,6 +1014,7 @@ func _check_stats() -> void:
 	_expect(progress.get_value("stats", "puzzles_unhinted", 0) == 1, "unhinted numbered solves are counted for the leaderboard")
 
 	# Play Games only exists on Android; elsewhere its buttons stay hidden and calls do nothing.
+	_expect(not game._settings._test_reminder_button.visible, "the test reminder button needs reminders (Android)")
 	_expect(not game._play_games.available() and not game._menu.leaderboards_button.visible
 			and not game._win_leaderboard_button.visible, "leaderboard buttons are hidden off Android")
 	var utc_minus_7 := Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) - 7 * 3600)

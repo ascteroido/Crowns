@@ -9,6 +9,8 @@ signal sound_toggled(enabled: bool)
 signal vibration_toggled(enabled: bool)
 signal reminder_toggled(enabled: bool)
 signal reminder_hour_chosen(hour: int)
+## Debug builds only: show the reminder notification now.
+signal test_reminder
 signal silent_wolf_toggled(enabled: bool)
 ## An empty locale means the device's language.
 signal language_chosen(locale: String)
@@ -24,6 +26,7 @@ var sound_toggle: CheckButton
 var vibration_toggle: CheckButton
 var reminder_toggle: CheckButton
 var reminder_hour_picker: OptionButton
+var _test_reminder_button: Button
 ## Shown only in builds with SilentWolf's key.
 var silent_wolf_toggle: CheckButton
 var _reminder_row: HBoxContainer
@@ -115,6 +118,14 @@ func _ready() -> void:
 	silent_wolf_toggle.visible = false
 	box.add_child(silent_wolf_toggle)
 
+	# Debug builds only, so not translated.
+	_test_reminder_button = Button.new()
+	_test_reminder_button.text = "Send test reminder"
+	_test_reminder_button.add_theme_font_size_override("font_size", 18)
+	_test_reminder_button.pressed.connect(test_reminder.emit)
+	_test_reminder_button.visible = false
+	box.add_child(_test_reminder_button)
+
 	var language_row := HBoxContainer.new()
 	language_row.add_theme_constant_override("separation", 12)
 	box.add_child(language_row)
@@ -159,6 +170,7 @@ func set_reminder(available: bool, enabled: bool, hours: Array, hour: int) -> vo
 	reminder_toggle.visible = available
 	reminder_toggle.set_pressed_no_signal(enabled)
 	_reminder_row.visible = available
+	_test_reminder_button.visible = available and OS.is_debug_build()
 	reminder_hour_picker.clear()
 	_hours.assign(hours)
 	for h in _hours:

@@ -36,6 +36,12 @@ func schedule(hour: int, minute: int, not_before: int, channel_name: String, tit
 		_reminder.schedule(_context, hour, minute, not_before * 1000, channel_name, title, text)
 
 
+## Shows the reminder now, for testing it from a debug build.
+func show_now(channel_name: String, title: String, text: String) -> void:
+	if _reminder:
+		_reminder.showNow(_context, channel_name, title, text)
+
+
 func cancel() -> void:
 	if _reminder:
 		_reminder.cancel(_context)

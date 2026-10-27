@@ -317,6 +317,7 @@ func _build_ui() -> void:
 	_settings.vibration_toggled.connect(_on_vibration_toggled)
 	_settings.reminder_toggled.connect(_on_reminder_toggled)
 	_settings.reminder_hour_chosen.connect(_on_reminder_hour_chosen)
+	_settings.test_reminder.connect(_on_test_reminder)
 	_settings.language_chosen.connect(_on_language_chosen)
 	_settings.how_to_play.connect(_start_lesson.bind(0))
 	_settings.back.connect(_show_menu)
@@ -913,6 +914,12 @@ func _update_reminder() -> void:
 		not_before = _next_daily_time()
 	_reminder.schedule(_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR), 0, not_before,
 			tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
+
+
+## Debug builds' test button: the reminder notification now, asking for permission first if needed.
+func _on_test_reminder() -> void:
+	if _reminder.request_permission():
+		_reminder.show_now(tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
 
 
 func _on_vibration_toggled(enabled: bool) -> void:

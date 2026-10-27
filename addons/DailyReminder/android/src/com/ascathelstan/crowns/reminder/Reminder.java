@@ -43,6 +43,16 @@ public class Reminder extends BroadcastReceiver {
 		setAlarm(context, Math.max(System.currentTimeMillis(), notBeforeMillis));
 	}
 
+	/** Shows the reminder right away, for checking it from debug builds. */
+	public static void showNow(Context context, String channelName, String title, String text) {
+		prefs(context).edit()
+				.putString("channel", channelName)
+				.putString("title", title)
+				.putString("text", text)
+				.apply();
+		notify(context);
+	}
+
 	public static void cancel(Context context) {
 		prefs(context).edit().putBoolean("enabled", false).apply();
 		alarms(context).cancel(alarmIntent(context));
