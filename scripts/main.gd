@@ -18,6 +18,8 @@ const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
+const SilentWolf := preload("res://scripts/silent_wolf.gd")
+const Leaderboards := preload("res://scripts/leaderboards.gd")
 ## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
 ## system fonts, but browsers can't, so the web build needs them bundled.
 const SYMBOLS := preload("res://fonts/DejaVuSans-symbols.ttf")
@@ -77,6 +79,8 @@ const REMINDER_HOURS := [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 const DEFAULT_REMINDER_HOUR := 19
 ## Save section for streaks and per-size totals.
 const STATS := "stats"
+## The player's SilentWolf identity ("player_id", "player_name") and scores not yet sent.
+const ONLINE := "online"
 
 ## Where progress and best times are stored; tests point this elsewhere.
 var save_path := "user://queens_progress.cfg"
@@ -138,6 +142,11 @@ var _stats: Stats
 var _archive: Archive
 var _play_games: PlayGames
 var _reminder: Reminder
+## Desktop and web leaderboards; Android uses Play Games instead.
+var _silent_wolf: SilentWolf
+var _leaderboards: Leaderboards
+## Whether the leaderboards were opened from a solved puzzle, so Back returns there.
+var _leaderboards_from_game := false
 ## Set once the cloud save has been fetched and merged; uploads wait for it, so
 ## a fresh install never overwrites progress saved from another device.
 var _cloud_ready := false
@@ -258,6 +267,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if (_settings.visible or _stats.visible or _archive.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
+	if _leaderboards.visible and event.is_action_pressed("ui_cancel"):
+		_close_leaderboards()
+		get_viewport().set_input_as_handled()
+		return
 	if not _game.visible:
 		return
 	if event.is_action_pressed("ui_undo") and not _code_overlay.visible:
@@ -289,7 +302,7 @@ func _build_ui() -> void:
 	_menu.weekly_chosen.connect(_start.bind(Mode.WEEKLY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.stats_chosen.connect(_show_stats)
-	_menu.leaderboards_chosen.connect(func() -> void: _play_games.show_all())
+	_menu.leaderboards_chosen.connect(_show_leaderboards.bind("daily"))
 	_menu.settings_chosen.connect(_show_settings)
 	_menu.exit_chosen.connect(_exit)
 	add_child(_menu)
@@ -329,7 +342,32 @@ func _build_ui() -> void:
 	_reminder = Reminder.new()
 	add_child(_reminder)
 	_reminder.permission_answered.connect(_on_reminder_permission)
-	_menu.leaderboards_button.visible = _play_games.available()
+	_silent_wolf = SilentWolf.new()
+	add_child(_silent_wolf)
+	_silent_wolf.pending = _progress.get_value(ONLINE, "pending", [])
+	_silent_wolf.pending_changed.connect(func(pending: Array) -> void:
+		_progress.set_value(ONLINE, "pending", pending)
+		_progress.save(save_path))
+	_leaderboards = Leaderboards.new()
+	_leaderboards.set_anchors_preset(PRESET_FULL_RECT)
+	_leaderboards.visible = false
+	_leaderboards.client = _silent_wolf
+	_leaderboards.back.connect(_close_leaderboards)
+	_leaderboards.name_changed.connect(func(player_name: String) -> void:
+		_progress.set_value(ONLINE, "player_name", player_name)
+		_progress.save(save_path))
+	add_child(_leaderboards)
+	_leaderboards.play_games_chosen.connect(_show_play_games_board)
+	_leaderboards.play_games_button.visible = _play_games.available()
+	_settings.silent_wolf_toggle.visible = _silent_wolf.available()
+	_settings.silent_wolf_toggle.set_pressed_no_signal(_progress.get_value("settings", "silent_wolf", true))
+	_settings.silent_wolf_toggled.connect(_on_silent_wolf_toggled)
+	_settings.timer_toggle.set_pressed_no_signal(_progress.get_value("settings", "show_timer", true))
+	_settings.timer_toggled.connect(_on_timer_toggled)
+	if _silent_wolf_on():
+		# Scores that couldn't be sent last time, e.g. while offline.
+		_silent_wolf.retry()
+	_menu.leaderboards_button.visible = _has_leaderboards()
 	_stats.achievements_button.visible = _play_games.available()
 	_play_games.signed_in.connect(_on_signed_in)
 	_play_games.cloud_loaded.connect(_on_cloud_loaded)
@@ -476,7 +514,7 @@ func _build_win_overlay() -> void:
 	_win_play_button.visible = false
 	buttons.add_child(_win_play_button)
 	_win_leaderboard_button = _button(tr("Leaderboard"), _show_mode_leaderboard)
-	_win_leaderboard_button.visible = _play_games.available()
+	_win_leaderboard_button.visible = _has_leaderboards()
 	buttons.add_child(_win_leaderboard_button)
 
 
@@ -679,6 +717,7 @@ func _show_menu() -> void:
 	_settings.visible = false
 	_stats.visible = false
 	_archive.visible = false
+	_leaderboards.visible = false
 	_fade_in(_menu)
 	var started := _progress.has_section("last")
 	var today := _today()
@@ -966,6 +1005,8 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_theme.set_color("font_color", "PopupMenu", Color.WHITE)
 	_theme.set_color("font_hover_color", "PopupMenu", GOLD)
 	_view.dark = enabled
+	# The player's own row: gold reads on the dark page, purple on the light one.
+	_leaderboards.highlight = GOLD if enabled else BUTTON_LIGHT.normal
 
 
 ## A toggle switch: a rounded `track` with a white knob at the right or left end.
@@ -996,6 +1037,7 @@ func _start(mode: Mode, date := "") -> void:
 	_menu.visible = false
 	_archive.visible = false
 	_settings.visible = false
+	_leaderboards.visible = false
 	_fade_in(_game)
 	var regular := mode == Mode.REGULAR
 	_size_picker.visible = regular
@@ -1011,8 +1053,7 @@ func _start(mode: Mode, date := "") -> void:
 	# The basics teach crossing out by hand; the advanced lessons do it for the player.
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false) or (tutorial and _lesson > 0)
 	_undo_button.visible = true
-	_timer_label.visible = not tutorial
-	_best_label.visible = not tutorial
+	_update_clock()
 	_load_puzzle()
 
 
@@ -1545,6 +1586,7 @@ func _check_win() -> void:
 		_progress.set_value(CHALLENGE_KEY, "run", _run)
 		_add_stat("climb_solved", 1)
 		_play_games.submit_climb(solved)
+		_submit_online("climb", solved)
 		_progress.save(save_path)
 		_on_progress_made()
 		_win_label.text = _run_summary(solved)
@@ -1570,12 +1612,15 @@ func _check_win() -> void:
 				if not _hinted:
 					_add_stat("puzzles_unhinted", 1)
 					_play_games.submit_solved(_progress.get_value(STATS, "puzzles_unhinted", 0))
+					_submit_online("solved", _progress.get_value(STATS, "puzzles_unhinted", 0))
 	if not _hinted:
 		if _mode == Mode.DAILY and _daily_live:
 			_play_games.submit_daily_time(_elapsed)
+			_submit_online(SilentWolf.daily_board(_daily_date), SilentWolf.time_score(_elapsed))
 		elif _mode == Mode.WEEKLY and _week == _week_start():
 			# Once the week has turned over, the board only holds the new week's times.
 			_play_games.submit_weekly_time(_elapsed)
+			_submit_online(SilentWolf.weekly_board(_week), SilentWolf.time_score(_elapsed))
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
 	if _mode == Mode.DAILY:
@@ -1702,28 +1747,140 @@ func _earned_achievements() -> Dictionary:
 	}
 
 
-## Whether the mode being played has a Play Games board to open from the win panel.
+## Whether scores go to SilentWolf: in builds with its key, unless turned off in
+## Settings (on Android, for players who only want Google Play Games).
+func _silent_wolf_on() -> bool:
+	return _silent_wolf.available() and _progress.get_value("settings", "silent_wolf", true)
+
+
+## Whether there are any leaderboards: SilentWolf's, or Play Games' on Android.
+func _has_leaderboards() -> bool:
+	return _silent_wolf_on() or _play_games.available()
+
+
+func _on_silent_wolf_toggled(enabled: bool) -> void:
+	_progress.set_value("settings", "silent_wolf", enabled)
+	_progress.save(save_path)
+	_menu.leaderboards_button.visible = _has_leaderboards()
+	if enabled:
+		_silent_wolf.retry()
+
+
+## Whether the mode being played has a board to open from the win panel.
 func _has_mode_leaderboard() -> bool:
 	match _mode:
 		Mode.DAILY:
 			# Past dailies aren't on the daily board, which only shows today's times.
-			return _play_games.available() and _daily_live
+			return _has_leaderboards() and _daily_live
 		Mode.WEEKLY:
-			return _play_games.has_weekly()
-	return _play_games.available()
+			return _play_games.has_weekly() or _silent_wolf_on()
+	return _has_leaderboards()
 
 
-## Opens the Play Games board for the mode just played.
+## Opens the board for the mode just played.
 func _show_mode_leaderboard() -> void:
+	var kind := "solved"
 	match _mode:
 		Mode.DAILY:
-			_play_games.show_daily()
+			kind = "daily"
 		Mode.WEEKLY:
-			_play_games.show_weekly()
+			kind = "weekly"
 		Mode.CHALLENGE:
+			kind = "climb"
+	if _silent_wolf_on():
+		_leaderboards_from_game = true
+		_game.visible = false
+		_open_leaderboards(kind)
+		return
+	_show_play_games_board(kind)
+
+
+## Opens Play Games' own board for `kind` ("daily", "weekly", "climb" or "solved").
+func _show_play_games_board(kind: String) -> void:
+	match kind:
+		"daily":
+			_play_games.show_daily()
+		"weekly":
+			_play_games.show_weekly()
+		"climb":
 			_play_games.show_climb()
 		_:
 			_play_games.show_solved()
+
+
+## The leaderboards from the menu: ours when SilentWolf is on, otherwise Play Games' own.
+func _show_leaderboards(kind: String) -> void:
+	if not _silent_wolf_on():
+		_play_games.show_all()
+		return
+	if _generating:
+		return
+	_leaderboards_from_game = false
+	for screen: Control in [_menu, _settings, _stats, _archive]:
+		screen.visible = false
+	_open_leaderboards(kind)
+
+
+func _open_leaderboards(kind: String) -> void:
+	_running = false
+	_leaderboards.player_id = _player_id()
+	_leaderboards.name_entry.text = _player_name()
+	var times := func(score: int) -> String: return _format_time(-score / 1000.0)
+	_leaderboards.boards = {
+		"daily": {"board": SilentWolf.daily_board(_today()), "title": _pretty_date(_today()), "format": times},
+		"weekly": {"board": SilentWolf.weekly_board(_week_start()),
+				"title": tr("Week of %s") % _pretty_date(_week_start()), "format": times},
+		"climb": {"board": "climb", "title": tr("Best runs"), "format": _puzzles},
+		"solved": {"board": "solved", "title": tr("Puzzles solved without hints"), "format": func(score: int) -> String:
+			return "%d" % score},
+	}
+	_fade_in(_leaderboards)
+	_leaderboards.show_board(kind)
+
+
+func _close_leaderboards() -> void:
+	_leaderboards.visible = false
+	if _leaderboards_from_game:
+		_leaderboards_from_game = false
+		_fade_in(_game)
+	else:
+		_show_menu()
+
+
+## Sends a score to the SilentWolf board `board`; Play Games gets its own copy.
+func _submit_online(board: String, score: int) -> void:
+	if _silent_wolf_on():
+		_silent_wolf.submit(board, _player_id(), _player_name(), score)
+
+
+## A random id for this player's scores, made on first use.
+func _player_id() -> String:
+	if not _progress.has_section_key(ONLINE, "player_id"):
+		_progress.set_value(ONLINE, "player_id", Crypto.new().generate_random_bytes(8).hex_encode())
+		_progress.save(save_path)
+	return _progress.get_value(ONLINE, "player_id")
+
+
+## The name shown on the boards; "Player 1234" until the player picks one.
+func _player_name() -> String:
+	if not _progress.has_section_key(ONLINE, "player_name"):
+		_progress.set_value(ONLINE, "player_name", "Player %d" % randi_range(1000, 9999))
+		_progress.save(save_path)
+	return _progress.get_value(ONLINE, "player_name")
+
+
+## The timer and best time show unless hidden in Settings; lessons are untimed.
+## Hidden, the clock still runs, so times and leaderboards work as usual.
+func _update_clock() -> void:
+	var shown: bool = _mode != Mode.TUTORIAL and _progress.get_value("settings", "show_timer", true)
+	_timer_label.visible = shown
+	_best_label.visible = shown
+
+
+func _on_timer_toggled(shown: bool) -> void:
+	_progress.set_value("settings", "show_timer", shown)
+	_progress.save(save_path)
+	_update_clock()
 
 
 func _update_best() -> void:

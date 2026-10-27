@@ -8,3 +8,7 @@
 
 # Compiled translations; the game reads the .po files
 *.mo
+
+# SilentWolf credentials (see scripts/silent_wolf.gd)
+scripts/silent_wolf_key.gd
+scripts/silent_wolf_key.gd.uid

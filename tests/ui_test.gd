@@ -10,6 +10,7 @@ const Grader := preload("res://scripts/grader.gd")
 const Language := preload("res://scripts/language.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
+const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -25,6 +26,8 @@ func _init() -> void:
 
 
 func _run() -> void:
+	# Never post to the real leaderboards from tests.
+	SilentWolf.offline = true
 	var main: Control = load("res://main.tscn").instantiate()
 	main.save_path = TEST_SAVE
 	# The tutorial's own test covers a first launch.
@@ -366,6 +369,10 @@ func _run() -> void:
 	await _frames(2)
 	await _check_prefetch()
 	await _frames(2)
+	await _check_silent_wolf()
+	await _frames(2)
+	await _check_timer_setting()
+	await _frames(2)
 	await _check_reminder()
 	await _frames(2)
 	_check_cloud_save()
@@ -552,6 +559,140 @@ func _check_prefetch() -> void:
 	game.queue_free()
 	await _frames(2)
 	_expect(not is_instance_valid(game), "a game with background work still running closes cleanly")
+
+
+func _check_silent_wolf() -> void:
+	_expect(SilentWolf.clean_name("  Ada\nLovelace the Great  ") == "Ada Lovelace the" and SilentWolf.time_score(61.5) == -61500,
+			"names are trimmed to one short line and times become negative milliseconds")
+	var raw := [
+		{"pn": "Ada", "s": -90000, "t": 1.0, "md": {"id": "a"}},
+		{"pn": "Ada L", "s": -70000, "t": 2.0, "md": {"id": "a"}},
+		{"pn": "Ada", "s": -80000, "t": 3.0, "md": {"id": "b"}},
+		{"pn": "Old", "s": -60000, "t": 0.5},
+	]
+	var ranked := SilentWolf.best_per_player(raw)
+	_expect(ranked.map(func(entry: Dictionary) -> String: return "%s %d" % [entry.name, entry.score])
+			== ["Old -60000", "Ada L -70000", "Ada -80000"],
+			"each player keeps their best score under their latest name, and same names stay apart by id")
+
+	# Solves here would change the stats later checks count on, so the save is put back after.
+	var before := FileAccess.get_file_as_string(TEST_SAVE)
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var wolf: SilentWolf = game._silent_wolf
+	_expect(not wolf.available() and not game._has_leaderboards() and not game._settings.silent_wolf_toggle.visible,
+			"without a key there are no SilentWolf boards or setting")
+	wolf.api_key = "test"
+	_expect(game._silent_wolf_on() and game._has_leaderboards(), "with a key, SilentWolf is on by default")
+	game._menu.leaderboards_button.visible = true
+
+	game._start(game.Mode.DAILY)
+	await _settle()
+	var board: Board = game._board
+	game._elapsed = 83.4
+	for row in board.size:
+		await _right_click(game._view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	var id: String = game._player_id()
+	var player_name: String = game._player_name()
+	_expect(id.length() == 16 and player_name.begins_with("Player "), "players get a random id and a placeholder name")
+	var daily_saves := wolf.sent.filter(func(request: Array) -> bool:
+		return request.slice(0, 4) == ["save", "daily-" + game._today(), id, player_name])
+	_expect(daily_saves.size() == 1 and absi(daily_saves[0][4] + 83400) < 1000, "today's daily time goes to today's board")
+	_expect(game._win_leaderboard_button.visible, "the win panel offers the leaderboard")
+
+	wolf.fake_scores["daily-" + game._today()] = [
+		{"pn": "Speedy", "s": -50000, "t": 1.0, "md": {"id": "x"}},
+		{"pn": player_name, "s": -83400, "t": 2.0, "md": {"id": id}},
+	]
+	game._win_leaderboard_button.pressed.emit()
+	await _frames(3)
+	var screen: Control = game._leaderboards
+	_expect(screen.visible and not game._game.visible and screen.kind() == "daily", "it opens on the daily board")
+	var cells: Array = screen._list.get_children().map(func(label: Label) -> String: return label.text)
+	_expect(cells == ["1", "Speedy", "0:50", "2", player_name, "1:23"], "the board lists ranks, names and times")
+	_expect(screen._list.get_child(4).has_theme_color_override("font_color"), "the player's own row stands out")
+	_screenshot("leaderboard.png")
+
+	screen.name_entry.text = "  Crowned One  "
+	screen.name_entry.text_submitted.emit(screen.name_entry.text)
+	_expect(game._player_name() == "Crowned One", "the player can rename themselves")
+	screen._tabs["climb"].pressed.emit()
+	await _frames(2)
+	_expect(screen.kind() == "climb" and screen._status.text == "No scores yet. Be the first!", "empty boards say so")
+	screen.back.emit()
+	await _frames(2)
+	_expect(game._game.visible and game._win_overlay.visible and not screen.visible,
+			"back returns to the solved puzzle")
+
+	game._start(game.Mode.CHALLENGE)
+	await _settle()
+	board = game._board
+	for row in board.size:
+		await _right_click(game._view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	_expect(["save", "climb", id, "Crowned One", 1] in wolf.sent, "Climb runs go up under the new name")
+
+	wolf.pending = [["solved", id, "Crowned One", 3]]
+	wolf.api_key = ""
+	await wolf.retry()
+	_expect(wolf.pending.size() == 1, "scores wait while the boards can't be reached")
+	wolf.api_key = "test"
+	await wolf.retry()
+	_expect(wolf.pending.is_empty() and ["save", "solved", id, "Crowned One", 3] in wolf.sent, "and go up later")
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("online", "pending", null) == [], "waiting scores are saved, so they survive a restart")
+
+	game._show_menu()
+	game._menu.leaderboards_chosen.emit()
+	await _frames(2)
+	_expect(screen.visible and not game._menu.visible, "the menu opens the leaderboards")
+	screen.back.emit()
+	await _frames(2)
+	_expect(game._menu.visible and not screen.visible, "and back returns to the menu")
+
+	# The Settings switch, for Android players who only want Google Play Games.
+	_expect(not screen.play_games_button.visible, "the Play Games button only shows on Android")
+	game._on_silent_wolf_toggled(false)
+	var sent_before := wolf.sent.size()
+	game._submit_online("solved", 9)
+	_expect(not game._silent_wolf_on() and wolf.sent.size() == sent_before and not game._menu.leaderboards_button.visible,
+			"turning SilentWolf off stops sending scores and, without Play Games, hides the leaderboards")
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "silent_wolf", true) == false, "the choice is saved")
+	game._on_silent_wolf_toggled(true)
+	_expect(game._silent_wolf_on() and game._menu.leaderboards_button.visible, "and turning it back on restores them")
+	game.queue_free()
+	await _frames(2)
+	var restore := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
+	restore.store_string(before)
+	restore.close()
+
+
+func _check_timer_setting() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(game._settings.timer_toggle.button_pressed, "the timer shows by default")
+	game._start(game.Mode.REGULAR)
+	await _settle()
+	_expect(game._timer_label.visible and game._best_label.visible, "puzzles show the timer")
+	game._settings.timer_toggle.button_pressed = false
+	_expect(not game._timer_label.visible and not game._best_label.visible, "the setting hides the timer at once")
+	_expect(game._progress.get_value("settings", "show_timer", true) == false, "and is saved")
+	var elapsed: float = game._elapsed
+	await _frames(10)
+	_expect(game._elapsed > elapsed, "the clock keeps running while hidden")
+	game._start(game.Mode.DAILY)
+	await _settle()
+	_expect(not game._timer_label.visible, "and stays hidden in other modes")
+	game._settings.timer_toggle.button_pressed = true
+	_expect(game._timer_label.visible, "turning it back on shows it again")
+	game.queue_free()
 
 
 func _check_weekly() -> void:

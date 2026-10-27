@@ -32,8 +32,7 @@
 - [x] Win animation
 - [x] Optional sound effects
 - [x] Colour-blind support: region patterns setting
-- [ ] Keyboard play: arrow keys to move, keys to place × and crown
-- [ ] Untimed mode: a setting that hides the timer
+- [x] Untimed mode: a setting that hides the timer
 - [x] Interactive tutorial: walk first-time players through the rules on a small board
 - [x] Haptics: short vibration on Android when placing a crown and on a win
 

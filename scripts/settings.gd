@@ -4,10 +4,12 @@ extends Control
 signal dark_mode_toggled(enabled: bool)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
+signal timer_toggled(shown: bool)
 signal sound_toggled(enabled: bool)
 signal vibration_toggled(enabled: bool)
 signal reminder_toggled(enabled: bool)
 signal reminder_hour_chosen(hour: int)
+signal silent_wolf_toggled(enabled: bool)
 ## An empty locale means the device's language.
 signal language_chosen(locale: String)
 signal how_to_play
@@ -16,11 +18,14 @@ signal back
 var dark_mode_toggle: CheckButton
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
+var timer_toggle: CheckButton
 var sound_toggle: CheckButton
 ## Shown only where the game can vibrate (Android).
 var vibration_toggle: CheckButton
 var reminder_toggle: CheckButton
 var reminder_hour_picker: OptionButton
+## Shown only in builds with SilentWolf's key.
+var silent_wolf_toggle: CheckButton
 var _reminder_row: HBoxContainer
 ## Hour of each reminder_hour_picker item.
 var _hours: Array[int] = []
@@ -62,6 +67,12 @@ func _ready() -> void:
 	patterns_toggle.toggled.connect(patterns_toggled.emit)
 	box.add_child(patterns_toggle)
 
+	timer_toggle = CheckButton.new()
+	timer_toggle.text = tr("Show timer")
+	timer_toggle.add_theme_font_size_override("font_size", 20)
+	timer_toggle.toggled.connect(timer_toggled.emit)
+	box.add_child(timer_toggle)
+
 	sound_toggle = CheckButton.new()
 	sound_toggle.text = tr("Sound effects")
 	sound_toggle.add_theme_font_size_override("font_size", 20)
@@ -95,6 +106,14 @@ func _ready() -> void:
 	reminder_hour_picker.add_theme_font_size_override("font_size", 20)
 	reminder_hour_picker.item_selected.connect(func(index: int) -> void: reminder_hour_chosen.emit(_hours[index]))
 	_reminder_row.add_child(reminder_hour_picker)
+
+	silent_wolf_toggle = CheckButton.new()
+	# TRANSLATORS: SilentWolf is the name of the leaderboard service; keep it as is.
+	silent_wolf_toggle.text = tr("Online leaderboards (SilentWolf)")
+	silent_wolf_toggle.add_theme_font_size_override("font_size", 20)
+	silent_wolf_toggle.toggled.connect(silent_wolf_toggled.emit)
+	silent_wolf_toggle.visible = false
+	box.add_child(silent_wolf_toggle)
 
 	var language_row := HBoxContainer.new()
 	language_row.add_theme_constant_override("separation", 12)

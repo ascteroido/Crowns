@@ -270,7 +270,8 @@ func _draw() -> void:
 			if reveal >= 0.0:
 				var diagonal := (n - 1 - row) + (n - 1 - col if is_layout_rtl() else col)
 				grow = _ease_out_back((reveal - diagonal * REVEAL_STEP_MS) / REVEAL_MS)
-				if grow <= 0.0:
+				# Under a few pixels, a rounded tile can't be drawn yet.
+				if grow * cs < 3.0:
 					continue
 				rect = _scaled(rect, grow)
 			var tile := rect.grow(-cs * grow * GAP / 2.0)
