@@ -5,6 +5,10 @@ extends Control
 ## (or double tap) places a crown. Dragging from an empty cell crosses out every
 ## empty cell it passes; dragging from a cross erases every cross it passes.
 ## Right click toggles a crown.
+##
+## With keyboard focus, the arrow keys move a cursor (Shift crosses out the empty
+## cells it moves onto), Space or X crosses out or clears the cell, Enter or C
+## toggles a crown, and Backspace or Delete empties it.
 
 const Board := preload("res://scripts/board.gd")
 const CrownArt := preload("res://scripts/crown_art.gd")
@@ -28,6 +32,8 @@ const TRAY_DARK := Color("121214")
 const GAP := 0.07
 const RADIUS := 0.16
 const HINT_COLOR := Color("2f6fde")
+const CURSOR_LIGHT := Color("2a2340")
+const CURSOR_DARK := Color("f4f1ea")
 const HINT_DIM := Color(0, 0, 0, 0.3)
 const PATTERN_INK := Color(0, 0, 0, 0.2)
 const PATTERN_COUNT := 14
@@ -57,6 +63,8 @@ var board: Board:
 		mistake = Vector2i(-1, -1)
 		hint_focus = PackedInt32Array()
 		hint_targets = PackedInt32Array()
+		if board and (cursor.x >= board.size or cursor.y >= board.size):
+			cursor = Vector2i(board.size / 2, board.size / 2)
 		queue_redraw()
 ## Cell indices a hint is about; every other cell is dimmed while it's set.
 var hint_focus := PackedInt32Array():
@@ -88,6 +96,9 @@ var dark := false:
 		dark = value
 		queue_redraw()
 
+## The keyboard's cell; it shows once a key is used and hides on a click.
+var cursor := Vector2i.ZERO
+var _cursor_shown := false
 var _stroke: Array = []
 var _painting := false
 var _erasing := false
@@ -109,6 +120,9 @@ var _reveal_at := -1
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
+	focus_mode = FOCUS_ALL
+	focus_entered.connect(queue_redraw)
+	focus_exited.connect(queue_redraw)
 	resized.connect(queue_redraw)
 
 
@@ -151,9 +165,17 @@ func region_name(region: int) -> String:
 func _gui_input(event: InputEvent) -> void:
 	if board == null or not interactive:
 		return
+	if event is InputEventKey:
+		_key_input(event)
+		return
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		var cell := _cell_at(button.position)
+		if button.pressed:
+			grab_focus()
+			if _cursor_shown:
+				_cursor_shown = false
+				queue_redraw()
 		if button.pressed and cell.x >= 0:
 			if button.button_index == MOUSE_BUTTON_LEFT:
 				var old := board.get_mark(cell)
@@ -191,6 +213,51 @@ func _gui_input(event: InputEvent) -> void:
 			if board.is_cross(cell):
 				_change(cell, Board.Mark.EMPTY)
 		accept_event()
+
+
+func _key_input(key: InputEventKey) -> void:
+	if not key.pressed or _painting or _erasing:
+		return
+	var keycode := key.keycode
+	var move := Vector2i.ZERO
+	if key.is_action_pressed("ui_left", true):
+		move = Vector2i(0, -1)
+	elif key.is_action_pressed("ui_right", true):
+		move = Vector2i(0, 1)
+	elif key.is_action_pressed("ui_up", true):
+		move = Vector2i(-1, 0)
+	elif key.is_action_pressed("ui_down", true):
+		move = Vector2i(1, 0)
+	var mark := -1
+	# Leaves Ctrl+C, Ctrl+X and the like to the rest of the game.
+	var mark_keys := not (key.ctrl_pressed or key.meta_pressed or key.alt_pressed)
+	if mark_keys and keycode in [KEY_SPACE, KEY_X]:
+		mark = Board.Mark.CROSS if board.get_mark(cursor) == Board.Mark.EMPTY else Board.Mark.EMPTY
+	elif mark_keys and keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_C]:
+		mark = Board.Mark.EMPTY if board.get_mark(cursor) == Board.Mark.CROWN else Board.Mark.CROWN
+	elif mark_keys and keycode in [KEY_BACKSPACE, KEY_DELETE]:
+		mark = Board.Mark.EMPTY
+	if move == Vector2i.ZERO and mark < 0:
+		return
+	accept_event()
+	# The first key shows the cursor where it is, without acting yet.
+	if not _cursor_shown:
+		_cursor_shown = true
+		queue_redraw()
+		return
+	if move != Vector2i.ZERO:
+		cursor = (cursor + move).clamp(Vector2i.ZERO, Vector2i(board.size - 1, board.size - 1))
+		queue_redraw()
+		if key.shift_pressed and board.get_mark(cursor) == Board.Mark.EMPTY:
+			mark = Board.Mark.CROSS
+	if mark >= 0:
+		_change(cursor, mark)
+		_finish_stroke()
+
+
+## Whether the keyboard cursor is showing.
+func cursor_shown() -> bool:
+	return _cursor_shown
 
 
 func _change(cell: Vector2i, mark: int) -> void:
@@ -314,6 +381,13 @@ func _draw() -> void:
 				ring.border_color = Color(HINT_COLOR, pulse)
 				ring.set_border_width_all(roundi(maxf(2.0, cs * 0.07)))
 				draw_style_box(ring, tile)
+	if _cursor_shown and interactive and has_focus() and reveal < 0.0:
+		var cursor_tile := Rect2(origin + Vector2(cursor.y, cursor.x) * cs, Vector2(cs, cs)).grow(-cs * GAP / 4.0)
+		var frame := _rounded(Color.TRANSPARENT, cs * RADIUS * 1.15)
+		frame.draw_center = false
+		frame.border_color = CURSOR_DARK if dark else CURSOR_LIGHT
+		frame.set_border_width_all(roundi(maxf(2.0, cs * 0.06)))
+		draw_style_box(frame, cursor_tile)
 
 
 ## A rounded box in `color`, for tiles and the tray behind them.

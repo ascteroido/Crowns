@@ -190,6 +190,8 @@ func _run() -> void:
 			applied = false
 	_expect(applied and main._hint_label.text.is_empty() and main._hint_button.text == "Hint", "applying a hint changes the highlighted cells")
 	main._on_hint()
+	# A long hint can take a third line and shrink the board; click where it ends up.
+	await _frames(1)
 	await _click(view, Vector2i(board.size - 1, board.size - 1))
 	_expect(main._hint_label.text.is_empty() and view.hint_targets.is_empty(), "editing the board dismisses the hint")
 	main._on_clear()
@@ -403,6 +405,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_speed()
 	await _frames(2)
+	await _check_keyboard()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
@@ -589,6 +593,103 @@ func _check_speed() -> void:
 	await _settle()
 	_expect(game._speed_run.level == 1 and game._board.size == game.SPEED_STAGES[0][0], "the menu starts a fresh run")
 	game.queue_free()
+
+
+func _check_keyboard() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	var board: Board = game._board
+	game._on_clear()
+	game._undo.clear()
+	await _frames(1)
+	_expect(view.has_focus() and not view.cursor_shown(), "the board takes the keyboard, cursor hidden")
+
+	# The first key only shows the cursor; then keys move it and mark cells.
+	view.cursor = Vector2i.ZERO
+	await _key(KEY_RIGHT)
+	_expect(view.cursor_shown() and view.cursor == Vector2i.ZERO and board.marks.count(Board.Mark.EMPTY) == board.marks.size(),
+			"the first key shows the cursor without acting")
+	await _key(KEY_RIGHT)
+	await _key(KEY_DOWN)
+	_expect(view.cursor == Vector2i(1, 1), "arrow keys move the cursor")
+	await _key(KEY_UP)
+	await _key(KEY_UP)
+	await _key(KEY_LEFT)
+	await _key(KEY_LEFT)
+	_expect(view.cursor == Vector2i.ZERO, "the cursor stops at the edges")
+	await _key(KEY_SPACE)
+	_expect(board.get_mark(Vector2i.ZERO) == Board.Mark.CROSS, "Space crosses out")
+	await _key(KEY_SPACE)
+	_expect(board.get_mark(Vector2i.ZERO) == Board.Mark.EMPTY, "Space again clears the cross")
+	await _key(KEY_ENTER)
+	_expect(board.get_mark(Vector2i.ZERO) == Board.Mark.CROWN, "Enter places a crown")
+	await _key(KEY_BACKSPACE)
+	_expect(board.get_mark(Vector2i.ZERO) == Board.Mark.EMPTY, "Backspace empties the cell")
+	await _key(KEY_RIGHT, true)
+	await _key(KEY_RIGHT, true)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.CROSS and board.get_mark(Vector2i(0, 2)) == Board.Mark.CROSS,
+			"Shift+arrows cross out the cells passed")
+
+	# Undo and redo, by keys and buttons.
+	_expect(game._redo_button.disabled, "nothing to redo yet")
+	await _key(KEY_Z, false, true)
+	_expect(board.get_mark(Vector2i(0, 2)) == Board.Mark.EMPTY and not game._redo_button.disabled, "Ctrl+Z undoes")
+	await _key(KEY_Z, false, true)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.EMPTY, "Ctrl+Z undoes again")
+	await _key(KEY_Z, true, true)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.CROSS and board.get_mark(Vector2i(0, 2)) == Board.Mark.EMPTY,
+			"Ctrl+Shift+Z redoes one step")
+	game._redo_button.pressed.emit()
+	_expect(board.get_mark(Vector2i(0, 2)) == Board.Mark.CROSS and game._redo_button.disabled, "the Redo button redoes the rest")
+	await _key(KEY_Z, false, true)
+	await _key(KEY_SPACE)
+	_expect(game._redo_button.disabled and game._redo.is_empty(), "a new move clears redo")
+	_expect(view.has_focus(), "buttons leave the keyboard with the board")
+
+	# H asks for a hint; a click hides the cursor.
+	await _key(KEY_H)
+	_expect(not game._hint_label.text.is_empty(), "H gives a hint")
+	await _click(view, Vector2i(board.size - 1, board.size - 1))
+	_expect(not view.cursor_shown(), "a click hides the cursor")
+	game._on_clear()
+	await _frames(1)
+
+	# Solve by keyboard, then Enter goes on to the next puzzle.
+	var number: int = game._number
+	await _key(KEY_DOWN)
+	for row in board.size:
+		var target := Vector2i(row, board.solution[row])
+		while view.cursor.x < target.x:
+			await _key(KEY_DOWN)
+		while view.cursor.y < target.y:
+			await _key(KEY_RIGHT)
+		while view.cursor.y > target.y:
+			await _key(KEY_LEFT)
+		await _key(KEY_C)
+	_expect(board.is_solved() and game._win_overlay.visible, "the keyboard can solve a puzzle")
+	await create_timer(1.2).timeout
+	_expect(game._next_puzzle_button.has_focus(), "the win panel's Next puzzle takes the keyboard")
+	await _key(KEY_ENTER)
+	await _settle()
+	_expect(game._number == number + 1 and view.has_focus(), "Enter moves on, and the board has the keyboard again")
+	game.queue_free()
+
+
+func _key(keycode: Key, shift := false, ctrl := false) -> void:
+	for pressed in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = keycode
+		event.physical_keycode = keycode
+		event.shift_pressed = shift
+		event.ctrl_pressed = ctrl
+		event.pressed = pressed
+		Input.parse_input_event(event)
+		await _frames(1)
 
 
 func _check_puzzle_code() -> void:

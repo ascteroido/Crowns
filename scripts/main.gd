@@ -143,6 +143,8 @@ var _hinted := false
 ## the [cell, old, new] batch Apply hint makes}. Empty when none is showing.
 var _hint := {}
 var _undo: Array = []
+## Batches undone since the last move, latest last, for redo.
+var _redo: Array = []
 ## The tutorial's intro card on show; past the last card, the guided solve.
 var _tutorial_card := 0
 ## The tutorial lesson being played, an index into LESSONS.
@@ -180,6 +182,7 @@ var _timer_label: Label
 var _best_label: Label
 var _view: BoardView
 var _undo_button: Button
+var _redo_button: Button
 var _clear_button: Button
 var _hint_button: Button
 var _hint_label: Label
@@ -289,8 +292,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _game.visible:
 		return
-	if event.is_action_pressed("ui_undo") and not _code_overlay.visible:
+	if event.is_action_pressed("ui_redo", true) and not _code_overlay.visible:
+		_on_redo()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_undo", true) and not _code_overlay.visible:
 		_on_undo()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_H \
+			and not (event as InputEventKey).ctrl_pressed and _hint_button.visible and not _code_overlay.visible:
+		_on_hint()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") and _code_overlay.visible:
 		_hide_code()
@@ -464,12 +474,21 @@ func _build_ui() -> void:
 	actions.add_theme_constant_override("separation", 12)
 	column.add_child(actions)
 	_undo_button = _button(tr("Undo"), _on_undo)
+	_undo_button.tooltip_text = "Ctrl+Z"
 	actions.add_child(_undo_button)
+	_redo_button = _button(tr("Redo"), _on_redo)
+	_redo_button.tooltip_text = "Ctrl+Shift+Z"
+	actions.add_child(_redo_button)
 	_clear_button = _button(tr("Clear"), _on_clear)
 	actions.add_child(_clear_button)
 	_hint_button = _button(tr("Hint"), _on_hint)
 	_hint_button.custom_minimum_size.x = 120
+	_hint_button.tooltip_text = "H"
 	actions.add_child(_hint_button)
+	# The board keeps the keyboard; these buttons have shortcuts or need a click.
+	for control: Control in [_back_button, _size_picker, _difficulty_picker, _prev_button, _next_button,
+			_code_button, _undo_button, _redo_button, _clear_button, _hint_button]:
+		control.focus_mode = FOCUS_NONE
 
 	_hint_label = _label("", 16)
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -480,6 +499,10 @@ func _build_ui() -> void:
 
 	var help := _label(tr("Place one crown in every row, column and colour region. Crowns may not touch, even diagonally.")
 			+ "\n" + tr("Tap: × or clear.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."), 14)
+	# Where there's likely a keyboard.
+	if not (OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")):
+		# TRANSLATORS: Keyboard controls, shown under the board on computers.
+		help.text += "\n" + tr("Keys: arrows, Space: ×, Enter: crown, H: hint, Ctrl+Shift+Z: redo.")
 	help.modulate = Color(1, 1, 1, 0.65)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -625,6 +648,7 @@ func _hide_code() -> void:
 		return
 	_code_overlay.visible = false
 	_code_entry.release_focus()
+	_view.grab_focus()
 	if _code_paused:
 		_running = true
 		_code_paused = false
@@ -662,7 +686,9 @@ func _show_overlay(delay: float) -> void:
 	_overlay_tween.tween_callback(func() -> void:
 		_win_panel.pivot_offset = _win_panel.size / 2.0
 		_win_panel.scale = Vector2(0.85, 0.85)
-		_win_crown.hop())
+		_win_crown.hop()
+		# Enter carries on from the keyboard.
+		(_next_puzzle_button if _next_puzzle_button.visible else _win_back_button).grab_focus())
 	_overlay_tween.tween_property(_win_overlay, "modulate:a", 1.0, 0.2)
 	_overlay_tween.parallel().tween_property(_win_panel, "scale", Vector2.ONE, 0.35) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -1145,6 +1171,7 @@ func _start(mode: Mode, date := "") -> void:
 	# The basics teach crossing out by hand; the advanced lessons do it for the player.
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false) or (tutorial and _lesson > 0)
 	_undo_button.visible = true
+	_redo_button.visible = true
 	_update_clock()
 	_load_puzzle()
 
@@ -1295,6 +1322,10 @@ func _load_puzzle() -> void:
 	_generating = false
 	_undo.clear()
 	_undo_button.disabled = true
+	_redo.clear()
+	_redo_button.disabled = true
+	if _view.is_visible_in_tree():
+		_view.grab_focus()
 	_timer_label.text = _format_time(_elapsed)
 	_running = true
 	match _mode:
@@ -1370,10 +1401,14 @@ func _on_difficulty_selected(index: int) -> void:
 	_load_puzzle()
 
 
-func _on_board_edited(changes: Array) -> void:
+## `redoing` keeps the redo list, which any other move clears.
+func _on_board_edited(changes: Array, redoing := false) -> void:
 	_clear_hint()
 	_undo.append(changes)
 	_undo_button.disabled = false
+	if not redoing:
+		_redo.clear()
+		_redo_button.disabled = true
 	if _mode == Mode.CHALLENGE:
 		for change in changes:
 			var cell: Vector2i = change[0]
@@ -1410,10 +1445,25 @@ func _on_undo() -> void:
 	for i in range(changes.size() - 1, -1, -1):
 		_board.set_mark(changes[i][0], changes[i][1])
 	_undo_button.disabled = _undo.is_empty()
+	_redo.append(changes)
+	_redo_button.disabled = false
 	_view.queue_redraw()
 	_save_board()
 	if _mode == Mode.TUTORIAL:
 		_update_tutorial()
+
+
+## Makes the last undone batch again, as if the player had just made it.
+func _on_redo() -> void:
+	if _redo.is_empty() or not _view.interactive:
+		return
+	var changes: Array = _redo.pop_back()
+	_redo_button.disabled = _redo.is_empty()
+	_play_changes(changes)
+	for change in changes:
+		_board.set_mark(change[0], change[2])
+	_view.queue_redraw()
+	_on_board_edited(changes, true)
 
 
 func _on_clear() -> void:
@@ -1552,6 +1602,7 @@ func _update_tutorial() -> void:
 	var on_card := _tutorial_card < cards.size()
 	_hint_button.visible = on_card
 	_undo_button.visible = not on_card
+	_redo_button.visible = not on_card
 	_view.interactive = not on_card
 	if on_card:
 		_hint_button.text = tr("Next")

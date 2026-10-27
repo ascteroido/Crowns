@@ -34,8 +34,8 @@
 - [ ] Steam or Flathub release for the desktop builds
 
 ## Feel and polish
-- [ ] Redo (Ctrl+Shift+Z, and a button beside Undo)
-- [ ] Keyboard play: arrow keys to move, keys to place × and crown
+- [x] Redo (Ctrl+Shift+Z, and a button beside Undo)
+- [x] Keyboard play: arrow keys to move, keys to place × and crown
 - [ ] Pencil marks: a third mark (a dot) for "maybe a crown here"
 - [ ] Mistake check: say whether the board has an error so far, without a full hint (counts as a hint)
 - [ ] Pinch to zoom on large boards on small phones
