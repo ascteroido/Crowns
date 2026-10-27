@@ -50,7 +50,8 @@ var _sent := {}
 
 
 func _ready() -> void:
-	if OS.get_name() != "Android" or DAILY_ID.is_empty():
+	# The Android build for outside Google Play ("no_google") has no Play Games.
+	if OS.get_name() != "Android" or OS.has_feature("no_google") or DAILY_ID.is_empty():
 		return
 	var services: Node = get_node_or_null("/root/GodotPlayGameServices")
 	if services == null or services.initialize() != OK:

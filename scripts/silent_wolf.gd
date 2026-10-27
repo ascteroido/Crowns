@@ -1,6 +1,6 @@
 extends Node
-## Online leaderboards through SilentWolf (silentwolf.com), for desktop and web,
-## where Google Play Games isn't available. Talks to its REST API directly.
+## Online leaderboards through SilentWolf (silentwolf.com), for desktop, web and
+## the Android build outside Google Play. Talks to its REST API directly.
 ##
 ## Boards are made on first use: "daily-YYYY-MM-DD" and "weekly-YYYY-MM-DD" (the
 ## week's Sunday) hold times, "climb" holds best runs and "solved" puzzles solved.
@@ -34,7 +34,8 @@ var _sending := false
 
 
 func _ready() -> void:
-	if ResourceLoader.exists(KEY_SCRIPT) and not offline:
+	# The Google Play build uses Play Games instead, and ships without the key too.
+	if ResourceLoader.exists(KEY_SCRIPT) and not offline and not OS.has_feature("play_store"):
 		var key: Script = load(KEY_SCRIPT)
 		game_id = key.GAME_ID
 		api_key = key.API_KEY

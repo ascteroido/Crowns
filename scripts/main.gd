@@ -144,9 +144,6 @@ var _play_games: PlayGames
 var _reminder: Reminder
 ## Desktop and web leaderboards; Android uses Play Games instead.
 var _silent_wolf: SilentWolf
-## SilentWolf starts off on Android, where the Play listing's audience includes
-## children: players opt in from Settings. Desktop and web start with it on.
-var _silent_wolf_default := OS.get_name() != "Android"
 var _leaderboards: Leaderboards
 ## Whether the leaderboards were opened from a solved puzzle, so Back returns there.
 var _leaderboards_from_game := false
@@ -360,10 +357,8 @@ func _build_ui() -> void:
 		_progress.set_value(ONLINE, "player_name", player_name)
 		_progress.save(save_path))
 	add_child(_leaderboards)
-	_leaderboards.play_games_chosen.connect(_show_play_games_board)
-	_leaderboards.play_games_button.visible = _play_games.available()
 	_settings.silent_wolf_toggle.visible = _silent_wolf.available()
-	_settings.silent_wolf_toggle.set_pressed_no_signal(_progress.get_value("settings", "silent_wolf", _silent_wolf_default))
+	_settings.silent_wolf_toggle.set_pressed_no_signal(_progress.get_value("settings", "silent_wolf", true))
 	_settings.silent_wolf_toggled.connect(_on_silent_wolf_toggled)
 	_settings.timer_toggle.set_pressed_no_signal(_progress.get_value("settings", "show_timer", true))
 	_settings.timer_toggled.connect(_on_timer_toggled)
@@ -1750,10 +1745,10 @@ func _earned_achievements() -> Dictionary:
 	}
 
 
-## Whether scores go to SilentWolf: in builds with its key, unless turned off in
-## Settings (on Android, for players who only want Google Play Games).
+## Whether scores go to SilentWolf: in builds with its key (all but Google Play's),
+## unless turned off in Settings.
 func _silent_wolf_on() -> bool:
-	return _silent_wolf.available() and _progress.get_value("settings", "silent_wolf", _silent_wolf_default)
+	return _silent_wolf.available() and _progress.get_value("settings", "silent_wolf", true)
 
 
 ## Whether there are any leaderboards: SilentWolf's, or Play Games' on Android.
@@ -1811,7 +1806,7 @@ func _show_play_games_board(kind: String) -> void:
 			_play_games.show_solved()
 
 
-## The leaderboards from the menu: ours when SilentWolf is on, otherwise Play Games' own.
+## The leaderboards from the menu: ours with SilentWolf, otherwise Play Games' own.
 func _show_leaderboards(kind: String) -> void:
 	if not _silent_wolf_on():
 		_play_games.show_all()

@@ -35,12 +35,17 @@ class AndroidExportPlugin extends EditorExportPlugin:
 			return true
 		return false
 
+	# Crowns: Android presets without a game id (the build for outside Google
+	# Play) get none of the plugin's libraries, dependencies or manifest entry.
+	func _enabled(platform) -> bool:
+		return _supports_platform(platform) and get_option("godot_play_game_services/game_id") != ""
+
 
 	func _export_begin(features: PackedStringArray, is_debug: bool, path: String, flags: int) -> void:
+		if not features.has("android"):
+			return
 		var id = get_option("godot_play_game_services/game_id")
 		if id == "":
-			printerr("[{plugin_name}] Export [Game id] is empty.".format({"plugin_name": _plugin_name}))
-			print("Please add your game-id here: [Project > Export > Android > godot_play_game_services/game_id].")
 			return
 
 		var file := FileAccess.open("android/build/res/values/strings.xml", FileAccess.WRITE)
@@ -50,13 +55,15 @@ class AndroidExportPlugin extends EditorExportPlugin:
 		print("[{plugin_name}] added game-id {id} to [values/strings.xml]".format({"plugin_name": _plugin_name, "id": id}))
 
 	func _get_android_libraries(platform, debug):
+		if not _enabled(platform):
+			return PackedStringArray()
 		if debug:
 			return PackedStringArray([_plugin_name + "/bin/debug/" + _plugin_name + "-debug.aar"])
 		else:
 			return PackedStringArray([_plugin_name + "/bin/release/" + _plugin_name + "-release.aar"])
 
 	func _get_android_dependencies(platform: EditorExportPlatform, debug: bool) -> PackedStringArray:
-		if not _supports_platform(platform):
+		if not _enabled(platform):
 			return PackedStringArray()
 
 		return PackedStringArray([
@@ -65,7 +72,7 @@ class AndroidExportPlugin extends EditorExportPlugin:
 			])
 
 	func _get_android_manifest_application_element_contents(platform: EditorExportPlatform, debug: bool) -> String:
-		if not _supports_platform(platform):
+		if not _enabled(platform):
 			return ""
 
 		return "<meta-data android:name=\"com.google.android.gms.games.APP_ID\" android:value=\"@string/game_services_project_id\"/>"

@@ -586,9 +586,6 @@ func _check_silent_wolf() -> void:
 			"without a key there are no SilentWolf boards or setting")
 	wolf.api_key = "test"
 	_expect(game._silent_wolf_on() and game._has_leaderboards(), "with a key, SilentWolf is on by default")
-	game._silent_wolf_default = false
-	_expect(not game._silent_wolf_on(), "on Android it starts off, for players to opt in")
-	game._silent_wolf_default = true
 	game._menu.leaderboards_button.visible = true
 
 	game._start(game.Mode.DAILY)
@@ -658,7 +655,6 @@ func _check_silent_wolf() -> void:
 	_expect(game._menu.visible and not screen.visible, "and back returns to the menu")
 
 	# The Settings switch, for Android players who only want Google Play Games.
-	_expect(not screen.play_games_button.visible, "the Play Games button only shows on Android")
 	game._on_silent_wolf_toggled(false)
 	var sent_before := wolf.sent.size()
 	game._submit_online("solved", 9)

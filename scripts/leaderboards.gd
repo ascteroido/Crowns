@@ -1,13 +1,11 @@
 extends Control
 ## The in-game leaderboards, read from SilentWolf: today's daily, this week's
-## weekly, The Climb and puzzles solved. On Android a button also opens the same
-## board in Google Play Games.
+## weekly, The Climb and puzzles solved. (The Google Play build shows Play
+## Games' own leaderboards instead.)
 
 signal back
 ## The player changed their leaderboard name.
 signal name_changed(player_name: String)
-## Open the Google Play Games board matching the `kind` tab.
-signal play_games_chosen(kind: String)
 
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const GOLD := Color("f4c542")
@@ -22,8 +20,6 @@ var player_id := ""
 var highlight := GOLD
 
 var name_entry: LineEdit
-## Shown only where Google Play Games is available.
-var play_games_button: Button
 var _tabs := {}
 var _subtitle: Label
 var _status: Label
@@ -107,14 +103,6 @@ func _ready() -> void:
 	var note := _label(tr("New scores go up under this name."), 14)
 	note.modulate = Color(1, 1, 1, 0.6)
 	column.add_child(note)
-
-	play_games_button = Button.new()
-	play_games_button.text = tr("Open in Google Play Games")
-	play_games_button.custom_minimum_size = Vector2(0, 48)
-	play_games_button.add_theme_font_size_override("font_size", 18)
-	play_games_button.pressed.connect(func() -> void: play_games_chosen.emit(_kind))
-	play_games_button.visible = false
-	column.add_child(play_games_button)
 
 	var back_button := Button.new()
 	back_button.text = tr("Back")
