@@ -586,6 +586,9 @@ func _check_silent_wolf() -> void:
 			"without a key there are no SilentWolf boards or setting")
 	wolf.api_key = "test"
 	_expect(game._silent_wolf_on() and game._has_leaderboards(), "with a key, SilentWolf is on by default")
+	game._silent_wolf_default = false
+	_expect(not game._silent_wolf_on(), "on Android it starts off, for players to opt in")
+	game._silent_wolf_default = true
 	game._menu.leaderboards_button.visible = true
 
 	game._start(game.Mode.DAILY)
