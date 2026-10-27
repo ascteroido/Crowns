@@ -24,24 +24,34 @@ static func grade(size: int, regions: PackedInt32Array) -> int:
 
 
 ## {"grade": int, "solution": column per row, empty when STUCK,
-##  "tier3_steps": how many tier 3 deductions the solve took,
-##  "largest_group": the most groups one confinement reasoned about}.
+##  "tier2_steps" / "tier3_steps": how many deductions of that tier the solve took,
+##  "largest_group": the most groups one confinement reasoned about,
+##  "open_left": cells still undecided where a STUCK solve gave up, else 0,
+##  "stuck_cells": those cells}.
+## A solve that finishes proves the puzzle has only one solution, since every
+## rule only rules out cells no solution can use.
 static func solve(size: int, regions: PackedInt32Array) -> Dictionary:
 	var state := _State.new(size, regions)
 	var hardest := 1
-	var tier3_steps := 0
+	var tier_steps := [0, 0, 0, 0]
 	var largest_group := 0
 	while not state.solved():
 		var step := _find_step(state)
 		if step.is_empty():
-			return {"grade": STUCK, "solution": PackedInt32Array(), "tier3_steps": tier3_steps,
-					"largest_group": largest_group}
+			var stuck_cells := PackedInt32Array()
+			for cell in state.open.size():
+				if state.open[cell]:
+					stuck_cells.append(cell)
+			return {"grade": STUCK, "solution": PackedInt32Array(), "tier2_steps": tier_steps[2],
+					"tier3_steps": tier_steps[3], "largest_group": largest_group,
+					"open_left": stuck_cells.size(), "stuck_cells": stuck_cells}
 		_apply(state, step)
 		hardest = maxi(hardest, step.tier)
+		tier_steps[step.tier] += 1
 		if step.tier == 3:
-			tier3_steps += 1
 			largest_group = maxi(largest_group, step.from.size())
-	return {"grade": hardest, "solution": state.crowns, "tier3_steps": tier3_steps, "largest_group": largest_group}
+	return {"grade": hardest, "solution": state.crowns, "tier2_steps": tier_steps[2], "tier3_steps": tier_steps[3],
+			"largest_group": largest_group, "open_left": 0, "stuck_cells": PackedInt32Array()}
 
 
 ## The easiest deduction left on a board whose crowns and crosses are all
@@ -75,13 +85,11 @@ static func group_index(size: int, group: int) -> int:
 static func _find_step(state: _State) -> Dictionary:
 	var step := _single(state)
 	if step.is_empty():
-		step = _confinement(state, 1)
+		step = _confinement(state, 1, 1)
 	if step.is_empty():
 		step = _blocker(state)
-	for k in range(2, state.size - 1):
-		if not step.is_empty():
-			break
-		step = _confinement(state, k)
+	if step.is_empty():
+		step = _confinement(state, 2, state.size - 2)
 	return step
 
 
@@ -104,9 +112,13 @@ static func _single(state: _State) -> Dictionary:
 
 
 ## k groups of one kind whose open cells fit inside k groups of another kind
-## leave no room there for anything else.
-static func _confinement(state: _State, k: int) -> Dictionary:
+## leave no room there for anything else. Finds the smallest such k from
+## `min_k` to `max_k`; among those, the first pairing below, then the lowest groups.
+static func _confinement(state: _State, min_k: int, max_k: int) -> Dictionary:
 	var n := state.size
+	var bits := _bit_counts(n)
+	var best := {}
+	var best_k := max_k + 1
 	# Lines pair with regions both ways.
 	for pair in [[Kind.REGION, Kind.ROW], [Kind.REGION, Kind.COLUMN], [Kind.ROW, Kind.REGION], [Kind.COLUMN, Kind.REGION]]:
 		var from: int = pair[0]
@@ -117,18 +129,19 @@ static func _confinement(state: _State, k: int) -> Dictionary:
 			cover.append(state.cover(from * n + g, to))
 			if not state.done[from * n + g]:
 				active |= 1 << g
+		# union[mask]: the `to` groups covered by the `from` groups in mask,
+		# built from the mask without its lowest group.
+		var union := PackedInt32Array()
+		union.resize(1 << n)
 		for mask in range(1, 1 << n):
-			if mask & active != mask or _bits(mask) != k:
-				continue
-			var union := 0
-			for g in n:
-				if mask & (1 << g):
-					union |= cover[g]
-			if _bits(union) != k:
+			var low := mask & -mask
+			union[mask] = union[mask ^ low] | cover[bits[low - 1]]
+			var k := bits[mask]
+			if k < min_k or k >= best_k or mask & active != mask or bits[union[mask]] != k:
 				continue
 			var cross := PackedInt32Array()
 			for g in n:
-				if union & (1 << g):
+				if union[mask] & (1 << g):
 					for cell in state.open_cells(to * n + g):
 						if not mask & (1 << state.group_of(cell, from)):
 							cross.append(cell)
@@ -141,11 +154,12 @@ static func _confinement(state: _State, k: int) -> Dictionary:
 				if mask & (1 << g):
 					from_groups.append(from * n + g)
 					focus.append_array(state.groups[from * n + g])
-				if union & (1 << g):
+				if union[mask] & (1 << g):
 					to_groups.append(to * n + g)
-			return {"tier": 2 if k == 1 else 3, "rule": "confined", "crown": -1, "cross": cross,
+			best = {"tier": 2 if k == 1 else 3, "rule": "confined", "crown": -1, "cross": cross,
 					"from": from_groups, "to": to_groups, "focus": focus}
-	return {}
+			best_k = k
+	return best
 
 
 ## Rules out a cell when a crown there would leave some other group with no open cells.
@@ -171,12 +185,20 @@ static func _blocker(state: _State) -> Dictionary:
 	return {}
 
 
-static func _bits(value: int) -> int:
-	var count := 0
-	while value:
-		value &= value - 1
-		count += 1
-	return count
+## Bit counts of every number below 2^size (so bits[low - 1] is also the index
+## of a single bit `low`), shared between solves.
+static var _bit_table := PackedByteArray([0])
+
+
+static func _bit_counts(size: int) -> PackedByteArray:
+	var table := _bit_table
+	if table.size() < 1 << size:
+		table = PackedByteArray()
+		table.resize(1 << size)
+		for value in range(1, 1 << size):
+			table[value] = table[value >> 1] + (value & 1)
+		_bit_table = table
+	return table
 
 
 class _State:

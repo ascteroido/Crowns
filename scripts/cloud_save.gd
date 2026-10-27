@@ -47,6 +47,8 @@ static func merge(local: ConfigFile, remote: ConfigFile) -> void:
 	_merge_stats(local, remote)
 
 	_keep_higher(local, remote, "challenge", "best")
+	if remote.has_section_key("speed", "best"):
+		_keep_lower(local, remote, "speed", "best")
 	# A run in progress here stays; otherwise pick up the one from the other device.
 	if not local.has_section_key("challenge", "run") and remote.has_section_key("challenge", "run"):
 		local.set_value("challenge", "run", remote.get_value("challenge", "run"))

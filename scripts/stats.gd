@@ -1,5 +1,5 @@
 extends Control
-## Stats screen: daily streaks and weekly solves, solves and times per size, and The Climb.
+## Stats screen: daily streaks and weekly solves, solves and times per size, The Climb and speed runs.
 
 signal back
 signal achievements_chosen
@@ -42,9 +42,9 @@ func _ready() -> void:
 	_box.add_child(back_button)
 
 
-## `daily` and `climb` are [label, value] pairs; `sizes` rows are
+## `daily`, `climb` and `speed` are [label, value] pairs; `sizes` rows are
 ## [size label, solved, average, best].
-func set_stats(daily: Array, sizes: Array, climb: Array) -> void:
+func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
 	for child in _content.get_children():
 		child.queue_free()
 	_section(tr("Daily and weekly"), _pairs(daily))
@@ -61,6 +61,7 @@ func set_stats(daily: Array, sizes: Array, climb: Array) -> void:
 			table.add_child(_table_cell(str(value), 17, table.get_child_count()))
 	_section(tr("Puzzles"), table)
 	_section(tr("The Climb"), _pairs(climb))
+	_section(tr("Speed run"), _pairs(speed))
 
 
 func _section(heading: String, body: Control) -> void:

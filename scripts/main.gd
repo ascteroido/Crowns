@@ -42,7 +42,7 @@ const SWITCH_OFF_DARK := Color("55545b")
 ## Screens fade in over this many seconds.
 const FADE := 0.15
 
-enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL }
+enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL, SPEED }
 
 ## Sizes generated on the spot; larger ones come from pre-made packs (PuzzlePack).
 const SIZES := [5, 6, 7, 8, 9, 10]
@@ -65,6 +65,15 @@ const CHALLENGE_STAGES := [
 	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
 ]
 const CHALLENGE_KEY := "challenge"
+## [size, difficulty] for each board of a speed run, played on one clock.
+const SPEED_STAGES := [
+	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
+	[6, Generator.Difficulty.MEDIUM], [7, Generator.Difficulty.MEDIUM],
+]
+const SPEED_KEY := "speed"
+## Seconds between a speed run's boards, with the clock stopped: long enough
+## for the victory wave on the largest board.
+const SPEED_PAUSE := 0.9
 ## The tutorial's lessons: puzzles as a letter per region, row by row, and the
 ## technique each teaches. The first, a 5×5 that opens on a one-cell region,
 ## solves with "only one cell left" steps alone. The others start part-solved,
@@ -111,6 +120,9 @@ var _week := ""
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
+## Current speed run, like `_run` but never saved: leaving abandons it. Its
+## "level" goes past SPEED_STAGES once the run is finished.
+var _speed_run := {}
 var _elapsed := 0.0
 var _running := false
 ## The timer only counts while the window has focus.
@@ -305,6 +317,7 @@ func _build_ui() -> void:
 	_menu.archive_chosen.connect(_show_archive)
 	_menu.weekly_chosen.connect(_start.bind(Mode.WEEKLY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
+	_menu.speed_chosen.connect(_start.bind(Mode.SPEED))
 	_menu.stats_chosen.connect(_show_stats)
 	_menu.leaderboards_chosen.connect(_show_leaderboards.bind("daily"))
 	_menu.settings_chosen.connect(_show_settings)
@@ -755,9 +768,13 @@ func _show_menu() -> void:
 		challenge_detail = tr("Run in progress · Puzzle %d") % _run.level
 	elif best_run > 0:
 		challenge_detail = tr("Best run: %s") % _puzzles(best_run)
+	var speed_best: float = _progress.get_value(SPEED_KEY, "best", INF)
+	var boards := SPEED_STAGES.size()
+	var speed_detail := tr_n("%d board, one clock", "%d boards, one clock", boards) % boards if speed_best == INF \
+			else tr("Best: %s") % _format_time(speed_best)
 	_menu.set_details(tr("Continue") if started else tr("Play"),
 			"%d×%d · %s · %s" % [_size, _size, _difficulty_name(_difficulty), tr("Puzzle #%d") % _number],
-			daily_detail, weekly_detail, challenge_detail)
+			daily_detail, weekly_detail, challenge_detail, speed_detail)
 
 
 ## Back to the archive for puzzles opened from it, otherwise to the menu.
@@ -835,20 +852,62 @@ func _show_stats() -> void:
 		[tr("Runs played"), _progress.get_value(STATS, "climb_runs", 0)],
 		[tr("Puzzles cleared"), _progress.get_value(STATS, "climb_solved", 0)],
 	]
-	_stats.set_stats(daily, sizes, climb)
+	var speed_best: float = _progress.get_value(SPEED_KEY, "best", INF)
+	var speed := [
+		[tr("Best time"), _format_time(speed_best) if speed_best != INF else "–"],
+		[tr("Runs played"), _progress.get_value(STATS, "speed_runs", 0)],
+		[tr("Runs finished"), _progress.get_value(STATS, "speed_finished", 0)],
+	]
+	_stats.set_stats(daily, sizes, climb, speed)
 	_menu.visible = false
 	_fade_in(_stats)
 
 
 ## Counts a puzzle's first solve; only solves without hints count towards times.
-func _record_solve(size: int, hinted: bool, seconds: float) -> void:
+## Returns the size and difficulty's record this solve beat, or INF when it set
+## none or there was none to beat.
+func _record_solve(size: int, difficulty: int, hinted: bool, seconds: float) -> float:
 	_add_stat("solved_%d" % size, 1)
 	if hinted:
-		return
+		return INF
 	_add_stat("timed_%d" % size, 1)
 	_add_stat("time_%d" % size, seconds)
 	if seconds < _progress.get_value(STATS, "best_%d" % size, INF):
 		_progress.set_value(STATS, "best_%d" % size, seconds)
+	var record := _size_record(size, difficulty)
+	if seconds >= record:
+		return INF
+	_progress.set_value(STATS, _record_key(size, difficulty), seconds)
+	return record
+
+
+func _record_key(size: int, difficulty: int) -> String:
+	return "best_%d_%s" % [size, Generator.DIFFICULTY_NAMES[difficulty].to_lower()]
+
+
+## The fastest first solve without hints at this size and difficulty, or INF.
+## Saves from before records were kept get one worked out from their best times.
+func _size_record(size: int, difficulty: int) -> float:
+	var key := _record_key(size, difficulty)
+	if _progress.has_section_key(STATS, key):
+		return _progress.get_value(STATS, key)
+	var record := INF
+	var regular := RegEx.create_from_string("^(\\d+)x\\d+_(.+)_\\d+$")
+	for puzzle: String in (_progress.get_section_keys("best") if _progress.has_section("best") else PackedStringArray()):
+		var at := [-1, -1]
+		var found := regular.search(puzzle)
+		if found:
+			at = [found.get_string(1).to_int(), Generator.DIFFICULTY_NAMES.map(func(name: String) -> String:
+				return name.to_lower()).find(found.get_string(2))]
+		elif puzzle.begins_with("daily_"):
+			at = [_daily_size(puzzle.trim_prefix("daily_")), DAILY_DIFFICULTY]
+		elif puzzle.begins_with("weekly_"):
+			at = [WEEKLY_SIZE, WEEKLY_DIFFICULTY]
+		if at == [size, difficulty]:
+			record = minf(record, _progress.get_value("best", puzzle))
+	if record != INF:
+		_progress.set_value(STATS, key, record)
+	return record
 
 
 ## Extends the streak when the previous solved daily was the day before.
@@ -1063,6 +1122,8 @@ func _start(mode: Mode, date := "") -> void:
 		_week = _week_start()
 	elif mode == Mode.CHALLENGE and _run.is_empty():
 		_new_run()
+	elif mode == Mode.SPEED:
+		_new_speed_run()
 	elif tutorial:
 		_tutorial_card = 0
 	_menu.visible = false
@@ -1077,7 +1138,7 @@ func _start(mode: Mode, date := "") -> void:
 	_next_button.visible = regular
 	_code_button.visible = regular
 	_code_overlay.visible = false
-	_hint_button.visible = mode != Mode.CHALLENGE
+	_hint_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED]
 	# The tutorial is untimed, and its Hint button turns the intro cards.
 	_clear_button.visible = not tutorial
 	_win_play_button.visible = false
@@ -1099,6 +1160,9 @@ func _puzzle_spec(ahead := 0) -> Array:
 		Mode.CHALLENGE:
 			var stage := _challenge_stage(ahead)
 			return [stage[0], stage[1], hash([_run.seed, _run.level + ahead])]
+		Mode.SPEED:
+			var stage: Array = SPEED_STAGES[mini(_speed_run.level + ahead, SPEED_STAGES.size()) - 1]
+			return [stage[0], stage[1], hash([_speed_run.seed, _speed_run.level + ahead])]
 	# The puzzle number comes last, for sizes read from a pack.
 	return [_size, _difficulty, hash([_size, _difficulty, _number + ahead]), _number + ahead]
 
@@ -1121,10 +1185,12 @@ func _generate(spec: Array) -> Dictionary:
 	return await _finish(_start_job(spec))
 
 
-## Starts generating the next regular puzzle, or The Climb's next level, while
-## this one is played, so Next doesn't have to wait for it.
+## Starts generating the next regular puzzle, or the next level of The Climb or
+## a speed run, while this one is played, so Next doesn't have to wait for it.
 func _prefetch_next() -> void:
-	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE] or (_mode == Mode.CHALLENGE and _run.is_empty()):
+	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE, Mode.SPEED] \
+			or (_mode == Mode.CHALLENGE and _run.is_empty()) \
+			or (_mode == Mode.SPEED and _speed_run.level >= SPEED_STAGES.size()):
 		return
 	var spec := _puzzle_spec(1)
 	# Pack puzzles load at once, so there's nothing to get ahead on.
@@ -1175,6 +1241,12 @@ func _new_run() -> void:
 	_progress.save(save_path)
 
 
+func _new_speed_run() -> void:
+	_speed_run = {"seed": randi(), "level": 1, "elapsed": 0.0}
+	_add_stat("speed_runs", 1)
+	_progress.save(save_path)
+
+
 func _load_puzzle() -> void:
 	_save_board()
 	_running = false
@@ -1205,7 +1277,7 @@ func _load_puzzle() -> void:
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
 	_board_key = _puzzle_key()
 	_hinted = false
-	_elapsed = _run.elapsed if _mode == Mode.CHALLENGE else 0.0
+	_elapsed = _run.elapsed if _mode == Mode.CHALLENGE else _speed_run.elapsed if _mode == Mode.SPEED else 0.0
 	var saved: Dictionary = {} if _board_key.is_empty() else _progress.get_value("in_progress", _board_key, {})
 	# Only restore onto the same layout, in case puzzle generation has changed since.
 	if saved.get("regions", PackedInt32Array()) == _board.regions:
@@ -1234,6 +1306,10 @@ func _load_puzzle() -> void:
 			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week)
 		Mode.CHALLENGE:
 			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(_challenge_stage()[1])]
+		Mode.SPEED:
+			# TRANSLATORS: The board being played in a speed run, e.g. "Speed run · 2 of 5".
+			_puzzle_label.text = tr("Speed run · {board} of {boards}").format(
+					{"board": _speed_run.level, "boards": SPEED_STAGES.size()})
 		Mode.TUTORIAL:
 			_puzzle_label.text = tr("How to play") if _lesson == 0 \
 					else tr("Technique %d of %d") % [_lesson, LESSONS.size() - 1]
@@ -1271,6 +1347,8 @@ func _on_next_puzzle() -> void:
 		return
 	if _mode == Mode.CHALLENGE and _run.is_empty():
 		_new_run()
+	if _mode == Mode.SPEED and _speed_run.level > SPEED_STAGES.size():
+		_new_speed_run()
 	_load_puzzle()
 
 
@@ -1357,7 +1435,7 @@ func _on_hint() -> void:
 		_tutorial_card += 1
 		_update_tutorial()
 		return
-	if not _view.interactive or _mode == Mode.CHALLENGE:
+	if not _view.interactive or _mode in [Mode.CHALLENGE, Mode.SPEED]:
 		return
 	if not _hint.is_empty():
 		_apply(_hint.changes.duplicate())
@@ -1609,7 +1687,7 @@ func _check_win() -> void:
 	_win_crown.visible = true
 	_win_heading.text = tr("Solved!")
 	# The daily and weekly are one puzzle each, so only they have no next one.
-	_next_puzzle_button.visible = _mode in [Mode.REGULAR, Mode.CHALLENGE]
+	_next_puzzle_button.visible = _mode in [Mode.REGULAR, Mode.CHALLENGE, Mode.SPEED]
 	_next_puzzle_button.text = tr("Next puzzle")
 	if _mode == Mode.TUTORIAL:
 		_set_tutorial_done()
@@ -1640,14 +1718,22 @@ func _check_win() -> void:
 		_update_best()
 		_show_win_overlay()
 		return
+	if _mode == Mode.SPEED:
+		_speed_solved()
+		return
 	var key := _puzzle_key()
+	var difficulty: int = _puzzle_spec()[1]
+	# Before this solve's time is saved, which a record worked out from old saves would count.
+	_size_record(_board.size, difficulty)
 	var best: float = _progress.get_value("best", key, INF)
 	# Hinted solves don't count towards best times.
 	var record := not _hinted and _elapsed < best
 	if record:
 		_progress.set_value("best", key, _elapsed)
+	# A record this first solve beat, or INF; replays of a known board don't count.
+	var beaten := INF
 	if not _progress.get_value("solved", key, false):
-		_record_solve(_board.size, _hinted, _elapsed)
+		beaten = _record_solve(_board.size, difficulty, _hinted, _elapsed)
 		match _mode:
 			Mode.DAILY:
 				# Archive dailies count as solves, but not towards streaks or the daily board.
@@ -1676,6 +1762,39 @@ func _check_win() -> void:
 	_on_progress_made()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
 	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
+	if beaten != INF:
+		# TRANSLATORS: Shown on solving faster than ever at a size and difficulty, e.g. "New 8×8 Hard record!"
+		_win_label.text += "\n" + tr("New {size} {difficulty} record!").format({
+			"size": "%d×%d" % [_board.size, _board.size], "difficulty": _difficulty_name(difficulty)}) \
+				+ "\n" + tr("Previous best: %s") % _format_time(beaten)
+	_update_best()
+	_show_win_overlay()
+
+
+## A speed run's board is solved: on to the next after a short pause, or the
+## run's result after the last.
+func _speed_solved() -> void:
+	_speed_run.elapsed = _elapsed
+	_speed_run.level += 1
+	if _speed_run.level <= SPEED_STAGES.size():
+		var run := _speed_run
+		await get_tree().create_timer(SPEED_PAUSE).timeout
+		# Unless the player left, or started over, in the meantime.
+		if _speed_run == run and _mode == Mode.SPEED and _game.visible:
+			_load_puzzle()
+		return
+	var best: float = _progress.get_value(SPEED_KEY, "best", INF)
+	if _elapsed < best:
+		_progress.set_value(SPEED_KEY, "best", _elapsed)
+	_add_stat("speed_finished", 1)
+	_progress.save(save_path)
+	_on_progress_made()
+	_win_heading.text = tr("Finished!")
+	var note := "  " + tr("(new best!)") if _elapsed < best and best != INF else ""
+	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
+	if _elapsed >= best:
+		_win_label.text += "\n" + tr("Best: %s") % _format_time(best)
+	_next_puzzle_button.text = tr("New run")
 	_update_best()
 	_show_win_overlay()
 
@@ -1821,6 +1940,9 @@ func _has_mode_leaderboard() -> bool:
 			return _has_leaderboards() and _daily_live
 		Mode.WEEKLY:
 			return _play_games.has_weekly() or _silent_wolf_on()
+		Mode.SPEED:
+			# No speed board yet; runs only keep a personal best.
+			return false
 	return _has_leaderboards()
 
 
@@ -1935,6 +2057,10 @@ func _update_best() -> void:
 		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
 		_best_label.text = "" if best_run == 0 else tr("Best run %d") % best_run
 		return
+	if _mode == Mode.SPEED:
+		var best_run: float = _progress.get_value(SPEED_KEY, "best", INF)
+		_best_label.text = "" if best_run == INF else tr("Best %s") % _format_time(best_run)
+		return
 	var best: float = _progress.get_value("best", _puzzle_key(), INF)
 	_best_label.text = "" if best == INF else tr("Best %s") % _format_time(best)
 
@@ -1947,8 +2073,8 @@ func _puzzle_key() -> String:
 			return _weekly_key(_week)
 		Mode.CHALLENGE:
 			return CHALLENGE_KEY
-		Mode.TUTORIAL:
-			# Nothing from the tutorial is saved.
+		Mode.TUTORIAL, Mode.SPEED:
+			# Nothing from the tutorial or a speed run is saved.
 			return ""
 	return "%dx%d_%s_%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty].to_lower(), _number]
 

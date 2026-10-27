@@ -1,6 +1,6 @@
 extends Control
 ## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one,
-## this week's weekly challenge or The Climb.
+## this week's weekly challenge, The Climb or a speed run.
 
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 
@@ -9,6 +9,7 @@ signal daily_chosen
 signal archive_chosen
 signal weekly_chosen
 signal challenge_chosen
+signal speed_chosen
 signal stats_chosen
 signal leaderboards_chosen
 signal settings_chosen
@@ -19,6 +20,7 @@ var daily_button: Button
 var archive_button: Button
 var weekly_button: Button
 var challenge_button: Button
+var speed_button: Button
 var stats_button: Button
 var leaderboards_button: Button
 var settings_button: Button
@@ -27,6 +29,7 @@ var _continue_detail: Label
 var _daily_detail: Label
 var _weekly_detail: Label
 var _challenge_detail: Label
+var _speed_detail: Label
 var _box: VBoxContainer
 ## [control, property, size at the desktop window's height], scaled up on taller screens.
 var _scaled := []
@@ -80,11 +83,25 @@ func _ready() -> void:
 	box.add_child(_weekly_detail)
 	box.add_child(_gap(8))
 
+	# The Climb and speed runs share a row, each with its detail beneath.
+	var runs_row := HBoxContainer.new()
+	_scale(runs_row, "separation", 10)
+	box.add_child(runs_row)
+	var details_row := HBoxContainer.new()
+	_scale(details_row, "separation", 10)
+	box.add_child(details_row)
 	challenge_button = _button(tr("The Climb"), challenge_chosen.emit)
-	box.add_child(challenge_button)
+	speed_button = _button(tr("Speed run"), speed_chosen.emit)
 	_challenge_detail = _label("", 14)
-	_challenge_detail.modulate = Color(1, 1, 1, 0.6)
-	box.add_child(_challenge_detail)
+	_speed_detail = _label("", 14)
+	for button: Button in [challenge_button, speed_button]:
+		button.size_flags_horizontal = SIZE_EXPAND_FILL
+		runs_row.add_child(button)
+	for detail: Label in [_challenge_detail, _speed_detail]:
+		detail.modulate = Color(1, 1, 1, 0.6)
+		detail.size_flags_horizontal = SIZE_EXPAND_FILL
+		detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		details_row.add_child(detail)
 	box.add_child(_gap(8))
 
 	# Shown only where Google Play Games is available.
@@ -153,12 +170,13 @@ func _scale(control: Control, property: String, base: int) -> void:
 
 
 func set_details(continue_title: String, continue_detail: String, daily_detail: String, weekly_detail: String,
-		challenge_detail: String) -> void:
+		challenge_detail: String, speed_detail: String) -> void:
 	continue_button.text = continue_title
 	_continue_detail.text = continue_detail
 	_daily_detail.text = daily_detail
 	_weekly_detail.text = weekly_detail
 	_challenge_detail.text = challenge_detail
+	_speed_detail.text = speed_detail
 
 
 func _label(text: String, font_size: int) -> Label:

@@ -17,6 +17,8 @@ var _packs := {}
 ## [size, difficulty] -> region layouts already in the pack, to skip repeats.
 var _seen := {}
 var _dirty := {}
+## [size, difficulty] -> workers making a puzzle for it right now.
+var _busy := {}
 var _stop := false
 var _mutex := Mutex.new()
 
@@ -41,6 +43,7 @@ func _run() -> void:
 			_combos.append(combo)
 			_packs[combo] = puzzles
 			_seen[combo] = {}
+			_busy[combo] = 0
 			for puzzle: Dictionary in puzzles:
 				_seen[combo][puzzle.regions] = true
 	_report()
@@ -65,7 +68,9 @@ func _run() -> void:
 	quit()
 
 
-## One worker: keeps making puzzles for whichever pack is furthest from its target.
+## One worker: keeps making puzzles for whichever pack is furthest from its
+## target, counting puzzles other workers are making as made, so the workers
+## spread across the packs instead of all waiting on the slowest one.
 func _work(worker: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
@@ -74,8 +79,11 @@ func _work(worker: int) -> void:
 		var combo := _next_combo()
 		if combo.is_empty():
 			return
-		var puzzle := Generator.generate(combo[0], combo[1], rng)
+		# Searching only pays off where the right layout is rare.
+		var puzzle := Generator.search(combo[0], combo[1], rng) if combo[1] >= Generator.Difficulty.HARD \
+				else Generator.generate(combo[0], combo[1], rng)
 		_mutex.lock()
+		_busy[combo] -= 1
 		if not _seen[combo].has(puzzle.regions) and _packs[combo].size() < _target:
 			_seen[combo][puzzle.regions] = true
 			_packs[combo].append(puzzle)
@@ -83,14 +91,19 @@ func _work(worker: int) -> void:
 		_mutex.unlock()
 
 
-## The unfinished pack with the fewest puzzles, or [] when all are full.
+## The unfinished pack with the fewest puzzles made or being made, or [] when
+## all are full. The caller is counted as making one for it.
 func _next_combo() -> Array:
 	_mutex.lock()
 	var best := []
+	var best_have := 0
 	for combo: Array in _combos:
-		var have: int = _packs[combo].size()
-		if have < _target and (best.is_empty() or have < _packs[best].size()):
+		var have: int = _packs[combo].size() + _busy[combo]
+		if _packs[combo].size() < _target and (best.is_empty() or have < best_have):
 			best = combo
+			best_have = have
+	if not best.is_empty():
+		_busy[best] += 1
 	_mutex.unlock()
 	return best
 

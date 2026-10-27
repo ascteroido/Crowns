@@ -8,6 +8,12 @@ extends RefCounted
 ## 4. Keep only puzzles the grader rates at the requested difficulty. Hard+ is a
 ##    Hard puzzle that leans harder on tier 3: two or more of its deductions, or
 ##    one about three or more groups at once.
+##
+## search() is faster for big Hard and Hard+ boards, and builds those puzzle
+## packs: it keeps nudging one layout towards the difficulty instead of
+## throwing layouts away; Easy and Medium layouts are cheap enough to throw
+## away. generate() stays as it is, since regular puzzles and their codes
+## depend on the boards it makes from each seed.
 
 const Solver := preload("res://scripts/solver.gd")
 const Grader := preload("res://scripts/grader.gd")
@@ -21,6 +27,9 @@ const REGION_WEIGHTS := [[4.0, 0.05], [2.0, 0.15], [1.0, 0.4], [1.0, 0.4]]
 
 const NEIGHBOURS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const REPAIR_STEPS := 80
+## Moves search() tries on a layout without getting closer before it starts a
+## fresh one; a fresh layout costs about as much as this many grades.
+const SEARCH_PATIENCE := 40
 
 
 ## Returns {"regions": PackedInt32Array, "solution": PackedInt32Array} for a
@@ -41,6 +50,67 @@ static func rates_as(size: int, regions: PackedInt32Array, difficulty: int) -> b
 		return Grader.grade(size, regions) == difficulty + 1
 	var solve := Grader.solve(size, regions)
 	return solve.grade == 3 and (solve.tier3_steps >= 2 or solve.largest_group >= 3)
+
+
+## Like generate(), but by local search: make a layout, then move single cells
+## between regions, keeping each move that leaves the grader no further from
+## `difficulty`. Crown cells never move, so `solution` stays a solution, and a
+## layout the grader can finish has only that one.
+static func search(size: int, difficulty: int, rng: RandomNumberGenerator) -> Dictionary:
+	var weights: Array = REGION_WEIGHTS[difficulty]
+	while true:
+		var start := _generate_unique(size, rng, weights[0], weights[1])
+		var solution: PackedInt32Array = start.solution
+		var regions: PackedInt32Array = start.regions
+		var crowns := {}
+		for row in size:
+			crowns[row * size + solution[row]] = true
+		var graded := Grader.solve(size, regions)
+		var distance := _distance(graded, difficulty)
+		var since_closer := 0
+		while since_closer < SEARCH_PATIENCE:
+			if distance == 0:
+				return {"regions": regions, "solution": solution}
+			# While the grader gets stuck, change the cells it couldn't decide.
+			var stuck: PackedInt32Array = graded.stuck_cells
+			var cell := stuck[rng.randi_range(0, stuck.size() - 1)] if not stuck.is_empty() and rng.randf() < 0.8 \
+					else rng.randi_range(0, size * size - 1)
+			since_closer += 1
+			if crowns.has(cell):
+				continue
+			var targets := _neighbour_regions(size, regions, cell)
+			if targets.is_empty() or not _stays_connected(size, regions, cell):
+				continue
+			var old := regions[cell]
+			regions[cell] = targets[rng.randi_range(0, targets.size() - 1)]
+			var regraded := Grader.solve(size, regions)
+			var moved := _distance(regraded, difficulty)
+			# Ties are kept too, so the search can drift across flat stretches.
+			if moved <= distance:
+				if moved < distance:
+					since_closer = 0
+				distance = moved
+				graded = regraded
+			else:
+				regions[cell] = old
+	return {}
+
+
+## How far a graded layout is from rating as `difficulty`; 0 when it does.
+## Layouts the grader can't finish are furthest, by how much they leave open.
+static func _distance(solve: Dictionary, difficulty: int) -> int:
+	if solve.grade == Grader.STUCK:
+		return 1000 + solve.open_left
+	match difficulty:
+		Difficulty.EASY:
+			return solve.tier2_steps + solve.tier3_steps
+		Difficulty.MEDIUM:
+			return solve.tier3_steps if solve.grade == 3 else (1 if solve.grade == 1 else 0)
+		Difficulty.HARD:
+			return 0 if solve.grade == 3 else 1
+	if solve.grade < 3:
+		return 2
+	return 0 if solve.tier3_steps >= 2 or solve.largest_group >= 3 else 1
 
 
 static func _generate_unique(size: int, rng: RandomNumberGenerator, spread: float, low: float) -> Dictionary:

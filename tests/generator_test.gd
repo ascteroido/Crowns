@@ -31,6 +31,7 @@ func _init() -> void:
 			print("%s %dx%d: %d puzzles, avg %d ms, slowest %d ms" % [name, size, size, PUZZLES_PER_SIZE,
 					(Time.get_ticks_msec() - started) / PUZZLES_PER_SIZE, slowest])
 
+	_check_search()
 	_check_rules()
 	_check_grader()
 	_check_packs()
@@ -52,6 +53,19 @@ func _check_puzzle(size: int, puzzle: Dictionary, label: String) -> void:
 
 	for region in size:
 		_expect(_is_contiguous(size, regions, region), label + " region %d is contiguous" % region)
+
+
+func _check_search() -> void:
+	for difficulty in Generator.DIFFICULTY_NAMES.size():
+		var name: String = Generator.DIFFICULTY_NAMES[difficulty]
+		for size in [6, 8]:
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash(["search", size, difficulty])
+			for number in 2:
+				var puzzle := Generator.search(size, difficulty, rng)
+				var label := "searched %s %dx%d #%d" % [name, size, size, number]
+				_check_puzzle(size, puzzle, label)
+				_expect(Generator.rates_as(size, puzzle.regions, difficulty), label + " grades as " + name)
 
 
 func _check_packs() -> void:
@@ -124,6 +138,18 @@ func _check_grader() -> void:
 			finished += 1
 			_expect(result.solution == Solver.find_solutions(size, regions, 1)[0], "grader solution #%d is the real one" % i)
 	_expect(finished > 100, "grader finishes most unique layouts (%d/150)" % finished)
+
+	# search() relies on this: a layout the grader finishes has one solution,
+	# even straight after growing, before any repair.
+	var grown := 0
+	for i in 300:
+		var size := rng.randi_range(5, 8)
+		var solution := Generator._random_placement(size, rng)
+		var regions := Generator._grow_regions(size, solution, rng, 1.0, 0.4)
+		if Grader.grade(size, regions) != Grader.STUCK:
+			grown += 1
+			_expect(Solver.count_solutions(size, regions) == 1, "finished grown layout #%d has one solution" % i)
+	_expect(grown > 10, "some grown layouts finish (%d/300)" % grown)
 
 
 func _is_contiguous(size: int, regions: PackedInt32Array, region: int) -> bool:

@@ -19,9 +19,8 @@
 - [x] Daily reminder: optional Android notification so players keep their streak
 - [x] Weekly challenge: one harder puzzle a week with its own leaderboard
 - [x] Monthly calendar trophies: a crown on each solved day in the archive, and a badge for a fully solved month
-- [ ] Daily share text: copy a result like "Crowns Oct 27 · 1:30 · no hints 👑" after the daily, Wordle-style
-- [ ] Personal records: point out on the win panel when a solve beats the best for its size or difficulty
-- [ ] Speed mode: a short run of small boards against the clock
+- [x] Personal records: point out on the win panel when a solve beats the best for its size or difficulty
+- [x] Speed mode: a short run of small boards against the clock
 
 ## Google Play Games
 - [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints

@@ -401,11 +401,15 @@ func _run() -> void:
 	await _frames(2)
 	await _check_challenge()
 	await _frames(2)
+	await _check_speed()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
 	await _frames(2)
 	await _check_prefetch()
+	await _frames(2)
+	await _check_records()
 	await _frames(2)
 	await _check_silent_wolf()
 	await _frames(2)
@@ -508,6 +512,82 @@ func _check_challenge() -> void:
 	_expect(game.CHALLENGE_STAGES[-1] == [10, Generator.Difficulty.HARD], "challenge ramps up to 10x10 Hard")
 	game._run.level = 99
 	_expect(game._challenge_stage() == game.CHALLENGE_STAGES[-1], "the last stage repeats")
+	game.queue_free()
+
+
+func _check_speed() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var progress: ConfigFile = game._progress
+	var boards: int = game.SPEED_STAGES.size()
+	_expect(game._menu._speed_detail.text == "%d boards, one clock" % boards, "menu introduces speed runs")
+	game._menu.speed_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	_expect(game._mode == game.Mode.SPEED and not game._hint_button.visible and not game._size_picker.visible,
+			"speed runs hide hints and puzzle pickers")
+	_expect(game._puzzle_label.text == "Speed run · 1 of %d" % boards, "the label counts the boards")
+	_expect(not game._win_leaderboard_button.visible, "speed runs have no leaderboard")
+
+	# Each board flows into the next on the same clock, which stops in between.
+	for level in boards:
+		var board: Board = game._board
+		var stage: Array = game.SPEED_STAGES[level]
+		_expect(board.size == stage[0] and Generator.rates_as(board.size, board.regions, stage[1]),
+				"speed board %d is a %dx%d %s" % [level + 1, stage[0], stage[0], Generator.DIFFICULTY_NAMES[stage[1]]])
+		game._elapsed = 10.0 * (level + 1)
+		for row in board.size:
+			await _right_click(view, Vector2i(row, board.solution[row]))
+		if level == boards - 1:
+			break
+		_expect(not game._win_overlay.visible and not game._running, "a solved board pauses without the win panel")
+		await create_timer(game.SPEED_PAUSE + 0.1).timeout
+		await _settle()
+		_expect(game._speed_run.level == level + 2 and game._elapsed >= 10.0 * (level + 1),
+				"board %d follows on with the run's time" % (level + 2))
+	await _frames(2)
+	var total := 10.0 * boards
+	_expect(game._win_overlay.visible and game._win_heading.text == "Finished!"
+			and game._win_label.text == "Time: %s" % game._format_time(total), "the last board shows the run's time")
+	# The clock also runs for the frames the clicks take.
+	var best: float = progress.get_value("speed", "best", INF)
+	_expect(best >= total and best < total + 1.0, "the run's time is the best")
+	_expect(game._best_label.text == "Best %s" % game._format_time(total), "the game shows the best run")
+	_expect(game._next_puzzle_button.visible and game._next_puzzle_button.text == "New run", "a finished run offers a new one")
+	_screenshot("speed_finished.png")
+
+	# A slower run doesn't replace the best, and the panel says what it was.
+	game._next_puzzle_button.pressed.emit()
+	await _settle()
+	_expect(game._speed_run.level == 1 and game._elapsed < 1.0, "a new run starts from the first board at 0:00")
+	game._speed_run.level = boards
+	game._speed_run.elapsed = 100.0
+	game._load_puzzle()
+	await _settle()
+	for row in game._board.size:
+		await _right_click(view, Vector2i(row, game._board.solution[row]))
+	await _frames(2)
+	_expect(progress.get_value("speed", "best", INF) == best
+			and game._win_label.text.contains("Best: %s" % game._format_time(total)), "a slower run keeps the best")
+
+	# Leaving between boards abandons the run, and nothing about it is saved.
+	game._next_puzzle_button.pressed.emit()
+	await _settle()
+	for row in game._board.size:
+		await _right_click(view, Vector2i(row, game._board.solution[row]))
+	game._show_menu()
+	await create_timer(game.SPEED_PAUSE + 0.1).timeout
+	_expect(game._menu.visible and not game._game.visible, "leaving between boards stays on the menu")
+	_expect(not progress.has_section_key("in_progress", "speed") and not progress.has_section_key("in_progress", ""),
+			"speed boards aren't kept")
+	_expect(game._menu._speed_detail.text == "Best: %s" % game._format_time(total), "menu shows the best run")
+	_expect(progress.get_value("stats", "speed_runs", 0) == 3 and progress.get_value("stats", "speed_finished", 0) == 2,
+			"runs played and finished are counted")
+	game._menu.speed_button.pressed.emit()
+	await _settle()
+	_expect(game._speed_run.level == 1 and game._board.size == game.SPEED_STAGES[0][0], "the menu starts a fresh run")
 	game.queue_free()
 
 
@@ -733,6 +813,50 @@ func _check_timer_setting() -> void:
 	game._settings.timer_toggle.button_pressed = true
 	_expect(game._timer_label.visible, "turning it back on shows it again")
 	game.queue_free()
+
+
+func _check_records() -> void:
+	var before := FileAccess.get_file_as_string(TEST_SAVE)
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var progress: ConfigFile = game._progress
+	# An older save: best times but no records kept yet.
+	progress.set_value("best", "6x6_hard_801", 150.0)
+	progress.set_value("best", "6x6_hard_802", 140.0)
+	progress.set_value("best", "6x6_medium_801", 30.0)
+	_expect(game._size_record(6, Generator.Difficulty.HARD) == 140.0 and progress.get_value("stats", "best_6_hard") == 140.0,
+			"a record is worked out from an old save's best times, per size and difficulty")
+	var solve := func(number: int, seconds: float, size := 6, difficulty := Generator.Difficulty.HARD) -> void:
+		game._size = size
+		game._difficulty = difficulty
+		game._number = number
+		game._start(game.Mode.REGULAR)
+		await _settle()
+		var board: Board = game._board
+		for row in board.size:
+			board.set_mark(Vector2i(row, board.solution[row]), Board.Mark.CROWN)
+		game._elapsed = seconds
+		game._check_win()
+		await _frames(2)
+	await solve.call(803, 150.0)
+	_expect(not game._win_label.text.contains("record"), "a slower solve sets no record")
+	await solve.call(804, 95.0)
+	_expect(game._win_label.text.contains("New 6×6 Hard record!") and game._win_label.text.contains("Previous best: 2:20"),
+			"a faster first solve announces the record and the time it beat")
+	_expect(progress.get_value("stats", "best_6_hard") == 95.0, "and keeps it")
+	progress.set_value("solved", "6x6_hard_805", true)
+	await solve.call(805, 50.0)
+	_expect(not game._win_label.text.contains("record") and progress.get_value("stats", "best_6_hard") == 95.0,
+			"replaying a puzzle already solved can't set a record")
+	await solve.call(806, 20.0, 7, Generator.Difficulty.EASY)
+	_expect(not game._win_label.text.contains("record"), "the first solve at a size and difficulty sets one quietly")
+	game.queue_free()
+	await _frames(2)
+	var restore := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
+	restore.store_string(before)
+	restore.close()
 
 
 func _check_weekly() -> void:
@@ -964,6 +1088,8 @@ func _check_cloud_save() -> void:
 	remote.set_value("in_progress", "6x6_easy_4", {"marks": "new"})
 	remote.set_value("challenge", "best", 8)
 	remote.set_value("challenge", "run", {"level": 4})
+	remote.set_value("speed", "best", 70.0)
+	local.set_value("speed", "best", 90.0)
 
 	var packed := CloudSave.pack(remote)
 	var unpacked := CloudSave.unpack(packed)
@@ -986,6 +1112,7 @@ func _check_cloud_save() -> void:
 			and not local.has_section_key("in_progress", "9x9_hard_1"), "boards in progress merge, skipping solved ones")
 	_expect(local.get_value("challenge", "best") == 8 and local.get_value("challenge", "run").level == 4,
 			"The Climb's best and a run from the other device carry over")
+	_expect(local.get_value("speed", "best") == 70.0, "the faster speed run wins")
 	_expect(local.get_value("settings", "dark_mode") == true, "settings stay with the device")
 	_expect(CloudSave.solved_count(local) == 2, "the save's progress counts solves")
 
