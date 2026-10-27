@@ -1,8 +1,12 @@
 extends Control
 ## Daily puzzle archive: a month calendar of past dailies to play or replay.
+## Solved days wear a crown, and a month with every daily solved earns a trophy.
 
 signal day_chosen(date: String)
 signal back
+
+const CrownArt := preload("res://scripts/crown_art.gd")
+const CrownIcon := preload("res://scripts/crown_icon.gd")
 
 ## Solved days are filled green so they stand out from the purple buttons.
 const SOLVED_FILLS := {"normal": Color("3d8a57"), "hover": Color("4a9c65"), "pressed": Color("327349")}
@@ -17,6 +21,8 @@ var last_date := ""
 var prev_button: Button
 var next_button: Button
 var _month_label: Label
+## The month's trophy, beside its name once every daily in it is solved.
+var _trophy: CrownIcon
 var _grid: GridContainer
 var _summary: Label
 var _year := 0
@@ -40,10 +46,18 @@ func _ready() -> void:
 	box.add_child(nav)
 	prev_button = _button("‹", func() -> void: _step_month(-1))
 	nav.add_child(prev_button)
+	var heading := HBoxContainer.new()
+	heading.alignment = BoxContainer.ALIGNMENT_CENTER
+	heading.size_flags_horizontal = SIZE_EXPAND_FILL
+	heading.add_theme_constant_override("separation", 8)
+	nav.add_child(heading)
+	_trophy = CrownIcon.new()
+	_trophy.custom_minimum_size = Vector2(30, 30)
+	_trophy.size_flags_vertical = SIZE_SHRINK_CENTER
+	_trophy.visible = false
+	heading.add_child(_trophy)
 	_month_label = _label("", 24)
-	_month_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_month_label.size_flags_horizontal = SIZE_EXPAND_FILL
-	nav.add_child(_month_label)
+	heading.add_child(_month_label)
 	next_button = _button("›", func() -> void: _step_month(1))
 	nav.add_child(next_button)
 
@@ -106,7 +120,7 @@ func _refresh() -> void:
 
 	var playable := 0
 	var solved := 0
-	for day in range(1, _days_in_month() + 1):
+	for day in range(1, days_in_month(_year, _month) + 1):
 		var date := "%04d-%02d-%02d" % [_year, _month, day]
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(60, 60)
@@ -125,14 +139,45 @@ func _refresh() -> void:
 					box.bg_color = SOLVED_FILLS[state]
 					box.set_corner_radius_all(10)
 					button.add_theme_stylebox_override(state, box)
+				var crown := _DayCrown.new()
+				crown.set_anchors_and_offsets_preset(PRESET_TOP_RIGHT)
+				crown.offset_left = -21
+				crown.offset_right = -3
+				crown.offset_top = 2
+				crown.offset_bottom = 20
+				crown.mouse_filter = MOUSE_FILTER_IGNORE
+				button.add_child(crown)
 			elif status.started:
 				button.text += "\n•"
 			if date == last_date:
 				_set_font_color(button, TODAY_COLOR)
 			button.pressed.connect(day_chosen.emit.bind(date))
 		_grid.add_child(button)
-	_summary.text = tr("Solved {solved} of {total} this month").format({"solved": solved, "total": playable}) \
-			if playable > 0 else ""
+	var complete := month_complete(_year, _month, first_date, last_date, status_for)
+	_trophy.visible = complete
+	if complete:
+		_summary.text = tr("Every daily solved!")
+	elif playable > 0 and solved == playable:
+		# The month isn't over yet.
+		_summary.text = tr("All solved so far")
+	else:
+		_summary.text = tr("Solved {solved} of {total} this month").format({"solved": solved, "total": playable}) \
+				if playable > 0 else ""
+
+
+## Whether every daily of a finished month is solved, counting from `first_date`
+## for the month the dailies began. The month of `last_date` (today) isn't over.
+static func month_complete(year: int, month: int, first_date: String, last_date: String, status_for: Callable) -> bool:
+	# "-31" sorts after a month's last day whatever its length, so a month is
+	# over once last_date passes it.
+	var month_end := "%04d-%02d-31" % [year, month]
+	if month_end < first_date or last_date <= month_end:
+		return false
+	for day in range(1, days_in_month(year, month) + 1):
+		var date := "%04d-%02d-%02d" % [year, month, day]
+		if date >= first_date and not status_for.call(date).solved:
+			return false
+	return true
 
 
 func _month_names() -> Array[String]:
@@ -146,9 +191,9 @@ func _weekdays() -> Array[String]:
 	return [tr("Su"), tr("Mo"), tr("Tu"), tr("We"), tr("Th"), tr("Fr"), tr("Sa")]
 
 
-func _days_in_month() -> int:
-	var next_year := _year + 1 if _month == 12 else _year
-	var next_month := 1 if _month == 12 else _month + 1
+static func days_in_month(year: int, month: int) -> int:
+	var next_year := year + 1 if month == 12 else year
+	var next_month := 1 if month == 12 else month + 1
 	var next_first := Time.get_unix_time_from_datetime_string("%04d-%02d-01" % [next_year, next_month])
 	return Time.get_date_dict_from_unix_time(next_first - 86400).day
 
@@ -170,6 +215,13 @@ func _button(text: String, on_pressed: Callable) -> Button:
 	button.add_theme_font_size_override("font_size", 24)
 	button.pressed.connect(on_pressed)
 	return button
+
+
+## A small still crown in the corner of a solved day.
+class _DayCrown extends Control:
+	func _draw() -> void:
+		var side := minf(size.x, size.y)
+		CrownArt.draw(self, Rect2((size - Vector2(side, side)) / 2.0, Vector2(side, side)))
 
 
 func _label(text: String, font_size: int) -> Label:

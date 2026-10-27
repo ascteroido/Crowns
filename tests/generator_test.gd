@@ -6,6 +6,7 @@ const Board := preload("res://scripts/board.gd")
 const Generator := preload("res://scripts/generator.gd")
 const Solver := preload("res://scripts/solver.gd")
 const Grader := preload("res://scripts/grader.gd")
+const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
 
 const PUZZLES_PER_SIZE := 10
 
@@ -26,12 +27,13 @@ func _init() -> void:
 				slowest = maxi(slowest, Time.get_ticks_msec() - t)
 				var label := "%s %dx%d #%d" % [name, size, size, number]
 				_check_puzzle(size, puzzle, label)
-				_expect(Grader.grade(size, puzzle.regions) == difficulty + 1, label + " grades as " + name)
+				_expect(Generator.rates_as(size, puzzle.regions, difficulty), label + " grades as " + name)
 			print("%s %dx%d: %d puzzles, avg %d ms, slowest %d ms" % [name, size, size, PUZZLES_PER_SIZE,
 					(Time.get_ticks_msec() - started) / PUZZLES_PER_SIZE, slowest])
 
 	_check_rules()
 	_check_grader()
+	_check_packs()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
 
@@ -50,6 +52,38 @@ func _check_puzzle(size: int, puzzle: Dictionary, label: String) -> void:
 
 	for region in size:
 		_expect(_is_contiguous(size, regions, region), label + " region %d is contiguous" % region)
+
+
+func _check_packs() -> void:
+	# Round trip, including an odd size whose last byte holds a single cell.
+	var puzzles := []
+	for number in 3:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(["pack", number])
+		puzzles.append(Generator.generate(7, Generator.Difficulty.MEDIUM, rng))
+	var bytes := PuzzlePack.encode(7, Generator.Difficulty.MEDIUM, puzzles)
+	_expect(bytes.size() == PuzzlePack.HEADER + 3 * PuzzlePack.entry_size(7), "packs store each puzzle compactly")
+	var back := PuzzlePack.decode_all(bytes)
+	_expect(back.size() == 3 and back[2].regions == puzzles[2].regions and back[2].solution == puzzles[2].solution,
+			"a pack reads back the puzzles written to it")
+
+	# Every shipped pack: a sample from each end must be sound and correctly graded.
+	for size in PuzzlePack.sizes():
+		for difficulty in Generator.DIFFICULTY_NAMES.size():
+			var count := PuzzlePack.count(size, difficulty)
+			var seen := {}
+			for number in range(1, count + 1):
+				var puzzle := PuzzlePack.puzzle(size, difficulty, number)
+				_expect(not seen.has(puzzle.regions), "%dx%d %s pack #%d is not a repeat" % [size, size,
+						Generator.DIFFICULTY_NAMES[difficulty], number])
+				seen[puzzle.regions] = true
+				if number <= 20 or number > count - 5:
+					var label := "%dx%d %s pack #%d" % [size, size, Generator.DIFFICULTY_NAMES[difficulty], number]
+					_check_puzzle(size, puzzle, label)
+					_expect(Generator.rates_as(size, puzzle.regions, difficulty), label + " has its difficulty")
+			_expect(PuzzlePack.puzzle(size, difficulty, count + 1).regions == PuzzlePack.puzzle(size, difficulty, 1).regions,
+					"%dx%d pack numbers wrap around" % [size, size])
+			print("%dx%d %s pack: %d puzzles" % [size, size, Generator.DIFFICULTY_NAMES[difficulty], count])
 
 
 func _check_rules() -> void:

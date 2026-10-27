@@ -5,30 +5,42 @@ extends RefCounted
 ## 2. Grow one region from each crown until the grid is filled.
 ## 3. While the solver finds a second solution, move one of that solution's
 ##    crown cells into a neighbouring region, which breaks that solution.
-## 4. Keep only puzzles the grader rates at the requested difficulty.
+## 4. Keep only puzzles the grader rates at the requested difficulty. Hard+ is a
+##    Hard puzzle that leans harder on tier 3: two or more of its deductions, or
+##    one about three or more groups at once.
 
 const Solver := preload("res://scripts/solver.gd")
 const Grader := preload("res://scripts/grader.gd")
 
-enum Difficulty { EASY, MEDIUM, HARD }
-const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard"]
+enum Difficulty { EASY, MEDIUM, HARD, HARD_PLUS }
+## Also the save keys' and pack files' names, lower-cased.
+const DIFFICULTY_NAMES := ["Easy", "Medium", "Hard", "Hard+"]
 ## Region growth weights per difficulty as [exponent, lowest base]: uneven
 ## regions hand out easy deductions, even ones need the deeper rules.
-const REGION_WEIGHTS := [[4.0, 0.05], [2.0, 0.15], [1.0, 0.4]]
+const REGION_WEIGHTS := [[4.0, 0.05], [2.0, 0.15], [1.0, 0.4], [1.0, 0.4]]
 
 const NEIGHBOURS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const REPAIR_STEPS := 80
 
 
 ## Returns {"regions": PackedInt32Array, "solution": PackedInt32Array} for a
-## puzzle whose grader tier is difficulty + 1.
+## puzzle that rates as `difficulty`.
 static func generate(size: int, difficulty: int, rng: RandomNumberGenerator) -> Dictionary:
 	var weights: Array = REGION_WEIGHTS[difficulty]
 	while true:
 		var puzzle := _generate_unique(size, rng, weights[0], weights[1])
-		if Grader.grade(size, puzzle.regions) == difficulty + 1:
+		if rates_as(size, puzzle.regions, difficulty):
 			return puzzle
 	return {}
+
+
+## Whether a layout rates as `difficulty`. Hard+ puzzles also count as Hard,
+## so the Hard puzzles stay the same as before Hard+ existed.
+static func rates_as(size: int, regions: PackedInt32Array, difficulty: int) -> bool:
+	if difficulty < Difficulty.HARD_PLUS:
+		return Grader.grade(size, regions) == difficulty + 1
+	var solve := Grader.solve(size, regions)
+	return solve.grade == 3 and (solve.tier3_steps >= 2 or solve.largest_group >= 3)
 
 
 static func _generate_unique(size: int, rng: RandomNumberGenerator, spread: float, low: float) -> Dictionary:

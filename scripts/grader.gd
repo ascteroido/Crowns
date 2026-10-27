@@ -23,17 +23,25 @@ static func grade(size: int, regions: PackedInt32Array) -> int:
 	return solve(size, regions).grade
 
 
-## {"grade": int, "solution": column per row, empty when STUCK}.
+## {"grade": int, "solution": column per row, empty when STUCK,
+##  "tier3_steps": how many tier 3 deductions the solve took,
+##  "largest_group": the most groups one confinement reasoned about}.
 static func solve(size: int, regions: PackedInt32Array) -> Dictionary:
 	var state := _State.new(size, regions)
 	var hardest := 1
+	var tier3_steps := 0
+	var largest_group := 0
 	while not state.solved():
 		var step := _find_step(state)
 		if step.is_empty():
-			return {"grade": STUCK, "solution": PackedInt32Array()}
+			return {"grade": STUCK, "solution": PackedInt32Array(), "tier3_steps": tier3_steps,
+					"largest_group": largest_group}
 		_apply(state, step)
 		hardest = maxi(hardest, step.tier)
-	return {"grade": hardest, "solution": state.crowns}
+		if step.tier == 3:
+			tier3_steps += 1
+			largest_group = maxi(largest_group, step.from.size())
+	return {"grade": hardest, "solution": state.crowns, "tier3_steps": tier3_steps, "largest_group": largest_group}
 
 
 ## The easiest deduction left on a board whose crowns and crosses are all

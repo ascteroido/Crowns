@@ -11,6 +11,7 @@ const Language := preload("res://scripts/language.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
+const Archive := preload("res://scripts/archive.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -279,6 +280,41 @@ func _run() -> void:
 	main._leave_game()
 	archive.show_month_of(yesterday)
 	_expect(_archive_day(archive, yesterday).text.ends_with("1:35"), "archive shows a past daily's best time")
+	var crowned := _archive_day(archive, yesterday).get_children().filter(func(c: Node) -> bool:
+		return c.get_script() != null)
+	_expect(crowned.size() == 1, "a solved day wears a crown")
+	_expect(not archive._trophy.visible, "the current month isn't over, so it has no trophy yet")
+
+	# Trophies, with made-up dates: every daily of a finished month solved.
+	var solved_days := {}
+	var status := func(date: String) -> Dictionary:
+		return {"solved": solved_days.has(date), "best": INF, "started": false}
+	for day in range(15, 31):
+		solved_days["2026-09-%02d" % day] = true
+	_expect(Archive.month_complete(2026, 9, "2026-09-15", "2026-10-03", status),
+			"a finished month with every daily solved earns a trophy, counting from the first daily")
+	_expect(not Archive.month_complete(2026, 9, "2026-09-15", "2026-09-30", status), "but not while it's still going")
+	solved_days.erase("2026-09-20")
+	_expect(not Archive.month_complete(2026, 9, "2026-09-15", "2026-10-03", status), "a missed day means no trophy")
+	solved_days["2026-09-20"] = true
+	for day in range(1, 32):
+		solved_days["2026-02-%02d" % day] = true
+	_expect(Archive.month_complete(2026, 2, "2026-01-01", "2026-10-03", status), "short months end on their last day")
+	var saved_status: Callable = archive.status_for
+	var saved_first: String = archive.first_date
+	var saved_last: String = archive.last_date
+	archive.status_for = status
+	archive.first_date = "2026-09-15"
+	archive.last_date = "2026-10-03"
+	archive.show_month_of("2026-09-20")
+	await _frames(2)
+	_expect(archive._trophy.visible and archive._summary.text == "Every daily solved!", "the archive shows the trophy")
+	_screenshot("archive_trophy.png")
+	archive.status_for = saved_status
+	archive.first_date = saved_first
+	archive.last_date = saved_last
+	archive.show_month_of(yesterday)
+	_expect(main._perfect_months() == 0, "no perfect months yet")
 	await _frames(3)
 	_screenshot("archive.png")
 	archive.back.emit()
@@ -345,12 +381,14 @@ func _run() -> void:
 	await _settle()
 	var medium_regions: PackedInt32Array = graded._board.regions
 	_expect(graded._difficulty_picker.visible and graded._difficulty == Generator.Difficulty.MEDIUM, "regular puzzles default to Medium")
-	for difficulty in [Generator.Difficulty.EASY, Generator.Difficulty.HARD]:
+	_expect(graded._difficulty_picker.item_count == 4 and graded._difficulty_picker.get_item_text(3) == "Hard+",
+			"Hard+ is offered after Hard")
+	for difficulty in [Generator.Difficulty.EASY, Generator.Difficulty.HARD, Generator.Difficulty.HARD_PLUS]:
 		graded._difficulty_picker.select(difficulty)
 		graded._on_difficulty_selected(difficulty)
 		await _settle()
 		var b: Board = graded._board
-		_expect(graded._number == 1 and Grader.grade(b.size, b.regions) == difficulty + 1,
+		_expect(graded._number == 1 and Generator.rates_as(b.size, b.regions, difficulty),
 				"%s puzzle grades as %s" % [Generator.DIFFICULTY_NAMES[difficulty], Generator.DIFFICULTY_NAMES[difficulty]])
 		_expect(graded._puzzle_key().contains(Generator.DIFFICULTY_NAMES[difficulty].to_lower()), "save key includes the difficulty")
 	_screenshot("hard.png")
@@ -476,11 +514,14 @@ func _check_challenge() -> void:
 func _check_puzzle_code() -> void:
 	var sizes := [5, 6, 7, 8, 9, 10]
 	_expect(PuzzleCode.encode(8, Generator.Difficulty.HARD, 142) == "8H-142", "codes read size, difficulty, number")
+	_expect(PuzzleCode.encode(8, Generator.Difficulty.HARD_PLUS, 3) == "8X-3"
+			and PuzzleCode.decode("8x-3", sizes).get("difficulty") == Generator.Difficulty.HARD_PLUS,
+			"Hard+ codes use X, as Hard has H")
 	_expect(PuzzleCode.decode("8H-142", sizes) == {"size": 8, "difficulty": Generator.Difficulty.HARD, "number": 142},
 			"a code decodes")
 	_expect(PuzzleCode.decode("Try this Crowns puzzle: 6e 12!", sizes).get("number") == 12
 			and PuzzleCode.decode("10m#3", sizes).get("size") == 10, "codes are found loosely in pasted text")
-	_expect(PuzzleCode.decode("4H-1", sizes).is_empty() and PuzzleCode.decode("8X-1", sizes).is_empty()
+	_expect(PuzzleCode.decode("4H-1", sizes).is_empty() and PuzzleCode.decode("8Q-1", sizes).is_empty()
 			and PuzzleCode.decode("8H-0", sizes).is_empty() and PuzzleCode.decode("hello", sizes).is_empty(),
 			"bad codes are refused")
 

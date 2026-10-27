@@ -18,6 +18,7 @@ const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
+const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Leaderboards := preload("res://scripts/leaderboards.gd")
 ## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
@@ -43,6 +44,7 @@ const FADE := 0.15
 
 enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL }
 
+## Sizes generated on the spot; larger ones come from pre-made packs (PuzzlePack).
 const SIZES := [5, 6, 7, 8, 9, 10]
 const DEFAULT_SIZE := 7
 const DAILY_SIZES := [7, 8, 9]
@@ -114,6 +116,8 @@ var _running := false
 ## The timer only counts while the window has focus.
 var _focused := true
 var _generating := false
+## Every size on offer: SIZES, then the larger ones that have packs.
+var _sizes: Array[int] = []
 ## Puzzles generate on a worker thread where there are threads (not the web build).
 var _threads := OS.has_feature("threads")
 ## The puzzle most likely to be played next, generating in the background while
@@ -393,10 +397,14 @@ func _build_ui() -> void:
 	var title := _label("Crowns", 34)
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
 	header.add_child(title)
+	_sizes.assign(SIZES)
+	for size in PuzzlePack.sizes():
+		if size not in _sizes:
+			_sizes.append(size)
 	_size_picker = OptionButton.new()
-	for s: int in SIZES:
+	for s: int in _sizes:
 		_size_picker.add_item("%d×%d" % [s, s], s)
-	_size_picker.select(maxi(0, SIZES.find(_size)))
+	_size_picker.select(maxi(0, _sizes.find(_size)))
 	_size_picker.item_selected.connect(_on_size_selected)
 	header.add_child(_size_picker)
 	_difficulty_picker = OptionButton.new()
@@ -617,7 +625,7 @@ func _copy_code() -> void:
 
 
 func _enter_code() -> void:
-	var code := PuzzleCode.decode(_code_entry.text, SIZES)
+	var code := PuzzleCode.decode(_code_entry.text, _sizes)
 	if code.is_empty():
 		_code_error.visible = true
 		return
@@ -626,7 +634,7 @@ func _enter_code() -> void:
 	_size = code["size"]
 	_difficulty = code["difficulty"]
 	_number = code["number"]
-	_size_picker.select(SIZES.find(_size))
+	_size_picker.select(_sizes.find(_size))
 	_difficulty_picker.select(_difficulty)
 	_load_puzzle()
 
@@ -779,6 +787,22 @@ func _game_is_archive_daily() -> bool:
 	return _board != null and _mode == Mode.DAILY and _from_archive
 
 
+## Finished months with every daily solved, as the archive's trophies show them.
+func _perfect_months() -> int:
+	var today := _today()
+	var year := DAILY_FIRST.substr(0, 4).to_int()
+	var month := DAILY_FIRST.substr(5, 2).to_int()
+	var count := 0
+	while "%04d-%02d-01" % [year, month] <= today:
+		if Archive.month_complete(year, month, DAILY_FIRST, today, _daily_status):
+			count += 1
+		month += 1
+		if month > 12:
+			month = 1
+			year += 1
+	return count
+
+
 func _daily_status(date: String) -> Dictionary:
 	var key := _daily_key(date)
 	return {"solved": _progress.get_value("solved", key, false), "best": _progress.get_value("best", key, INF),
@@ -795,10 +819,12 @@ func _show_stats() -> void:
 		[tr("Current streak"), _days(_current_streak())],
 		[tr("Longest streak"), _days(_progress.get_value(STATS, "longest_streak", 0))],
 		[tr("Dailies solved"), _progress.get_value(STATS, "dailies_solved", 0)],
+		# TRANSLATORS: Months with every daily puzzle solved.
+		[tr("Perfect months"), _perfect_months()],
 		[tr("Weeklies solved"), _progress.get_value(STATS, "weeklies_solved", 0)],
 	]
 	var sizes := []
-	for size: int in SIZES:
+	for size: int in _sizes:
 		var timed: int = _progress.get_value(STATS, "timed_%d" % size, 0)
 		var total: float = _progress.get_value(STATS, "time_%d" % size, 0.0)
 		var best: float = _progress.get_value(STATS, "best_%d" % size, INF)
@@ -1073,11 +1099,19 @@ func _puzzle_spec(ahead := 0) -> Array:
 		Mode.CHALLENGE:
 			var stage := _challenge_stage(ahead)
 			return [stage[0], stage[1], hash([_run.seed, _run.level + ahead])]
-	return [_size, _difficulty, hash([_size, _difficulty, _number + ahead])]
+	# The puzzle number comes last, for sizes read from a pack.
+	return [_size, _difficulty, hash([_size, _difficulty, _number + ahead]), _number + ahead]
+
+
+## Whether `size` comes from a pre-made pack rather than the generator.
+func _from_pack(size: int) -> bool:
+	return size not in SIZES
 
 
 ## The puzzle for `spec`: the one generated ahead if it matches, otherwise made now.
 func _generate(spec: Array) -> Dictionary:
+	if _from_pack(spec[0]):
+		return PuzzlePack.puzzle(spec[0], spec[1], spec[3])
 	if not _prefetch.is_empty() and _prefetch.spec == spec:
 		var job := _prefetch
 		_prefetch = {}
@@ -1093,6 +1127,9 @@ func _prefetch_next() -> void:
 	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE] or (_mode == Mode.CHALLENGE and _run.is_empty()):
 		return
 	var spec := _puzzle_spec(1)
+	# Pack puzzles load at once, so there's nothing to get ahead on.
+	if _from_pack(spec[0]):
+		return
 	if not _prefetch.is_empty():
 		if _prefetch.spec == spec:
 			return
@@ -1151,6 +1188,11 @@ func _load_puzzle() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 
+	if _mode == Mode.REGULAR and _size not in _sizes:
+		# A size whose pack this build lacks, e.g. from a save made elsewhere.
+		_size = DEFAULT_SIZE
+		_number = 1
+		_size_picker.select(_sizes.find(_size))
 	var size: int
 	var puzzle: Dictionary
 	if _mode == Mode.TUTORIAL:
@@ -1234,9 +1276,9 @@ func _on_next_puzzle() -> void:
 
 func _on_size_selected(index: int) -> void:
 	if _generating:
-		_size_picker.select(SIZES.find(_size))
+		_size_picker.select(_sizes.find(_size))
 		return
-	_size = SIZES[index]
+	_size = _sizes[index]
 	_number = 1
 	_load_puzzle()
 
@@ -1733,7 +1775,7 @@ func _earned_achievements() -> Dictionary:
 	var quick := false
 	for key in bests:
 		# The weekly challenge is always Hard.
-		hard = hard or key.contains("_hard_") or key.begins_with("weekly_")
+		hard = hard or key.contains("_hard_") or key.contains("_hard+_") or key.begins_with("weekly_")
 		quick = quick or (key.begins_with("daily_") and _progress.get_value("best", key) < 60.0)
 	var solved := CloudSave.solved_count(_progress)
 	return {
@@ -1960,7 +2002,7 @@ func _pretty_date(date: String) -> String:
 
 ## Difficulty names as shown; Generator.DIFFICULTY_NAMES stay English for save keys.
 func _difficulty_name(difficulty: int) -> String:
-	return [tr("Easy"), tr("Medium"), tr("Hard")][difficulty]
+	return [tr("Easy"), tr("Medium"), tr("Hard"), tr("Hard+")][difficulty]
 
 
 func _puzzles(count: int) -> String:
