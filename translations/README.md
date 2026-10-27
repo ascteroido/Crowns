@@ -29,8 +29,12 @@ The game also follows the device's language when the player hasn't chosen one.
 - Text that runs too long can overflow buttons on phones. If a word won't fit,
   a shorter one is better than an exact one.
 - Godot draws letters from the device's fonts when the game's font lacks them, so
-  most scripts display as they are. Right-to-left languages (Arabic, Hebrew) would
-  also need the layout mirrored, which the game doesn't do yet.
+  most scripts display as they are. Arabic and Hebrew letters are bundled too, for
+  the web build, which can't use the device's fonts.
+- Right-to-left languages (Arabic, Hebrew, Persian, Urdu…) mirror the layout
+  automatically: buttons, rows and the archive calendar run right to left. The
+  puzzle board itself isn't mirrored, so "column 1" in hints is always the
+  leftmost column, and a puzzle code shows the same board in every language.
 
 ## When the game's text changes
 

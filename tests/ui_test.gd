@@ -992,8 +992,42 @@ func _check_languages() -> void:
 	var english: Control = root.get_children().filter(func(node: Node) -> bool:
 		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
 	_expect(english._settings.dark_mode_toggle.text == "Dark mode", "device language switches back")
+	_expect(not english.is_layout_rtl(), "English lays out left to right")
 	english.queue_free()
 	TranslationServer.remove_translation(german)
+	await _frames(2)
+
+	# Right-to-left: the layout mirrors, but the board and its numbering don't.
+	var arabic := Translation.new()
+	arabic.locale = "ar"
+	arabic.add_message("English", "العربية", "language name")
+	TranslationServer.add_translation(arabic)
+	var saved_rtl := ConfigFile.new()
+	saved_rtl.load(TEST_SAVE)
+	saved_rtl.set_value("settings", "language", "ar")
+	saved_rtl.save(TEST_SAVE)
+	var rtl: Control = load("res://main.tscn").instantiate()
+	rtl.save_path = TEST_SAVE
+	root.add_child(rtl)
+	await _frames(3)
+	# Arrows like the archive's ‹ › need nothing: right-to-left text mirrors them itself.
+	_expect(rtl.is_layout_rtl() and rtl._menu.is_layout_rtl(), "Arabic lays out right to left")
+	_expect(rtl.theme.get_stylebox("normal_mirrored", "OptionButton") == rtl.theme.get_stylebox("normal", "Button"),
+			"dropdowns keep their style when mirrored")
+	_expect(ThemeDB.fallback_font.fallbacks.any(func(font: Font) -> bool:
+			return font.has_char("ا".unicode_at(0))) and ThemeDB.fallback_font.fallbacks.any(func(font: Font) -> bool:
+			return font.has_char("א".unicode_at(0))), "Arabic and Hebrew letters are bundled")
+	rtl._start(rtl.Mode.REGULAR)
+	await _settle()
+	var view: Control = rtl._view
+	var pressed := Vector2i(0, 0)
+	await _slow_click(view, pressed)
+	_expect(rtl._board.get_mark(pressed) == Board.Mark.CROSS, "the board isn't mirrored: column 1 stays on the left")
+	saved_rtl.load(TEST_SAVE)
+	saved_rtl.set_value("settings", "language", "")
+	saved_rtl.save(TEST_SAVE)
+	rtl.queue_free()
+	TranslationServer.remove_translation(arabic)
 	await _frames(2)
 
 

@@ -40,8 +40,9 @@ const POP_MS := {Board.Mark.CROWN: 220.0, Board.Mark.CROSS: 130.0, Board.Mark.AU
 ## The win wave: each row's crowns hop this long after the row above.
 const WAVE_STEP_MS := 70.0
 const HOP_MS := 420.0
-## The opening reveal: tiles grow in along diagonals from the bottom-left corner,
-## each diagonal this long after the one before, each tile taking REVEAL_MS.
+## The opening reveal: tiles grow in along diagonals from the bottom-left corner
+## (bottom-right in right-to-left languages), each diagonal this long after the
+## one before, each tile taking REVEAL_MS.
 const REVEAL_STEP_MS := 36.0
 const REVEAL_MS := 380.0
 
@@ -122,7 +123,8 @@ func celebrate() -> void:
 	queue_redraw()
 
 
-## Grows the tiles into place from the bottom-left corner to the top-right.
+## Grows the tiles into place from the bottom-left corner to the top-right, or
+## mirrored for right-to-left languages.
 func reveal() -> void:
 	_reveal_at = Time.get_ticks_msec()
 	queue_redraw()
@@ -266,7 +268,7 @@ func _draw() -> void:
 			var rect := Rect2(origin + Vector2(col, row) * cs, Vector2(cs, cs))
 			var grow := 1.0
 			if reveal >= 0.0:
-				var diagonal := (n - 1 - row) + col
+				var diagonal := (n - 1 - row) + (n - 1 - col if is_layout_rtl() else col)
 				grow = _ease_out_back((reveal - diagonal * REVEAL_STEP_MS) / REVEAL_MS)
 				if grow <= 0.0:
 					continue

@@ -21,6 +21,9 @@ const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 ## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
 ## system fonts, but browsers can't, so the web build needs them bundled.
 const SYMBOLS := preload("res://fonts/DejaVuSans-symbols.ttf")
+## Arabic and Hebrew, for the same reason: the web build can't borrow system fonts.
+const SCRIPTS: Array[Font] = [preload("res://fonts/NotoSansArabic-Regular.ttf"),
+		preload("res://fonts/NotoSansHebrew-Regular.ttf")]
 
 const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
 const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
@@ -180,8 +183,9 @@ func _ready() -> void:
 	var first_launch := not FileAccess.file_exists(save_path)
 	_progress.load(save_path)
 	var font := ThemeDB.fallback_font
-	if SYMBOLS not in font.fallbacks:
-		font.fallbacks.append(SYMBOLS)
+	for fallback: Font in [SYMBOLS] + SCRIPTS:
+		if fallback not in font.fallbacks:
+			font.fallbacks.append(fallback)
 	_size = _progress.get_value("last", "size", DEFAULT_SIZE)
 	_number = _progress.get_value("last", "number", 1)
 	_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
@@ -921,6 +925,8 @@ func _apply_dark_mode(enabled: bool) -> void:
 		box.content_margin_top = 6
 		box.content_margin_bottom = 6
 		_theme.set_stylebox(state, "Button", box)
+		# Right-to-left layouts draw dropdowns with these instead.
+		_theme.set_stylebox(state + "_mirrored", "OptionButton", box)
 		# Keep the toggle switch borderless; it would otherwise inherit the button fill.
 		_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
 	_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())

@@ -25,7 +25,7 @@
 ## Reach
 - [x] Web build for itch, playable in the browser
 - [x] Puzzle codes: share or enter a seed so friends can play the same board
-- [ ] Right-to-left layout for Arabic and Hebrew translations
+- [x] Right-to-left layout for Arabic and Hebrew translations
 
 ## Feel and polish
 - [ ] Redo (Ctrl+Shift+Z)
