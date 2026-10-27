@@ -15,7 +15,7 @@ msgstr ""
 msgid "Archive"
 msgstr ""
 
-#: scripts/archive.gd:62 scripts/main.gd:957 scripts/settings.gd:120 scripts/stats.gd:38
+#: scripts/archive.gd:62 scripts/main.gd:979 scripts/settings.gd:120 scripts/stats.gd:38
 msgid "Back"
 msgstr ""
 
@@ -173,468 +173,468 @@ msgstr ""
 msgid "periwinkle"
 msgstr ""
 
-#: scripts/main.gd:328 scripts/main.gd:445 scripts/main.gd:957 scripts/main.gd:958
+#: scripts/main.gd:350 scripts/main.gd:467 scripts/main.gd:979 scripts/main.gd:980
 msgid "Menu"
 msgstr ""
 
-#: scripts/main.gd:349
+#: scripts/main.gd:371
 msgid "Prev"
 msgstr ""
 
-#: scripts/main.gd:355 scripts/main.gd:1305
+#: scripts/main.gd:377 scripts/main.gd:1385
 msgid "Next"
 msgstr ""
 
 #. Opens the puzzle code panel, to share this puzzle or enter a friend's.
-#: scripts/main.gd:358
+#: scripts/main.gd:380
 msgid "Code"
 msgstr ""
 
-#: scripts/main.gd:382
+#: scripts/main.gd:404
 msgid "Undo"
 msgstr ""
 
-#: scripts/main.gd:384
+#: scripts/main.gd:406
 msgid "Clear"
 msgstr ""
 
-#: scripts/main.gd:386 scripts/main.gd:1205
+#: scripts/main.gd:408 scripts/main.gd:1285
 msgid "Hint"
 msgstr ""
 
-#: scripts/main.gd:397
+#: scripts/main.gd:419
 msgid "Place one crown in every row, column and colour region. Crowns may not touch, even diagonally."
 msgstr ""
 
-#: scripts/main.gd:398
+#: scripts/main.gd:420
 msgid "Tap: × or clear.  Double tap: crown.  Drag from empty to cross out, from × to erase.  Right click: crown.  Ctrl+Z: undo."
 msgstr ""
 
-#: scripts/main.gd:434 scripts/main.gd:1436
+#: scripts/main.gd:456 scripts/main.gd:1516
 msgid "Solved!"
 msgstr ""
 
-#: scripts/main.gd:444
+#: scripts/main.gd:466
 msgid "Look at board"
 msgstr ""
 
-#: scripts/main.gd:447 scripts/main.gd:1439
+#: scripts/main.gd:469 scripts/main.gd:1519
 msgid "Next puzzle"
 msgstr ""
 
-#: scripts/main.gd:449 scripts/main.gd:1445
+#: scripts/main.gd:471 scripts/main.gd:1525
 msgid "Start playing"
 msgstr ""
 
-#: scripts/main.gd:452
+#: scripts/main.gd:474
 msgid "Leaderboard"
 msgstr ""
 
-#: scripts/main.gd:484
+#: scripts/main.gd:506
 msgid "Puzzle code"
 msgstr ""
 
-#: scripts/main.gd:490
+#: scripts/main.gd:512
 msgid "Share it so friends can play this same board."
 msgstr ""
 
-#: scripts/main.gd:495 scripts/main.gd:531
+#: scripts/main.gd:517 scripts/main.gd:553
 msgid "Copy code"
 msgstr ""
 
-#: scripts/main.gd:500
+#: scripts/main.gd:522
 msgid "Got a code from a friend?"
 msgstr ""
 
 #. Placeholder in the box for entering a puzzle code; keep the code itself as is.
-#: scripts/main.gd:508
+#: scripts/main.gd:530
 msgid "e.g. %s"
 msgstr ""
 
-#: scripts/main.gd:515 scripts/main.gd:686
+#: scripts/main.gd:537 scripts/main.gd:708
 msgid "Play"
 msgstr ""
 
-#: scripts/main.gd:516
+#: scripts/main.gd:538
 msgid "That isn't a puzzle code."
 msgstr ""
 
-#: scripts/main.gd:522
+#: scripts/main.gd:544
 msgid "Close"
 msgstr ""
 
-#: scripts/main.gd:552
+#: scripts/main.gd:574
 msgid "Try this Crowns puzzle: %s"
 msgstr ""
 
-#: scripts/main.gd:553
+#: scripts/main.gd:575
 msgid "Copied!"
 msgstr ""
 
-#: scripts/main.gd:663 scripts/main.gd:676
+#: scripts/main.gd:685 scripts/main.gd:698
 msgid "Solved in %s"
 msgstr ""
 
-#: scripts/main.gd:665 scripts/main.gd:678
+#: scripts/main.gd:687 scripts/main.gd:700
 msgid "Solved (hints used)"
 msgstr ""
 
-#: scripts/main.gd:668
+#: scripts/main.gd:690
 msgid "%d day streak"
 msgid_plural "%d days streak"
 msgstr[0] ""
 msgstr[1] ""
 
 #. %s is a short date, the Sunday the weekly challenge starts, e.g. "Oct 25".
-#: scripts/main.gd:673
+#: scripts/main.gd:695
 msgid "Week of %s"
 msgstr ""
 
-#: scripts/main.gd:679
+#: scripts/main.gd:701
 msgid "%d day left"
 msgid_plural "%d days left"
 msgstr[0] ""
 msgstr[1] ""
 
-#: scripts/main.gd:681
+#: scripts/main.gd:703
 msgid "One life, no hints"
 msgstr ""
 
-#: scripts/main.gd:683
+#: scripts/main.gd:705
 msgid "Run in progress · Puzzle %d"
 msgstr ""
 
-#: scripts/main.gd:685
+#: scripts/main.gd:707
 msgid "Best run: %s"
 msgstr ""
 
-#: scripts/main.gd:686 scripts/menu.gd:55
+#: scripts/main.gd:708 scripts/menu.gd:55
 msgid "Continue"
 msgstr ""
 
-#: scripts/main.gd:687 scripts/main.gd:1057
+#: scripts/main.gd:709 scripts/main.gd:1136
 msgid "Puzzle #%d"
 msgstr ""
 
-#: scripts/main.gd:731
+#: scripts/main.gd:753
 msgid "Current streak"
 msgstr ""
 
-#: scripts/main.gd:732
+#: scripts/main.gd:754
 msgid "Longest streak"
 msgstr ""
 
-#: scripts/main.gd:733
+#: scripts/main.gd:755
 msgid "Dailies solved"
 msgstr ""
 
-#: scripts/main.gd:734
+#: scripts/main.gd:756
 msgid "Weeklies solved"
 msgstr ""
 
-#: scripts/main.gd:744
+#: scripts/main.gd:766
 msgid "Best run"
 msgstr ""
 
-#: scripts/main.gd:745
+#: scripts/main.gd:767
 msgid "Runs played"
 msgstr ""
 
-#: scripts/main.gd:746
+#: scripts/main.gd:768
 msgid "Puzzles cleared"
 msgstr ""
 
-#: scripts/main.gd:852 scripts/settings.gd:80
+#: scripts/main.gd:874 scripts/settings.gd:80
 msgid "Daily reminder"
 msgstr ""
 
-#: scripts/main.gd:852
+#: scripts/main.gd:874
 msgid "Today's daily puzzle is ready."
 msgstr ""
 
-#: scripts/main.gd:957
+#: scripts/main.gd:979
 msgid "Skip"
 msgstr ""
 
-#: scripts/main.gd:1005
+#: scripts/main.gd:1096
 msgid "Generating…"
 msgstr ""
 
-#: scripts/main.gd:1059
+#: scripts/main.gd:1138
 msgid "Daily · %s"
 msgstr ""
 
-#: scripts/main.gd:1061
+#: scripts/main.gd:1140
 msgid "Weekly · %s"
 msgstr ""
 
-#: scripts/main.gd:1063
+#: scripts/main.gd:1142
 msgid "The Climb #%d · %s"
 msgstr ""
 
-#: scripts/main.gd:1065 scripts/settings.gd:113
+#: scripts/main.gd:1144 scripts/settings.gd:113
 msgid "How to play"
 msgstr ""
 
-#: scripts/main.gd:1066
+#: scripts/main.gd:1145
 msgid "Technique %d of %d"
 msgstr ""
 
-#: scripts/main.gd:1197
+#: scripts/main.gd:1277
 msgid "Apply hint"
 msgstr ""
 
-#: scripts/main.gd:1213
+#: scripts/main.gd:1293
 msgid "This crown isn't part of the solution."
 msgstr ""
 
-#: scripts/main.gd:1217
+#: scripts/main.gd:1297
 msgid "This cell is crossed out, but it needs a crown."
 msgstr ""
 
-#: scripts/main.gd:1225
+#: scripts/main.gd:1305
 msgid "There's no simple deduction from here, so here's a crown."
 msgstr ""
 
-#: scripts/main.gd:1285
+#: scripts/main.gd:1365
 msgid "Harder puzzles need more than \"only one cell left\". These lessons show the techniques the hints use, starting with claiming a line."
 msgstr ""
 
-#: scripts/main.gd:1286
+#: scripts/main.gd:1366
 msgid "If all of a region's open cells lie in one row, its crown must be in that row. That uses up the row's crown, so cross out the rest of the row. The same works for columns, and for a row that lies inside one region."
 msgstr ""
 
-#: scripts/main.gd:1288
+#: scripts/main.gd:1368
 msgid "Groups: if two regions fit entirely within two rows, their crowns use up both rows' crowns. Cross out every other cell in those rows. It works for three regions in three rows too, and for columns."
 msgstr ""
 
-#: scripts/main.gd:1290
+#: scripts/main.gd:1370
 msgid "What if? Imagine a crown in a cell. If it would rule out every open cell left in some row, column or region, that cell can't hold a crown. Cross it out."
 msgstr ""
 
-#: scripts/main.gd:1291
+#: scripts/main.gd:1371
 msgid "Welcome to Crowns! Place one crown in every row, every column and every colour region."
 msgstr ""
 
-#: scripts/main.gd:1292
+#: scripts/main.gd:1372
 msgid "Crowns can never touch each other, not even diagonally."
 msgstr ""
 
-#: scripts/main.gd:1312
+#: scripts/main.gd:1392
 msgid "Tap it to clear it."
 msgstr ""
 
-#: scripts/main.gd:1322
+#: scripts/main.gd:1402
 msgid "A crown rules out the rest of its row, column and region, and every cell touching it. Tap each highlighted cell to cross it out, or drag across them."
 msgstr ""
 
-#: scripts/main.gd:1324
+#: scripts/main.gd:1404
 msgid "Cross out the cells the new crown rules out. (Auto-place × in Settings can do this for you.)"
 msgstr ""
 
-#: scripts/main.gd:1329
+#: scripts/main.gd:1409
 msgid "Double tap it to place a crown."
 msgstr ""
 
 #. {group} is a row, column or region, e.g. "row 3" or "the purple region".
-#: scripts/main.gd:1362
+#: scripts/main.gd:1442
 msgid "{group} has only one cell left that can hold its crown."
 msgstr ""
 
-#: scripts/main.gd:1365
+#: scripts/main.gd:1445
 msgid "A crown in row {row}, column {column} would rule out every open cell left in {group}, so cross it out."
 msgstr ""
 
 #. {a} and {b} are a row, column or region, e.g. "the purple region".
-#: scripts/main.gd:1370
+#: scripts/main.gd:1450
 msgid "{a}'s open cells all lie in {b}, so {b}'s crown must come from {a}. Cross out the rest of {b}."
 msgstr ""
 
 #. {a} and {b} are several rows, columns or regions, e.g. "rows 2 and 3"; {count} is at least 2.
-#: scripts/main.gd:1373
+#: scripts/main.gd:1453
 msgid "{a} only have open cells in {b}, so their {count} crowns fill {b}. Cross out everything else in {b}."
 msgstr ""
 
-#: scripts/main.gd:1385
+#: scripts/main.gd:1465
 msgid "row %d"
 msgstr ""
 
-#: scripts/main.gd:1387
+#: scripts/main.gd:1467
 msgid "column %d"
 msgstr ""
 
 #. %s is a region colour, e.g. "purple".
-#: scripts/main.gd:1389
+#: scripts/main.gd:1469
 msgid "the %s region"
 msgstr ""
 
 #. Joins a list, e.g. "2, 3 and 4": {items} is all but the last item, joined by the list separator.
-#: scripts/main.gd:1402
+#: scripts/main.gd:1482
 msgid "{items} and {last}"
 msgstr ""
 
 #. Joins a list, e.g. "2, 3 and 4": {items} is all but the last item, joined by the list separator.
-#: scripts/main.gd:1402
+#: scripts/main.gd:1482
 msgctxt "list separator"
 msgid ", "
 msgstr ""
 
-#: scripts/main.gd:1406
+#: scripts/main.gd:1486
 msgid "rows %s"
 msgstr ""
 
-#: scripts/main.gd:1408
+#: scripts/main.gd:1488
 msgid "columns %s"
 msgstr ""
 
 #. %s lists region colours, e.g. "purple and blue".
-#: scripts/main.gd:1410
+#: scripts/main.gd:1490
 msgid "the %s regions"
 msgstr ""
 
-#: scripts/main.gd:1443
+#: scripts/main.gd:1523
 msgid "You solved your first puzzle!"
 msgstr ""
 
-#: scripts/main.gd:1444
+#: scripts/main.gd:1524
 msgid "That's every technique the hints use."
 msgstr ""
 
-#: scripts/main.gd:1444
+#: scripts/main.gd:1524
 msgid "Lesson complete!"
 msgstr ""
 
-#: scripts/main.gd:1445
+#: scripts/main.gd:1525
 msgid "Next lesson"
 msgstr ""
 
-#: scripts/main.gd:1499
+#: scripts/main.gd:1579
 msgid "(hints used)"
 msgstr ""
 
-#: scripts/main.gd:1499
+#: scripts/main.gd:1579
 msgid "(new best!)"
 msgstr ""
 
-#: scripts/main.gd:1500
+#: scripts/main.gd:1580
 msgid "Time: %s"
 msgstr ""
 
-#: scripts/main.gd:1525
+#: scripts/main.gd:1605
 msgid "Out of lives"
 msgstr ""
 
-#: scripts/main.gd:1526
+#: scripts/main.gd:1606
 msgid "(best run!)"
 msgstr ""
 
-#: scripts/main.gd:1527
+#: scripts/main.gd:1607
 msgid "That crown doesn't belong there."
 msgstr ""
 
-#: scripts/main.gd:1529
+#: scripts/main.gd:1609
 msgid "New run"
 msgstr ""
 
-#: scripts/main.gd:1536
+#: scripts/main.gd:1616
 msgid "%d puzzle solved"
 msgid_plural "%d puzzles solved"
 msgstr[0] ""
 msgstr[1] ""
 
-#: scripts/main.gd:1646
+#: scripts/main.gd:1726
 msgid "Best run %d"
 msgstr ""
 
-#: scripts/main.gd:1649
+#: scripts/main.gd:1729
 msgid "Best %s"
 msgstr ""
 
-#: scripts/main.gd:1705
+#: scripts/main.gd:1785
 msgctxt "short month"
 msgid "Jan"
 msgstr ""
 
-#: scripts/main.gd:1705
+#: scripts/main.gd:1785
 msgctxt "short month"
 msgid "Feb"
 msgstr ""
 
-#: scripts/main.gd:1705
+#: scripts/main.gd:1785
 msgctxt "short month"
 msgid "Mar"
 msgstr ""
 
-#: scripts/main.gd:1706
+#: scripts/main.gd:1786
 msgctxt "short month"
 msgid "Apr"
 msgstr ""
 
-#: scripts/main.gd:1706
+#: scripts/main.gd:1786
 msgctxt "short month"
 msgid "May"
 msgstr ""
 
-#: scripts/main.gd:1706
+#: scripts/main.gd:1786
 msgctxt "short month"
 msgid "Jun"
 msgstr ""
 
-#: scripts/main.gd:1706
+#: scripts/main.gd:1786
 msgctxt "short month"
 msgid "Jul"
 msgstr ""
 
-#: scripts/main.gd:1707
+#: scripts/main.gd:1787
 msgctxt "short month"
 msgid "Aug"
 msgstr ""
 
-#: scripts/main.gd:1707
+#: scripts/main.gd:1787
 msgctxt "short month"
 msgid "Sep"
 msgstr ""
 
-#: scripts/main.gd:1707
+#: scripts/main.gd:1787
 msgctxt "short month"
 msgid "Oct"
 msgstr ""
 
-#: scripts/main.gd:1707
+#: scripts/main.gd:1787
 msgctxt "short month"
 msgid "Nov"
 msgstr ""
 
-#: scripts/main.gd:1708
+#: scripts/main.gd:1788
 msgctxt "short month"
 msgid "Dec"
 msgstr ""
 
 #. A short date, e.g. "Oct 23".
-#: scripts/main.gd:1710
+#: scripts/main.gd:1790
 msgctxt "short date"
 msgid "{month} {day}"
 msgstr ""
 
-#: scripts/main.gd:1715
+#: scripts/main.gd:1795
 msgid "Easy"
 msgstr ""
 
-#: scripts/main.gd:1715
+#: scripts/main.gd:1795
 msgid "Medium"
 msgstr ""
 
-#: scripts/main.gd:1715
+#: scripts/main.gd:1795
 msgid "Hard"
 msgstr ""
 
-#: scripts/main.gd:1719
+#: scripts/main.gd:1799
 msgid "%d puzzle"
 msgid_plural "%d puzzles"
 msgstr[0] ""
 msgstr[1] ""
 
-#: scripts/main.gd:1723
+#: scripts/main.gd:1803
 msgid "%d day"
 msgid_plural "%d days"
 msgstr[0] ""

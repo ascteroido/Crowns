@@ -61,7 +61,7 @@ func _run() -> void:
 	main._show_menu()
 
 	main._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	var view: Control = main._view
 	var board: Board = main._board
 	_expect(board != null and view.interactive, "puzzle generated and board accepts input")
@@ -207,7 +207,7 @@ func _run() -> void:
 	_screenshot("solved.png")
 
 	main._go_to(main._number + 1)
-	await _frames(10)
+	await _settle()
 	_expect(main._number == 2 and not main._win_overlay.visible and main._board != board, "next puzzle loads")
 	_screenshot("next.png")
 
@@ -216,7 +216,7 @@ func _run() -> void:
 	_expect(main._menu.visible and not main._running, "menu button returns to the menu and pauses")
 	_expect(main._menu.continue_button.text == "Continue", "menu offers Continue once started")
 	main._menu.daily_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	var daily: Board = main._board
 	_expect(main._mode == main.Mode.DAILY and main.DAILY_SIZES.has(daily.size), "daily puzzle loads with a daily size")
 	_expect(not main._size_picker.visible and not main._next_button.visible, "daily hides size and navigation")
@@ -225,7 +225,7 @@ func _run() -> void:
 
 	main._show_menu()
 	main._menu.daily_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(main._board.regions == daily.regions, "daily puzzle is the same when reopened")
 	_solve_with_hints(main)
 	await _frames(3)
@@ -243,7 +243,7 @@ func _run() -> void:
 	_expect(archive.next_button.disabled, "archive can't go past the current month")
 	_expect(_archive_day(archive, today).text.ends_with("✓"), "archive marks today's solved daily")
 	archive.day_chosen.emit(yesterday)
-	await _frames(10)
+	await _settle()
 	_expect(main._mode == main.Mode.DAILY and main._daily_date == yesterday and main._board.regions != daily.regions,
 			"archive opens a past daily")
 	_expect(main._puzzle_label.text.ends_with(main._pretty_date(yesterday)) and main._back_button.text == "Back",
@@ -255,7 +255,7 @@ func _run() -> void:
 	archive.show_month_of(yesterday)
 	_expect(_archive_day(archive, yesterday).text.ends_with("•"), "archive marks a started daily")
 	archive.day_chosen.emit(yesterday)
-	await _frames(10)
+	await _settle()
 	_expect(main._board.get_mark(Vector2i(0, 0)) == Board.Mark.CROSS, "past daily progress is kept")
 	var streak_before: int = main._progress.get_value("stats", "streak", 0)
 	_solve_with_hints(main)
@@ -274,7 +274,7 @@ func _run() -> void:
 	_expect(main._menu.visible and not archive.visible, "archive back returns to the menu")
 
 	main._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(main._mode == main.Mode.REGULAR and main._number == 2 and main._next_button.visible, "continue resumes the regular puzzles")
 	main._on_dark_mode_toggled(true)
 	await _right_click(view, Vector2i(0, 0))
@@ -302,14 +302,14 @@ func _run() -> void:
 	main._elapsed = 42.0
 	main._show_menu()
 	main._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(main._board.marks == in_progress, "marks restored after visiting the menu")
 	_expect(main._elapsed >= 42.0 and main._elapsed < 43.0, "timer restored after visiting the menu")
 	main._go_to(3)
-	await _frames(10)
+	await _settle()
 	_expect(not main._board.marks.has(Board.Mark.CROWN), "another puzzle starts from its own board")
 	main._go_to(2)
-	await _frames(10)
+	await _settle()
 	_expect(main._board.marks == in_progress, "marks restored after switching puzzles")
 	main._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	main.queue_free()
@@ -319,7 +319,7 @@ func _run() -> void:
 	root.add_child(reopened)
 	await _frames(3)
 	reopened._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(reopened._number == 2 and reopened._board.marks == in_progress, "marks restored after a restart")
 	_expect(reopened._elapsed >= 42.0, "timer restored after a restart")
 	reopened.queue_free()
@@ -331,13 +331,13 @@ func _run() -> void:
 	root.add_child(graded)
 	await _frames(3)
 	graded._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	var medium_regions: PackedInt32Array = graded._board.regions
 	_expect(graded._difficulty_picker.visible and graded._difficulty == Generator.Difficulty.MEDIUM, "regular puzzles default to Medium")
 	for difficulty in [Generator.Difficulty.EASY, Generator.Difficulty.HARD]:
 		graded._difficulty_picker.select(difficulty)
 		graded._on_difficulty_selected(difficulty)
-		await _frames(10)
+		await _settle()
 		var b: Board = graded._board
 		_expect(graded._number == 1 and Grader.grade(b.size, b.regions) == difficulty + 1,
 				"%s puzzle grades as %s" % [Generator.DIFFICULTY_NAMES[difficulty], Generator.DIFFICULTY_NAMES[difficulty]])
@@ -346,7 +346,7 @@ func _run() -> void:
 	graded._show_menu()
 	_expect(graded._menu._continue_detail.text.contains("Hard"), "menu shows the chosen difficulty")
 	graded._menu.daily_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(not graded._difficulty_picker.visible, "daily hides the difficulty picker")
 	graded.queue_free()
 	await _frames(2)
@@ -355,6 +355,8 @@ func _run() -> void:
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
+	await _frames(2)
+	await _check_prefetch()
 	await _frames(2)
 	await _check_reminder()
 	await _frames(2)
@@ -402,7 +404,7 @@ func _check_challenge() -> void:
 	await _frames(3)
 	_expect(game._menu._challenge_detail.text == "One life, no hints", "menu introduces the challenge")
 	game._menu.challenge_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	var view: Control = game._view
 	var board: Board = game._board
 	_expect(game._mode == game.Mode.CHALLENGE and not game._hint_button.visible, "challenge hides hints")
@@ -420,7 +422,7 @@ func _check_challenge() -> void:
 	game._elapsed = 30.0
 	game._run.elapsed = 30.0
 	game._next_puzzle_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	board = game._board
 	_expect(game._puzzle_label.text.begins_with("The Climb #2") and game._elapsed >= 30.0, "next puzzle continues the run")
 
@@ -430,7 +432,7 @@ func _check_challenge() -> void:
 	game._show_menu()
 	_expect(game._menu._challenge_detail.text == "Run in progress · Puzzle 2", "menu offers the run in progress")
 	game._menu.challenge_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	board = game._board
 	_expect(game._run.level == 2 and board.marks == marks, "challenge resumes the same puzzle and board")
 
@@ -448,7 +450,7 @@ func _check_challenge() -> void:
 	_expect(game._menu._challenge_detail.text == "Best run: 1 puzzle", "menu shows the best run")
 
 	game._menu.challenge_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(game._run.level == 1 and game._board.size == 5 and view.mistake == Vector2i(-1, -1), "a new run starts from the first puzzle")
 	_expect(game.CHALLENGE_STAGES[-1] == [10, Generator.Difficulty.HARD], "challenge ramps up to 10x10 Hard")
 	game._run.level = 99
@@ -472,7 +474,7 @@ func _check_puzzle_code() -> void:
 	root.add_child(game)
 	await _frames(3)
 	game._start(game.Mode.REGULAR)
-	await _frames(10)
+	await _settle()
 	_expect(game._code_button.visible, "regular puzzles offer a code")
 	game._show_code()
 	_expect(game._code_overlay.visible and not game._running, "the code panel opens and pauses the timer")
@@ -491,22 +493,57 @@ func _check_puzzle_code() -> void:
 	game._show_code()
 	game._code_entry.text = "9h-77"
 	game._enter_code()
-	await _frames(10)
+	await _settle()
 	var regions: PackedInt32Array = game._board.regions
 	_expect(not game._code_overlay.visible and game._size == 9 and game._difficulty == Generator.Difficulty.HARD
 			and game._number == 77 and game._puzzle_label.text == "Puzzle #77", "entering a code opens that puzzle")
 	_expect(game._size_picker.get_selected_id() == 9 and game._difficulty_picker.selected == Generator.Difficulty.HARD,
 			"the pickers follow the code")
 	game._go_to(76)
-	await _frames(10)
+	await _settle()
 	game._go_to(77)
-	await _frames(10)
+	await _settle()
 	_expect(game._board.regions == regions, "a code gives the same board as browsing to it")
 
 	game._start(game.Mode.WEEKLY)
-	await _frames(10)
+	await _settle()
 	_expect(not game._code_button.visible, "only regular puzzles have codes")
 	game.queue_free()
+
+
+func _check_prefetch() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._start(game.Mode.REGULAR)
+	await _settle()
+	var next: Array = game._puzzle_spec(1)
+	_expect(game._prefetch.get("spec") == next, "the next regular puzzle generates in the background")
+	while not WorkerThreadPool.is_task_completed(game._prefetch.task):
+		await process_frame
+	var number: int = game._number
+	game._go_to(number + 1)
+	_expect(not game._generating and game._number == number + 1, "Next is instant once the next puzzle is ready")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = next[2]
+	_expect(game._board.regions == Generator.generate(next[0], next[1], rng).regions,
+			"the background puzzle is the same as one made on the spot")
+	_expect(game._prefetch.get("spec") == game._puzzle_spec(1), "and the one after starts generating")
+
+	game._go_to(number)
+	await _settle()
+	_expect(game._prefetch.get("spec") == game._puzzle_spec(1) and game._tasks.size() >= 1,
+			"going back replaces the guess")
+	game._start(game.Mode.CHALLENGE)
+	await _settle()
+	_expect(game._prefetch.get("spec") == game._puzzle_spec(1) and game._puzzle_spec(1)[2] == hash([game._run.seed, game._run.level + 1]),
+			"The Climb generates its next level in the background")
+	game._start(game.Mode.DAILY)
+	await _settle()
+	game.queue_free()
+	await _frames(2)
+	_expect(not is_instance_valid(game), "a game with background work still running closes cleanly")
 
 
 func _check_weekly() -> void:
@@ -525,7 +562,7 @@ func _check_weekly() -> void:
 			"menu shows the week and the days left")
 
 	game._menu.weekly_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	var board: Board = game._board
 	_expect(game._mode == game.Mode.WEEKLY and board.size == game.WEEKLY_SIZE
 			and Grader.grade(board.size, board.regions) == Generator.Difficulty.HARD + 1, "the weekly is a hard 10x10")
@@ -536,7 +573,7 @@ func _check_weekly() -> void:
 	await _click(game._view, Vector2i(0, 0))
 	game._show_menu()
 	game._menu.weekly_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(game._board.regions == board.regions and game._board.get_mark(Vector2i(0, 0)) == Board.Mark.CROSS,
 			"the weekly is the same puzzle when reopened, with its progress")
 
@@ -652,7 +689,7 @@ func _check_tutorial() -> void:
 	_expect(saved.get_value("settings", "tutorial_done", false) and not saved.has_section("solved")
 			and not saved.has_section("in_progress"), "the tutorial is marked done and records nothing else")
 	game._win_play_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(game._mode == game.Mode.REGULAR and game._timer_label.visible and game._clear_button.visible
 			and game._hint_button.text == "Hint" and not game._view.auto_cross, "Start playing opens a regular puzzle")
 
@@ -682,7 +719,7 @@ func _check_tutorial() -> void:
 		_expect(lesson_board.is_solved() and game._next_puzzle_button.text == ("Start playing" if last else "Next lesson")
 				and not game._win_play_button.visible, "lesson %d can be finished by following it" % lesson)
 	game._next_puzzle_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	_expect(game._mode == game.Mode.REGULAR, "the last lesson's Start playing opens a regular puzzle")
 	game.queue_free()
 	await _frames(2)
@@ -812,17 +849,17 @@ func _check_stats() -> void:
 
 	# An unhinted solve is timed; solving the same puzzle again isn't counted twice.
 	game._menu.continue_button.pressed.emit()
-	await _frames(10)
+	await _settle()
 	game._size_picker.select(0)
 	game._on_size_selected(0)
-	await _frames(10)
+	await _settle()
 	for attempt in 2:
 		var board: Board = game._board
 		game._elapsed = 40.0
 		for row in board.size:
 			await _right_click(game._view, Vector2i(row, board.solution[row]))
 		game._go_to(1)
-		await _frames(10)
+		await _settle()
 	_expect(progress.get_value("stats", "solved_5", 0) == 1, "a puzzle counts once however often it's solved")
 	_expect(progress.get_value("stats", "timed_5", 0) == 1 and progress.get_value("stats", "best_5", INF) < 41.0,
 			"unhinted solves record their time")
@@ -918,10 +955,16 @@ func _check_languages() -> void:
 	for i in picker.item_count:
 		items.append(picker.get_item_text(i))
 	# The shipped translations are listed too, so only the test's German is checked by name.
-	var german_index := items.find("Deutsch")
+	var german_index := items.find("Deutsch (%d%%)" % floori(300.0 / Language.template_keys().size()))
 	_expect(items.slice(0, 2) == ["Device language", "English"] and german_index > 1
 			and items.size() == Language.locales().size() + 1, "language picker lists the languages by their own names")
 	_expect(picker.selected == 0, "language follows the device by default")
+	var keys := Language.template_keys()
+	# Every msgid but the header's empty one.
+	_expect(keys.size() == FileAccess.get_file_as_string(Language.TEMPLATE).count("\nmsgid ") - 1
+			and "language name\u0004English" in keys and "Dark mode" in keys, "the template's strings are all counted")
+	_expect(Language.completion("en") == 1.0 and is_equal_approx(Language.completion("de"), 3.0 / keys.size()),
+			"a translation's completion is its share of the template")
 
 	picker.select(german_index)
 	picker.item_selected.emit(german_index)
@@ -1015,6 +1058,13 @@ func _slow_click(view: Control, cell: Vector2i) -> void:
 
 func _right_click(view: Control, cell: Vector2i) -> void:
 	await _click(view, cell, MOUSE_BUTTON_RIGHT)
+
+
+## Waits a few frames, then for any game still generating its puzzle in the background.
+func _settle() -> void:
+	await _frames(10)
+	while root.get_children().any(func(node: Node) -> bool: return node.get("_generating") == true):
+		await process_frame
 
 
 func _frames(count: int) -> void:

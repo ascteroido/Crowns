@@ -107,6 +107,14 @@ var _running := false
 ## The timer only counts while the window has focus.
 var _focused := true
 var _generating := false
+## Puzzles generate on a worker thread where there are threads (not the web build).
+var _threads := OS.has_feature("threads")
+## The puzzle most likely to be played next, generating in the background while
+## this one is played: {"spec": _puzzle_spec() of it, "task": WorkerThreadPool
+## task, "result": the puzzle once the task is done}. Empty when there's none.
+var _prefetch := {}
+## Worker tasks not yet waited on, which WorkerThreadPool needs for each one.
+var _tasks := {}
 var _hinted := false
 ## Hint on show: {"message": String, "focus", "targets": cell indices, "changes":
 ## the [cell, old, new] batch Apply hint makes}. Empty when none is showing.
@@ -199,6 +207,9 @@ func _ready() -> void:
 	var names := {}
 	for locale in Language.locales():
 		names[locale] = Language.native_name(locale)
+		# Translations show how far along they are, e.g. "Esperanto (69%)".
+		if locale != Language.SOURCE:
+			names[locale] += " (%d%%)" % floori(Language.completion(locale) * 100.0)
 	_settings.set_languages(names, _progress.get_value("settings", "language", ""))
 	_settings.set_reminder(_reminder.available(), _progress.get_value("settings", "reminder", false), REMINDER_HOURS,
 			_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR))
@@ -222,7 +233,18 @@ func _notification(what: int) -> void:
 		_focused = true
 
 
+func _exit_tree() -> void:
+	for task: int in _tasks:
+		WorkerThreadPool.wait_for_task_completion(task)
+	_tasks.clear()
+
+
 func _process(delta: float) -> void:
+	# Tidy up background puzzles that finished after nothing wanted them.
+	for task: int in _tasks.keys():
+		if _tasks[task] == false and WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
+			_tasks.erase(task)
 	if _running and _focused:
 		_elapsed += delta
 		_timer_label.text = _format_time(_elapsed)
@@ -988,6 +1010,75 @@ func _start(mode: Mode, date := "") -> void:
 	_load_puzzle()
 
 
+## [size, difficulty, seed] of the puzzle to play in the current mode, or of the
+## one `ahead` places after it.
+func _puzzle_spec(ahead := 0) -> Array:
+	match _mode:
+		Mode.DAILY:
+			return [_daily_size(_daily_date), DAILY_DIFFICULTY, hash(["daily", _daily_date])]
+		Mode.WEEKLY:
+			return [WEEKLY_SIZE, WEEKLY_DIFFICULTY, hash(["weekly", _week])]
+		Mode.CHALLENGE:
+			var stage := _challenge_stage(ahead)
+			return [stage[0], stage[1], hash([_run.seed, _run.level + ahead])]
+	return [_size, _difficulty, hash([_size, _difficulty, _number + ahead])]
+
+
+## The puzzle for `spec`: the one generated ahead if it matches, otherwise made now.
+func _generate(spec: Array) -> Dictionary:
+	if not _prefetch.is_empty() and _prefetch.spec == spec:
+		var job := _prefetch
+		_prefetch = {}
+		return await _finish(job)
+	if not _threads:
+		return Generator.generate(spec[0], spec[1], _seeded(spec[2]))
+	return await _finish(_start_job(spec))
+
+
+## Starts generating the next regular puzzle, or The Climb's next level, while
+## this one is played, so Next doesn't have to wait for it.
+func _prefetch_next() -> void:
+	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE] or (_mode == Mode.CHALLENGE and _run.is_empty()):
+		return
+	var spec := _puzzle_spec(1)
+	if not _prefetch.is_empty():
+		if _prefetch.spec == spec:
+			return
+		_tasks[_prefetch.task] = false
+	_prefetch = _start_job(spec)
+
+
+func _start_job(spec: Array) -> Dictionary:
+	var job := _make_job(spec)
+	_tasks[job.task] = true
+	return job
+
+
+## Static so the worker's function holds nothing of this node, which may be
+## freed (a language change rebuilds it) while the worker runs.
+static func _make_job(spec: Array) -> Dictionary:
+	var result := {}
+	var rng := _seeded(spec[2])
+	var task := WorkerThreadPool.add_task(func() -> void:
+		result.merge(Generator.generate(spec[0], spec[1], rng)))
+	return {"spec": spec, "task": task, "result": result}
+
+
+## Waits for `job` without blocking the screen, then hands over its puzzle.
+func _finish(job: Dictionary) -> Dictionary:
+	while not WorkerThreadPool.is_task_completed(job.task):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(job.task)
+	_tasks.erase(job.task)
+	return job.result
+
+
+static func _seeded(seed: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	return rng
+
+
 func _new_run() -> void:
 	_run = {"seed": randi(), "level": 1, "elapsed": 0.0}
 	_progress.set_value(CHALLENGE_KEY, "run", _run)
@@ -1003,33 +1094,20 @@ func _load_puzzle() -> void:
 	_view.interactive = false
 	_generating = true
 	_puzzle_label.text = tr("Generating…")
-	# Let the label paint before the larger sizes block for a moment.
-	await get_tree().process_frame
-	await get_tree().process_frame
+	if not _threads:
+		# Let the label paint before the larger sizes block for a moment.
+		await get_tree().process_frame
+		await get_tree().process_frame
 
-	var size := _size
-	var difficulty := _difficulty
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([_size, _difficulty, _number])
-	if _mode == Mode.DAILY:
-		size = _daily_size(_daily_date)
-		difficulty = DAILY_DIFFICULTY
-		rng.seed = hash(["daily", _daily_date])
-	elif _mode == Mode.WEEKLY:
-		size = WEEKLY_SIZE
-		difficulty = WEEKLY_DIFFICULTY
-		rng.seed = hash(["weekly", _week])
-	elif _mode == Mode.CHALLENGE:
-		var stage: Array = _challenge_stage()
-		size = stage[0]
-		difficulty = stage[1]
-		rng.seed = hash([_run.seed, _run.level])
+	var size: int
 	var puzzle: Dictionary
 	if _mode == Mode.TUTORIAL:
 		puzzle = _lesson_puzzle()
 		size = LESSONS[_lesson].layout.size()
 	else:
-		puzzle = Generator.generate(size, difficulty, rng)
+		var spec := _puzzle_spec()
+		size = spec[0]
+		puzzle = await _generate(spec)
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
 	_board_key = _puzzle_key()
 	_hinted = false
@@ -1043,6 +1121,7 @@ func _load_puzzle() -> void:
 	if _mode == Mode.TUTORIAL:
 		_board.marks = _lesson_marks()
 	_view.board = _board
+	_prefetch_next()
 	_view.reveal()
 	_sounds.play("reveal")
 	_clear_hint()
@@ -1060,7 +1139,7 @@ func _load_puzzle() -> void:
 		Mode.WEEKLY:
 			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week)
 		Mode.CHALLENGE:
-			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(difficulty)]
+			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(_challenge_stage()[1])]
 		Mode.TUTORIAL:
 			_puzzle_label.text = tr("How to play") if _lesson == 0 \
 					else tr("Technique %d of %d") % [_lesson, LESSONS.size() - 1]
@@ -1074,8 +1153,9 @@ func _load_puzzle() -> void:
 		_progress.save(save_path)
 
 
-func _challenge_stage() -> Array:
-	return CHALLENGE_STAGES[mini(_run.level, CHALLENGE_STAGES.size()) - 1]
+## [size, difficulty] of The Climb's current level, or the one `ahead` of it.
+func _challenge_stage(ahead := 0) -> Array:
+	return CHALLENGE_STAGES[mini(_run.level + ahead, CHALLENGE_STAGES.size()) - 1]
 
 
 func _go_to(number: int) -> void:
