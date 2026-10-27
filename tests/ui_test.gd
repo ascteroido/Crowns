@@ -501,6 +501,16 @@ func _check_reminder() -> void:
 	# Notifications need the Android plugin, so here the settings stay hidden and calls do nothing.
 	_expect(not game._reminder.available() and not settings.reminder_toggle.visible and not settings._reminder_row.visible,
 			"reminder settings are hidden off Android")
+	# Vibration is Android-only too, but its setting still saves.
+	_expect(not game._haptics.available() and not settings.vibration_toggle.visible, "vibration setting is hidden off Android")
+	settings.vibration_toggle.button_pressed = false
+	_expect(not game._haptics.enabled and game._progress.get_value("settings", "vibration", true) == false,
+			"turning vibration off saves it")
+	settings.vibration_toggle.button_pressed = true
+	game._haptics.win()
+	game._haptics.crown()
+	_expect(game._haptics.WIN_PATTERN.all(func(pulse: Array) -> bool: return pulse[0] + pulse[1] <= 1000),
+			"the win vibration fits within the win sound")
 	_expect(settings._hour_name(7) == "7:00 AM" and settings._hour_name(12) == "12:00 PM"
 			and settings._hour_name(19) == "7:00 PM", "reminder times use a 12-hour clock in English")
 	_expect(settings.reminder_hour_picker.get_item_text(settings.reminder_hour_picker.selected) == "7:00 PM",

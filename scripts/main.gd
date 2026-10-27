@@ -11,6 +11,7 @@ const Stats := preload("res://scripts/stats.gd")
 const Archive := preload("res://scripts/archive.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
+const Haptics := preload("res://scripts/haptics.gd")
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
@@ -111,6 +112,7 @@ var _reminder: Reminder
 ## a fresh install never overwrites progress saved from another device.
 var _cloud_ready := false
 var _sounds: Sounds
+var _haptics: Haptics
 var _game: Control
 var _back_button: Button
 var _win_back_button: Button
@@ -159,6 +161,9 @@ func _ready() -> void:
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
 	_sounds.enabled = _progress.get_value("settings", "sound", true)
 	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
+	_haptics.enabled = _progress.get_value("settings", "vibration", true)
+	_settings.vibration_toggle.visible = _haptics.available()
+	_settings.vibration_toggle.set_pressed_no_signal(_haptics.enabled)
 	var names := {}
 	for locale in Language.locales():
 		names[locale] = Language.native_name(locale)
@@ -207,6 +212,8 @@ func _build_ui() -> void:
 	theme = _theme
 	_sounds = Sounds.new()
 	add_child(_sounds)
+	_haptics = Haptics.new()
+	add_child(_haptics)
 	_background = ColorRect.new()
 	_background.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_background)
@@ -231,6 +238,7 @@ func _build_ui() -> void:
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
+	_settings.vibration_toggled.connect(_on_vibration_toggled)
 	_settings.reminder_toggled.connect(_on_reminder_toggled)
 	_settings.reminder_hour_chosen.connect(_on_reminder_hour_chosen)
 	_settings.language_chosen.connect(_on_language_chosen)
@@ -435,13 +443,15 @@ func _on_node_added(node: Node) -> void:
 		(node as BaseButton).pressed.connect(_sounds.play.bind("click"))
 
 
-## Sounds for each cell the player changes; auto crosses stay quiet.
+## Sounds and vibration for each cell the player changes; auto crosses stay quiet.
 func _on_marked(_cell: Vector2i, old_mark: int, new_mark: int) -> void:
 	match new_mark:
 		Board.Mark.CROWN:
 			_sounds.play("crown")
+			_haptics.crown()
 		Board.Mark.CROSS:
 			_sounds.play("cross")
+			_haptics.cross()
 		Board.Mark.EMPTY:
 			if old_mark in [Board.Mark.CROSS, Board.Mark.CROWN]:
 				_sounds.play("erase")
@@ -451,8 +461,10 @@ func _on_marked(_cell: Vector2i, old_mark: int, new_mark: int) -> void:
 func _play_changes(changes: Array) -> void:
 	if changes.any(func(c: Array) -> bool: return c[2] == Board.Mark.CROWN):
 		_sounds.play("crown")
+		_haptics.crown()
 	elif changes.any(func(c: Array) -> bool: return c[2] == Board.Mark.CROSS):
 		_sounds.play("cross")
+		_haptics.cross()
 	else:
 		_sounds.play("erase")
 
@@ -676,6 +688,12 @@ func _update_reminder() -> void:
 		not_before = _next_daily_time()
 	_reminder.schedule(_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR), 0, not_before,
 			tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
+
+
+func _on_vibration_toggled(enabled: bool) -> void:
+	_haptics.enabled = enabled
+	_progress.set_value("settings", "vibration", enabled)
+	_progress.save(save_path)
 
 
 func _on_patterns_toggled(enabled: bool) -> void:
@@ -1094,6 +1112,7 @@ func _check_win() -> void:
 	_view.interactive = false
 	_view.celebrate()
 	_sounds.play("win")
+	_haptics.win()
 	_win_crown.visible = true
 	_win_heading.text = tr("Solved!")
 	# The daily and weekly are one puzzle each, so only they have no next one.

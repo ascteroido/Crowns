@@ -5,6 +5,7 @@ signal dark_mode_toggled(enabled: bool)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal sound_toggled(enabled: bool)
+signal vibration_toggled(enabled: bool)
 signal reminder_toggled(enabled: bool)
 signal reminder_hour_chosen(hour: int)
 ## An empty locale means the device's language.
@@ -15,6 +16,8 @@ var dark_mode_toggle: CheckButton
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var sound_toggle: CheckButton
+## Shown only where the game can vibrate (Android).
+var vibration_toggle: CheckButton
 var reminder_toggle: CheckButton
 var reminder_hour_picker: OptionButton
 var _reminder_row: HBoxContainer
@@ -63,6 +66,13 @@ func _ready() -> void:
 	sound_toggle.add_theme_font_size_override("font_size", 20)
 	sound_toggle.toggled.connect(sound_toggled.emit)
 	box.add_child(sound_toggle)
+
+	vibration_toggle = CheckButton.new()
+	vibration_toggle.text = tr("Vibration")
+	vibration_toggle.add_theme_font_size_override("font_size", 20)
+	vibration_toggle.toggled.connect(vibration_toggled.emit)
+	vibration_toggle.visible = false
+	box.add_child(vibration_toggle)
 
 	# Shown only where the game can notify (Android); see set_reminder.
 	reminder_toggle = CheckButton.new()
