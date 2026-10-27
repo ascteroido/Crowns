@@ -40,6 +40,10 @@ const POP_MS := {Board.Mark.CROWN: 220.0, Board.Mark.CROSS: 130.0, Board.Mark.AU
 ## The win wave: each row's crowns hop this long after the row above.
 const WAVE_STEP_MS := 70.0
 const HOP_MS := 420.0
+## The opening reveal: tiles grow in along diagonals from the bottom-left corner,
+## each diagonal this long after the one before, each tile taking REVEAL_MS.
+const REVEAL_STEP_MS := 36.0
+const REVEAL_MS := 380.0
 
 var board: Board:
 	set(value):
@@ -48,6 +52,7 @@ var board: Board:
 		_shown_marks = board.marks.duplicate() if board else PackedInt32Array()
 		_pops.clear()
 		_celebrate_at = -1
+		_reveal_at = -1
 		mistake = Vector2i(-1, -1)
 		hint_focus = PackedInt32Array()
 		hint_targets = PackedInt32Array()
@@ -97,6 +102,8 @@ var _shown_marks := PackedInt32Array()
 var _pops := {}
 ## Time the win wave started, or -1.
 var _celebrate_at := -1
+## Time the opening reveal started, or -1.
+var _reveal_at := -1
 
 
 func _ready() -> void:
@@ -105,7 +112,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if not _pops.is_empty() or _celebrate_at >= 0 or not hint_targets.is_empty():
+	if not _pops.is_empty() or _celebrate_at >= 0 or _reveal_at >= 0 or not hint_targets.is_empty():
 		queue_redraw()
 
 
@@ -113,6 +120,17 @@ func _process(_delta: float) -> void:
 func celebrate() -> void:
 	_celebrate_at = Time.get_ticks_msec()
 	queue_redraw()
+
+
+## Grows the tiles into place from the bottom-left corner to the top-right.
+func reveal() -> void:
+	_reveal_at = Time.get_ticks_msec()
+	queue_redraw()
+
+
+## How long reveal() runs on the current board.
+func reveal_ms() -> float:
+	return 2 * (board.size - 1) * REVEAL_STEP_MS + REVEAL_MS if board else 0.0
 
 
 ## How long celebrate() runs on the current board.
@@ -232,6 +250,10 @@ func _draw() -> void:
 	if wave > celebration_ms():
 		_celebrate_at = -1
 		wave = -1.0
+	var reveal := float(now - _reveal_at) if _reveal_at >= 0 else -1.0
+	if reveal > reveal_ms():
+		_reveal_at = -1
+		reveal = -1.0
 	var pulse := 0.65 + 0.35 * sin(now / 1000.0 * TAU * 1.2)
 
 	# The tray behind the tiles, its edge as wide as the gaps between them.
@@ -242,10 +264,18 @@ func _draw() -> void:
 			var cell := Vector2i(row, col)
 			# The cell's square on the board; marks are sized to it, the tile sits inside it.
 			var rect := Rect2(origin + Vector2(col, row) * cs, Vector2(cs, cs))
-			var tile := rect.grow(-cs * GAP / 2.0)
-			var outline := _tile_outline(tile, cs * RADIUS)
+			var grow := 1.0
+			if reveal >= 0.0:
+				var diagonal := (n - 1 - row) + col
+				grow = _ease_out_back((reveal - diagonal * REVEAL_STEP_MS) / REVEAL_MS)
+				if grow <= 0.0:
+					continue
+				rect = _scaled(rect, grow)
+			var tile := rect.grow(-cs * grow * GAP / 2.0)
+			var radius := cs * grow * RADIUS
+			var outline := _tile_outline(tile, radius)
 			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
-			draw_style_box(_rounded(fill.darkened(0.18) if dark else fill, cs * RADIUS), tile)
+			draw_style_box(_rounded(fill.darkened(0.18) if dark else fill, radius), tile)
 			if patterns:
 				_draw_pattern(tile, board.region_at(cell), outline)
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
@@ -274,9 +304,9 @@ func _draw() -> void:
 					else:
 						CrownArt.draw(self, mark_rect)
 			if not hint_focus.is_empty() and not hint_focus.has(i):
-				draw_style_box(_rounded(HINT_DIM, cs * RADIUS), tile)
+				draw_style_box(_rounded(HINT_DIM, radius), tile)
 			if hint_targets.has(i):
-				var ring := _rounded(Color.TRANSPARENT, cs * RADIUS)
+				var ring := _rounded(Color.TRANSPARENT, radius)
 				ring.draw_center = false
 				ring.border_color = Color(HINT_COLOR, pulse)
 				ring.set_border_width_all(roundi(maxf(2.0, cs * 0.07)))

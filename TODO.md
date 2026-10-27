@@ -24,7 +24,7 @@
 
 ## Reach
 - [x] Web build for itch, playable in the browser
-- [ ] Puzzle codes: share or enter a seed so friends can play the same board
+- [x] Puzzle codes: share or enter a seed so friends can play the same board
 - [ ] Right-to-left layout for Arabic and Hebrew translations
 
 ## Feel and polish
@@ -34,8 +34,8 @@
 - [x] Colour-blind support: region patterns setting
 - [ ] Keyboard play: arrow keys to move, keys to place × and crown
 - [ ] Untimed mode: a setting that hides the timer
-- [ ] Interactive tutorial: walk first-time players through the rules on a small board
-- [ ] Haptics: short vibration on Android when placing a crown and on a win
+- [x] Interactive tutorial: walk first-time players through the rules on a small board
+- [x] Haptics: short vibration on Android when placing a crown and on a win
 
 ## Later
 - [ ] Pre-made puzzles: generate 11×11–14×14 boards offline and bundle them, so large sizes don't depend on generation speed

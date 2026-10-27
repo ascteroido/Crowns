@@ -10,6 +10,7 @@ signal reminder_toggled(enabled: bool)
 signal reminder_hour_chosen(hour: int)
 ## An empty locale means the device's language.
 signal language_chosen(locale: String)
+signal how_to_play
 signal back
 
 var dark_mode_toggle: CheckButton
@@ -107,6 +108,13 @@ func _ready() -> void:
 	language_picker.add_theme_font_size_override("font_size", 20)
 	language_picker.item_selected.connect(func(index: int) -> void: language_chosen.emit(_locales[index]))
 	language_row.add_child(language_picker)
+
+	var tutorial_button := Button.new()
+	tutorial_button.text = tr("How to play")
+	tutorial_button.custom_minimum_size = Vector2(0, 52)
+	tutorial_button.add_theme_font_size_override("font_size", 20)
+	tutorial_button.pressed.connect(how_to_play.emit)
+	box.add_child(tutorial_button)
 
 	var back_button := Button.new()
 	back_button.text = tr("Back")

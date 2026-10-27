@@ -9,6 +9,7 @@ const Generator := preload("res://scripts/generator.gd")
 const Grader := preload("res://scripts/grader.gd")
 const Language := preload("res://scripts/language.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
+const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -26,6 +27,8 @@ func _init() -> void:
 func _run() -> void:
 	var main: Control = load("res://main.tscn").instantiate()
 	main.save_path = TEST_SAVE
+	# The tutorial's own test covers a first launch.
+	main.first_run_tutorial = false
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	# Headless windows default to 64x64, which would drop clicks outside it.
 	root.size = Vector2i(ProjectSettings.get_setting("display/window/size/viewport_width"),
@@ -62,6 +65,12 @@ func _run() -> void:
 	var view: Control = main._view
 	var board: Board = main._board
 	_expect(board != null and view.interactive, "puzzle generated and board accepts input")
+	_expect(view._reveal_at >= 0, "a new puzzle grows its tiles in")
+	var reveal_end: float = Time.get_ticks_msec() + view.reveal_ms() + 50
+	while Time.get_ticks_msec() < reveal_end:
+		await _frames(1)
+	await _frames(1)
+	_expect(view._reveal_at == -1, "the reveal finishes")
 
 	# A slow click crosses out an empty cell and clears anything else.
 	var target := Vector2i(0, (board.solution[0] + 2) % board.size)
@@ -345,9 +354,13 @@ func _run() -> void:
 	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
+	await _check_puzzle_code()
+	await _frames(2)
 	await _check_reminder()
 	await _frames(2)
 	_check_cloud_save()
+	await _check_tutorial()
+	await _frames(2)
 	await _check_achievements()
 	await _frames(2)
 	await _check_stats()
@@ -443,6 +456,59 @@ func _check_challenge() -> void:
 	game.queue_free()
 
 
+func _check_puzzle_code() -> void:
+	var sizes := [5, 6, 7, 8, 9, 10]
+	_expect(PuzzleCode.encode(8, Generator.Difficulty.HARD, 142) == "8H-142", "codes read size, difficulty, number")
+	_expect(PuzzleCode.decode("8H-142", sizes) == {"size": 8, "difficulty": Generator.Difficulty.HARD, "number": 142},
+			"a code decodes")
+	_expect(PuzzleCode.decode("Try this Crowns puzzle: 6e 12!", sizes).get("number") == 12
+			and PuzzleCode.decode("10m#3", sizes).get("size") == 10, "codes are found loosely in pasted text")
+	_expect(PuzzleCode.decode("4H-1", sizes).is_empty() and PuzzleCode.decode("8X-1", sizes).is_empty()
+			and PuzzleCode.decode("8H-0", sizes).is_empty() and PuzzleCode.decode("hello", sizes).is_empty(),
+			"bad codes are refused")
+
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._start(game.Mode.REGULAR)
+	await _frames(10)
+	_expect(game._code_button.visible, "regular puzzles offer a code")
+	game._show_code()
+	_expect(game._code_overlay.visible and not game._running, "the code panel opens and pauses the timer")
+	_expect(game._code_label.text == PuzzleCode.encode(game._size, game._difficulty, game._number),
+			"the panel shows this puzzle's code")
+	game._copy_code()
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		_expect(DisplayServer.clipboard_get().contains(game._code_label.text), "copying puts the code on the clipboard")
+	_expect(game._code_copy_button.text == "Copied!", "the copy button confirms")
+	game._code_entry.text = "nonsense"
+	game._enter_code()
+	_expect(game._code_overlay.visible and game._code_error.visible, "a bad code shows an error")
+	game._hide_code()
+	_expect(not game._code_overlay.visible and game._running, "closing resumes the timer")
+
+	game._show_code()
+	game._code_entry.text = "9h-77"
+	game._enter_code()
+	await _frames(10)
+	var regions: PackedInt32Array = game._board.regions
+	_expect(not game._code_overlay.visible and game._size == 9 and game._difficulty == Generator.Difficulty.HARD
+			and game._number == 77 and game._puzzle_label.text == "Puzzle #77", "entering a code opens that puzzle")
+	_expect(game._size_picker.get_selected_id() == 9 and game._difficulty_picker.selected == Generator.Difficulty.HARD,
+			"the pickers follow the code")
+	game._go_to(76)
+	await _frames(10)
+	game._go_to(77)
+	await _frames(10)
+	_expect(game._board.regions == regions, "a code gives the same board as browsing to it")
+
+	game._start(game.Mode.WEEKLY)
+	await _frames(10)
+	_expect(not game._code_button.visible, "only regular puzzles have codes")
+	game.queue_free()
+
+
 func _check_weekly() -> void:
 	var game: Control = load("res://main.tscn").instantiate()
 	game.save_path = TEST_SAVE
@@ -529,6 +595,113 @@ func _check_reminder() -> void:
 	_expect(next > now and next - now <= 86400 and Time.get_date_string_from_unix_time(next - 7 * 3600) != game._today()
 			and Time.get_datetime_dict_from_unix_time(next - 7 * 3600).hour == 0, "the next daily comes out at midnight UTC-7")
 	game.queue_free()
+
+
+func _check_tutorial() -> void:
+	const SAVE := "user://tutorial_test.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = SAVE
+	root.add_child(game)
+	await _frames(5)
+	var view: Control = game._view
+	_expect(game._mode == game.Mode.TUTORIAL and game._game.visible and not game._menu.visible,
+			"a first launch starts the tutorial")
+	_expect(game._back_button.text == "Skip" and not game._timer_label.visible and not game._clear_button.visible,
+			"the tutorial is untimed and can be skipped")
+	_expect(game._hint_label.text.begins_with("Welcome to Crowns") and game._hint_button.text == "Next"
+			and not view.interactive and not game._undo_button.visible, "the tutorial opens on an intro card")
+	game._hint_button.pressed.emit()
+	game._hint_button.pressed.emit()
+	var board: Board = game._board
+	_expect(view.interactive and not game._hint_button.visible and view.hint_targets.size() == 1
+			and game._hint_label.text.ends_with("Double tap it to place a crown."), "after the cards, the first crown is shown")
+	_expect(board.regions.count(board.region_at(Vector2i(view.hint_targets[0] / 5, view.hint_targets[0] % 5))) == 1,
+			"the first crown goes in a one-cell region")
+
+	# A wrong crown is pointed out, and undo puts things back.
+	var wrong := Vector2i(0, (board.solution[0] + 2) % 5)
+	await _right_click(view, wrong)
+	_expect(game._hint_label.text.begins_with("This crown isn't part of the solution."), "the tutorial points out a mistake")
+	game._on_undo()
+	_expect(game._hint_label.text.ends_with("Double tap it to place a crown."), "undo returns to the step")
+
+	# Follow every step: crowns where shown, crosses on the cells a crown rules out.
+	var steps := 0
+	var crossing_steps := 0
+	while not board.is_solved() and steps < 40:
+		steps += 1
+		var targets: PackedInt32Array = view.hint_targets
+		var crown: bool = game._hint_label.text.ends_with("place a crown.")
+		if not crown:
+			crossing_steps += 1
+		for i in targets:
+			var cell := Vector2i(i / 5, i % 5)
+			if crown:
+				await _slow_click(view, cell)
+				await _click(view, cell)
+			else:
+				await _slow_click(view, cell)
+	await _frames(3)
+	_expect(board.is_solved() and crossing_steps >= 2, "following the steps solves the puzzle, crossing out along the way")
+	_expect(game._win_overlay.visible and game._next_puzzle_button.text == "Next lesson" and game._win_play_button.visible
+			and not game._win_leaderboard_button.visible and game._win_back_button.text == "Menu",
+			"the basics end offering the next lesson or playing")
+	var saved := ConfigFile.new()
+	saved.load(SAVE)
+	_expect(saved.get_value("settings", "tutorial_done", false) and not saved.has_section("solved")
+			and not saved.has_section("in_progress"), "the tutorial is marked done and records nothing else")
+	game._win_play_button.pressed.emit()
+	await _frames(10)
+	_expect(game._mode == game.Mode.REGULAR and game._timer_label.visible and game._clear_button.visible
+			and game._hint_button.text == "Hint" and not game._view.auto_cross, "Start playing opens a regular puzzle")
+
+	# The advanced lessons: each opens on its technique, then finishes with simple steps.
+	var openings := {"confined": "'s open cells all lie in row", "group": "regions only have open cells in rows",
+			"blocker": "would rule out every open cell left in"}
+	for lesson in range(1, game.LESSONS.size()):
+		game._start_lesson(lesson)
+		await _frames(5)
+		_expect(game._puzzle_label.text == "Technique %d of 3" % lesson and game._view.auto_cross, "lesson %d starts" % lesson)
+		while game._hint_button.visible:
+			game._hint_button.pressed.emit()
+		var lesson_board: Board = game._board
+		_expect(game._hint_label.text.contains(openings[game.LESSONS[lesson].technique]),
+				"lesson %d opens on its technique" % lesson)
+		var moves := 0
+		while not lesson_board.is_solved() and moves < 30:
+			moves += 1
+			var crown: bool = game._hint_label.text.ends_with("place a crown.")
+			var changes := []
+			for i in game._view.hint_targets:
+				var cell := Vector2i(i / lesson_board.size, i % lesson_board.size)
+				changes.append([cell, lesson_board.get_mark(cell), Board.Mark.CROWN if crown else Board.Mark.CROSS])
+			game._apply(changes)
+		await _frames(3)
+		var last: bool = lesson == game.LESSONS.size() - 1
+		_expect(lesson_board.is_solved() and game._next_puzzle_button.text == ("Start playing" if last else "Next lesson")
+				and not game._win_play_button.visible, "lesson %d can be finished by following it" % lesson)
+	game._next_puzzle_button.pressed.emit()
+	await _frames(10)
+	_expect(game._mode == game.Mode.REGULAR, "the last lesson's Start playing opens a regular puzzle")
+	game.queue_free()
+	await _frames(2)
+
+	# Later launches go to the menu; Settings replays the tutorial.
+	game = load("res://main.tscn").instantiate()
+	game.save_path = SAVE
+	root.add_child(game)
+	await _frames(5)
+	_expect(game._menu.visible and game._mode != game.Mode.TUTORIAL, "the tutorial only starts by itself once")
+	game._show_settings()
+	game._settings.how_to_play.emit()
+	await _frames(5)
+	_expect(game._mode == game.Mode.TUTORIAL and not game._settings.visible and game._tutorial_card == 0,
+			"How to play replays the tutorial")
+	game._leave_game()
+	_expect(game._menu.visible, "skipping returns to the menu")
+	game.queue_free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 
 
 func _check_cloud_save() -> void:

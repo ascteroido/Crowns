@@ -1,7 +1,7 @@
 extends Node
 ## Sound effects. Crosses, erasing and the win play recordings from sounds/;
 ## the rest are synthesised at startup: wooden ticks for buttons and marimba
-## notes for crowns, hints and conflicts.
+## notes for crowns, hints, conflicts and the board reveal.
 
 ## Plenty for soft percussion, and half the startup work of 44.1 kHz.
 const RATE := 22050
@@ -15,6 +15,7 @@ var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _last_cross := -CROSS_GAP_MS
+var _reveal_task := -1
 
 
 func _ready() -> void:
@@ -40,6 +41,19 @@ func _ready() -> void:
 		for n: Array in notes:
 			sum += _marimba(t - n[0], _note(n[1]), 0.35)
 		return sum * 0.3)
+	# The longest sound and only needed once a puzzle loads, so it renders off
+	# the main thread rather than holding up startup.
+	# The web build has no threads, so it renders there and then.
+	if OS.has_feature("threads"):
+		_reveal_task = WorkerThreadPool.add_task(_render_reveal)
+	else:
+		_render_reveal()
+
+
+func _exit_tree() -> void:
+	if _reveal_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_reveal_task)
+		_reveal_task = -1
 
 
 func play(sound: String) -> void:
@@ -56,6 +70,17 @@ func play(sound: String) -> void:
 	# A little variation keeps repeated taps from sounding mechanical.
 	player.pitch_scale = randf_range(0.96, 1.04) if sound in ["click", "cross", "erase"] else 1.0
 	player.play()
+
+
+## A soft rising run up the pentatonic scale while a new board grows in.
+func _render_reveal() -> void:
+	var run := [60, 62, 64, 67, 69, 72, 74, 76, 79]
+	var stream := _render(1.3, func(t: float) -> float:
+		var sum := 0.0
+		for i in mini(run.size(), int(t / 0.07) + 1):
+			sum += _marimba(t - i * 0.07, _note(run[i]), 0.2 if i < run.size() - 1 else 0.4)
+		return sum * 0.16)
+	(func() -> void: _streams.reveal = stream).call_deferred()
 
 
 ## Frequency of a MIDI note number (60 is middle C).
