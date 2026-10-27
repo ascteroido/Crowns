@@ -107,6 +107,9 @@ func _ready() -> void:
 	exit_button = _button(tr("Exit"), exit_chosen.emit)
 	exit_button.visible = OS.has_feature("pc")
 	box.add_child(exit_button)
+	# Buttons that come and go change the menu's height, so it's refitted.
+	leaderboards_button.visibility_changed.connect(_fit)
+	exit_button.visibility_changed.connect(_fit)
 	_fit()
 
 
@@ -115,9 +118,19 @@ func _notification(what: int) -> void:
 		_fit()
 
 
-## Grows the menu to fill tall phone screens; the 860 px desktop window keeps the base sizes.
+## Grows the menu to fill tall phone screens; the 860 px desktop window keeps the
+## base sizes. Never past what fits, so every button stays on screen.
 func _fit() -> void:
 	var factor := clampf(size.y / 860.0, 1.0, 1.6)
+	if size.y > 0.0 and _box:
+		_apply(1.0)
+		var base := _box.get_combined_minimum_size().y
+		if base > 0.0:
+			factor = minf(factor, (size.y - 48.0) / base)
+	_apply(factor)
+
+
+func _apply(factor: float) -> void:
 	for entry: Array in _scaled:
 		var control: Control = entry[0]
 		var value := roundi(entry[2] * factor)

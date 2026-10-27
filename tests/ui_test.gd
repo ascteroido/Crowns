@@ -39,6 +39,14 @@ func _run() -> void:
 	_expect(main._menu.continue_button.text == "Play", "fresh save offers Play")
 	_expect(main._menu.exit_button.visible == OS.has_feature("pc"), "exit shows on desktop only")
 	_expect(main._menu.exit_chosen.is_connected(main._exit), "exit button closes the game")
+	main._menu.leaderboards_button.visible = true
+	main._menu.exit_button.visible = true
+	await _frames(3)
+	var menu_box: Rect2 = main._menu._box.get_global_rect()
+	_expect(menu_box.position.y >= 0.0 and menu_box.end.y <= main._menu.size.y,
+			"the menu shrinks to fit when every button shows")
+	main._menu.leaderboards_button.visible = false
+	main._menu.exit_button.visible = OS.has_feature("pc")
 	_screenshot("menu.png")
 
 	# Settings: dark mode recolours the screen and is saved.
