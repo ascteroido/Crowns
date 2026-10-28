@@ -1,6 +1,6 @@
 extends Control
 ## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one,
-## this week's weekly challenge, The Climb or a speed run.
+## this week's weekly challenge, The Climb or a speed run, or make a puzzle.
 
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 
@@ -11,6 +11,7 @@ signal weekly_chosen
 signal challenge_chosen
 signal speed_chosen
 signal stats_chosen
+signal create_chosen
 signal leaderboards_chosen
 signal settings_chosen
 signal exit_chosen
@@ -22,6 +23,7 @@ var weekly_button: Button
 var challenge_button: Button
 var speed_button: Button
 var stats_button: Button
+var create_button: Button
 var leaderboards_button: Button
 var settings_button: Button
 var exit_button: Button
@@ -116,6 +118,10 @@ func _ready() -> void:
 	stats_button = _button(tr("Stats"), stats_chosen.emit)
 	stats_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	options_row.add_child(stats_button)
+	# TRANSLATORS: Opens the puzzle editor.
+	create_button = _button(tr("Create"), create_chosen.emit)
+	create_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	options_row.add_child(create_button)
 	settings_button = _button(tr("Settings"), settings_chosen.emit)
 	settings_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	options_row.add_child(settings_button)

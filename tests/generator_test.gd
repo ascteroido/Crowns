@@ -7,6 +7,7 @@ const Generator := preload("res://scripts/generator.gd")
 const Solver := preload("res://scripts/solver.gd")
 const Grader := preload("res://scripts/grader.gd")
 const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
+const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 
 const PUZZLES_PER_SIZE := 10
 
@@ -32,6 +33,7 @@ func _init() -> void:
 					(Time.get_ticks_msec() - started) / PUZZLES_PER_SIZE, slowest])
 
 	_check_search()
+	_check_custom()
 	_check_rules()
 	_check_grader()
 	_check_packs()
@@ -66,6 +68,56 @@ func _check_search() -> void:
 				var label := "searched %s %dx%d #%d" % [name, size, size, number]
 				_check_puzzle(size, puzzle, label)
 				_expect(Generator.rates_as(size, puzzle.regions, difficulty), label + " grades as " + name)
+
+
+func _check_custom() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for size in range(CustomPuzzle.MIN_SIZE, CustomPuzzle.MAX_SIZE + 1):
+		var puzzle := Generator.generate(size, Generator.Difficulty.MEDIUM, rng)
+		var code := CustomPuzzle.encode(size, puzzle.regions)
+		var decoded := CustomPuzzle.decode("Try this Crowns puzzle: %s!" % code)
+		_expect(decoded.get("size") == size and decoded.regions == CustomPuzzle.canonical(puzzle.regions),
+				"custom %dx%d code round-trips from a message" % [size, size])
+		var verdict := CustomPuzzle.check(size, decoded.regions)
+		_expect(verdict.problem.is_empty() and verdict.solution == puzzle.solution and verdict.difficulty == 1,
+				"custom %dx%d layout checks as fair and Medium" % [size, size])
+		# Swapping colour numbers changes nothing about the layout, so not its code either.
+		var swapped: PackedInt32Array = puzzle.regions.duplicate()
+		for i in swapped.size():
+			swapped[i] = size - 1 - swapped[i]
+		_expect(CustomPuzzle.encode(size, swapped) == code, "custom %dx%d codes ignore colour numbering" % [size, size])
+	_expect(CustomPuzzle.decode("7C-oops").is_empty(), "a mangled custom code is refused")
+	_expect(CustomPuzzle.decode("8H-142").is_empty() and CustomPuzzle.decode("11C-AAAA").is_empty(),
+			"numbered codes and unsupported sizes aren't custom codes")
+
+	# What's wrong with layouts that aren't fair puzzles yet.
+	var stripes := PackedInt32Array()
+	for row in 5:
+		for col in 5:
+			stripes.append(row)
+	_expect(CustomPuzzle.check(5, stripes).problem == CustomPuzzle.MANY_SOLUTIONS, "row stripes have many solutions")
+	var blank := stripes.duplicate()
+	blank[3] = -1
+	blank[7] = -1
+	_expect(CustomPuzzle.check(5, blank) == {"problem": CustomPuzzle.UNPAINTED, "count": 2}, "unpainted cells are counted")
+	var four := stripes.duplicate()
+	for col in 5:
+		four[20 + col] = 3
+	_expect(CustomPuzzle.check(5, four) == {"problem": CustomPuzzle.MISSING, "count": 1}, "unused colours are counted")
+	# The top-left cell painted like the bottom row leaves that colour in two pieces.
+	var split := stripes.duplicate()
+	split[0] = 4
+	_expect(CustomPuzzle.check(5, split).problem == CustomPuzzle.SPLIT and CustomPuzzle.check(5, split).region == 4,
+			"a region in two pieces is found")
+	# Two colours both confined to the top row would both need its only crown.
+	var none := PackedInt32Array([
+		0, 0, 2, 1, 1,
+		2, 2, 2, 2, 2,
+		3, 3, 3, 3, 3,
+		3, 3, 3, 3, 3,
+		4, 4, 4, 4, 4])
+	_expect(CustomPuzzle.check(5, none).problem == CustomPuzzle.NO_SOLUTION, "a layout with no solution is found")
 
 
 func _check_packs() -> void:

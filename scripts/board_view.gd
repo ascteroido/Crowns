@@ -18,6 +18,8 @@ const CrownArt := preload("res://scripts/crown_art.gd")
 signal edited(changes: Array)
 ## Emitted for each cell the player changes, as it happens, including auto crosses.
 signal marked(cell: Vector2i, old_mark: int, new_mark: int)
+## Paint mode: emitted once a press or drag has painted cells.
+signal painted
 
 # No reds, so conflict hatching always stands out.
 const REGION_COLORS: Array[Color] = [
@@ -36,6 +38,10 @@ const CURSOR_LIGHT := Color("2a2340")
 const CURSOR_DARK := Color("f4f1ea")
 const HINT_DIM := Color(0, 0, 0, 0.3)
 const PATTERN_INK := Color(0, 0, 0, 0.2)
+## Outline of a cell with no region yet, in the editor: an empty slot in the
+## tray, so it can't be mistaken for the grey region.
+const UNPAINTED_LIGHT := Color(1, 1, 1, 0.7)
+const UNPAINTED_DARK := Color(1, 1, 1, 0.18)
 const PATTERN_COUNT := 14
 const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
@@ -81,6 +87,9 @@ var mistake := Vector2i(-1, -1):
 	set(value):
 		mistake = value
 		queue_redraw()
+## Paint mode, for the editor: presses, drags and the keyboard's mark keys give
+## cells this region instead of marks. -1 for normal play.
+var paint := -1
 ## When false the board ignores input, e.g. after the puzzle is solved, and
 ## can't take the keyboard (stray clicks on it would leave the win panel without it).
 var interactive := true:
@@ -187,7 +196,9 @@ func _gui_input(event: InputEvent) -> void:
 			if _cursor_shown:
 				_cursor_shown = false
 				queue_redraw()
-		if button.pressed and cell.x >= 0:
+		if paint >= 0:
+			_paint_input(button.pressed, cell, button.position)
+		elif button.pressed and cell.x >= 0:
 			_drag_from = button.position
 			if button.button_index == MOUSE_BUTTON_LEFT:
 				var old := board.get_mark(cell)
@@ -210,6 +221,12 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 		elif not button.pressed:
 			_finish_stroke()
+	elif event is InputEventMouseMotion and paint >= 0 and _painting:
+		var to := (event as InputEventMouseMotion).position
+		for cell in _cells_along(_drag_from, to):
+			_paint_cell(cell)
+		_drag_from = to
+		accept_event()
 	elif event is InputEventMouseMotion and (_painting or _erasing):
 		var to := (event as InputEventMouseMotion).position
 		for cell in _cells_along(_drag_from, to):
@@ -225,6 +242,23 @@ func _gui_input(event: InputEvent) -> void:
 					_change(cell, Board.Mark.EMPTY)
 		_drag_from = to
 		accept_event()
+
+
+func _paint_input(pressed: bool, cell: Vector2i, pos: Vector2) -> void:
+	if pressed and cell.x >= 0:
+		_painting = true
+		_drag_from = pos
+		_paint_cell(cell)
+		accept_event()
+	elif not pressed and _painting:
+		_painting = false
+		painted.emit()
+
+
+func _paint_cell(cell: Vector2i) -> void:
+	if cell.x >= 0 and board.region_at(cell) != paint:
+		board.regions[board.index(cell)] = paint
+		queue_redraw()
 
 
 ## The cells a drag from `from` to `to` passes through, in order, as
@@ -275,7 +309,10 @@ func _key_input(key: InputEventKey) -> void:
 		queue_redraw()
 		if key.shift_pressed and board.get_mark(cursor) == Board.Mark.EMPTY:
 			mark = Board.Mark.CROSS
-	if mark >= 0:
+	if mark >= 0 and paint >= 0:
+		_paint_cell(cursor)
+		painted.emit()
+	elif mark >= 0:
 		_change(cursor, mark)
 		_finish_stroke()
 
@@ -336,6 +373,9 @@ func _draw() -> void:
 		return
 	var n := board.size
 	var cs := _cell_size()
+	# Not laid out yet: nothing to draw, and shapes this small can't be drawn.
+	if cs < 1.0:
+		return
 	var origin := _origin()
 	var flags := board.conflicts()
 	var now := Time.get_ticks_msec()
@@ -369,7 +409,15 @@ func _draw() -> void:
 			var tile := rect.grow(-cs * grow * GAP / 2.0)
 			var radius := cs * grow * RADIUS
 			var outline := _tile_outline(tile, radius)
-			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
+			var region := board.region_at(cell)
+			if region < 0:
+				var slot := _rounded(Color.TRANSPARENT, radius)
+				slot.draw_center = false
+				slot.border_color = UNPAINTED_DARK if dark else UNPAINTED_LIGHT
+				slot.set_border_width_all(roundi(maxf(1.5, cs * 0.04)))
+				draw_style_box(slot, tile)
+				continue
+			var fill := REGION_COLORS[region % REGION_COLORS.size()]
 			draw_style_box(_rounded(fill.darkened(0.18) if dim else fill, radius), tile)
 			if patterns:
 				_draw_pattern(tile, board.region_at(cell), outline)

@@ -10,6 +10,7 @@ const Grader := preload("res://scripts/grader.gd")
 const Language := preload("res://scripts/language.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
+const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Archive := preload("res://scripts/archive.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
@@ -104,6 +105,20 @@ func _run() -> void:
 	_expect(main._view.dark and main._theme.get_color("font_color", "Label") == main.THEMES.dark.text,
 			"a dark custom page gets light text and a dimmed board")
 	_screenshot("settings_custom.png")
+
+	# Volume, on computers: saved, and greyed out while sound is off.
+	var slider: HSlider = main._settings.volume_slider
+	_expect(main._settings._volume_row.visible and slider.value == 100 and main._sounds.volume == 1.0,
+			"computers get a volume slider, full by default")
+	slider.value = 40
+	saved.load(TEST_SAVE)
+	_expect(is_equal_approx(main._sounds.volume, 0.4) and is_equal_approx(saved.get_value("settings", "volume", 1.0), 0.4)
+			and is_equal_approx(main._sounds._players[0].volume_db, linear_to_db(0.4)), "the volume slider sets and saves the volume")
+	main._settings.sound_toggle.button_pressed = false
+	_expect(not slider.editable, "the slider is off while sound is")
+	main._settings.sound_toggle.button_pressed = true
+	_expect(slider.editable, "the slider comes back with sound")
+	slider.value = 100
 
 	# The app icon follows the theme unless chosen; it can only change on Android.
 	_expect(not main._settings._app_icon_row.visible and not main._app_icon.available(), "the app icon choice is Android only")
@@ -466,6 +481,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_mistakes()
 	await _frames(2)
+	await _check_editor()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
@@ -786,6 +803,96 @@ func _overlay_shown(game: Control) -> void:
 	var started := Time.get_ticks_msec()
 	while game._overlay_tween and game._overlay_tween.is_running() and Time.get_ticks_msec() - started < 10000:
 		await process_frame
+
+
+func _check_editor() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var progress: ConfigFile = game._progress
+	var solved_before: int = progress.get_value("stats", "solved_5", 0)
+	game._menu.create_button.pressed.emit()
+	await _frames(3)
+	var editor: Control = game._editor
+	_expect(editor.visible and not game._menu.visible and editor.view.has_focus(), "Create opens the editor")
+	editor.size_picker.select(0)
+	editor.size_picker.item_selected.emit(0)
+	await _frames(2)
+	var view: Control = editor.view
+	_expect(view.board.size == 5 and editor.status_label.text == "25 cells left to paint."
+			and editor.play_button.disabled and editor.share_button.disabled, "a blank board says what's left")
+
+	# Painting by dragging along rows, one colour each.
+	for row in 4:
+		editor._palette.get_child(row).pressed.emit()
+		await _drag_row(view, row)
+	_expect(view.board.regions.slice(0, 5) == PackedInt32Array([0, 0, 0, 0, 0])
+			and editor.status_label.text == "5 cells left to paint.", "dragging paints the cells in the chosen colour")
+	editor._palette.get_child(3).pressed.emit()
+	await _drag_row(view, 4)
+	_expect(editor.status_label.text == "1 colour isn't used yet.", "every colour must be used")
+	editor._palette.get_child(4).pressed.emit()
+	await _drag_row(view, 4)
+	_expect(editor.status_label.text.begins_with("More than one solution"), "stripes have many solutions")
+	await _click(view, Vector2i(0, 0))
+	_expect(editor.status_label.text == "The grey region is split in two. Each colour needs to be one piece.",
+			"a split region is named")
+	_expect(progress.get_value("editor", "size", 0) == 5 and progress.get_value("editor", "regions", PackedInt32Array())[0] == 4,
+			"the draft is kept")
+
+	# A fair layout can be played and shared.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var puzzle := Generator.generate(5, Generator.Difficulty.EASY, rng)
+	editor.open(5, puzzle.regions)
+	# As painting it would, keep it as the draft.
+	editor.changed.emit(5, editor.view.board.regions)
+	_expect(editor.status_label.text == "One solution · Easy" and not editor.play_button.disabled, "a fair layout shows its difficulty")
+	var code: String = editor.code()
+	editor.share_button.pressed.emit()
+	_expect(editor.status_label.text == code and editor.share_button.text == "Copied!", "Share shows the code")
+	editor.play_button.pressed.emit()
+	await _settle()
+	_expect(game._mode == game.Mode.CUSTOM and game._game.visible and game._puzzle_label.text == "Custom puzzle · Easy"
+			and game._back_button.text == "Back" and game._code_button.visible and not game._size_picker.visible,
+			"Play opens the puzzle")
+	game._show_code()
+	_expect(game._code_label.text == code, "the code panel shows the custom code")
+	game._hide_code()
+	var board: Board = game._board
+	game._elapsed = 30.0
+	for row in board.size:
+		await _right_click(game._view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	_expect(game._win_overlay.visible and game._win_label.text == "Time: 0:30", "a custom puzzle can be solved")
+	_expect(progress.get_value("best", "custom_" + code, INF) < 31.0 and progress.get_value("stats", "solved_5", 0) == solved_before,
+			"custom solves keep a best time but count for no stats")
+	game._win_back_button.pressed.emit()
+	await _frames(2)
+	_expect(editor.visible and editor.code() == code, "Back returns to the editor and its draft")
+
+	# Friends open it from the code; a numbered code goes back to regular play.
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	game._show_code()
+	game._code_entry.text = "Try this Crowns puzzle: %s" % code
+	game._enter_code()
+	await _settle()
+	_expect(game._mode == game.Mode.CUSTOM and game._board.regions == CustomPuzzle.canonical(puzzle.regions)
+			and game._back_button.text == "Menu", "a custom code from a friend opens the puzzle")
+	game._show_code()
+	game._code_entry.text = "6E-3"
+	game._enter_code()
+	await _settle()
+	_expect(game._mode == game.Mode.REGULAR and game._size == 6 and game._number == 3, "a numbered code returns to regular play")
+	game._show_code()
+	# All one colour: a real layout, but not a fair puzzle.
+	game._code_entry.text = "5C-AAAAAAAAAAAAAA"
+	game._enter_code()
+	_expect(game._code_error.visible and game._mode == game.Mode.REGULAR, "a custom code without one solution is refused")
+	game._hide_code()
+	game.queue_free()
 
 
 func _key(keycode: Key, shift := false, ctrl := false) -> void:

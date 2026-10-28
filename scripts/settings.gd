@@ -10,6 +10,8 @@ signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
 signal sound_toggled(enabled: bool)
+## The volume slider moved; `preview` once it settles, to play a sample.
+signal volume_changed(volume: float, preview: bool)
 signal vibration_toggled(enabled: bool)
 signal reminder_toggled(enabled: bool)
 signal reminder_hour_chosen(hour: int)
@@ -38,6 +40,10 @@ var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var timer_toggle: CheckButton
 var sound_toggle: CheckButton
+## Desktop and web only; phones have volume buttons.
+var volume_slider: HSlider
+var _volume_row: HBoxContainer
+var _volume_dragging := false
 ## Shown only where the game can vibrate (Android).
 var vibration_toggle: CheckButton
 var reminder_toggle: CheckButton
@@ -138,6 +144,28 @@ func _ready() -> void:
 	sound_toggle.toggled.connect(sound_toggled.emit)
 	box.add_child(sound_toggle)
 
+	_volume_row = HBoxContainer.new()
+	_volume_row.add_theme_constant_override("separation", 12)
+	_volume_row.visible = not (OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios"))
+	box.add_child(_volume_row)
+	var volume_label := _row_label(tr("Volume"))
+	volume_label.size_flags_horizontal = SIZE_FILL
+	_volume_row.add_child(volume_label)
+	volume_slider = HSlider.new()
+	volume_slider.max_value = 100
+	volume_slider.step = 5
+	volume_slider.value = 100
+	volume_slider.size_flags_horizontal = SIZE_EXPAND_FILL
+	volume_slider.size_flags_vertical = SIZE_SHRINK_CENTER
+	# A sample plays when the slider settles: on letting go, or at once for clicks and keys.
+	volume_slider.drag_started.connect(func() -> void: _volume_dragging = true)
+	volume_slider.drag_ended.connect(func(_changed: bool) -> void:
+		_volume_dragging = false
+		volume_changed.emit(volume_slider.value / 100.0, true))
+	volume_slider.value_changed.connect(func(value: float) -> void:
+		volume_changed.emit(value / 100.0, not _volume_dragging))
+	_volume_row.add_child(volume_slider)
+
 	vibration_toggle = CheckButton.new()
 	vibration_toggle.text = tr("Vibration")
 	vibration_toggle.add_theme_font_size_override("font_size", 20)
@@ -222,6 +250,13 @@ func show_theme(theme_name: String, background: Color, button: Color) -> void:
 func show_app_icon(available: bool, icon: String) -> void:
 	_app_icon_row.visible = available
 	app_icon_picker.select(maxi(0, APP_ICONS.find(icon)))
+
+
+## Sets the volume slider without signalling, greyed out while sound is off.
+func show_volume(volume: float, enabled: bool) -> void:
+	volume_slider.set_value_no_signal(volume * 100.0)
+	volume_slider.editable = enabled
+	volume_slider.modulate.a = 1.0 if enabled else 0.45
 
 
 func _row_label(text: String) -> Label:

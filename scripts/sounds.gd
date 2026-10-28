@@ -10,6 +10,12 @@ const VOICES := 8
 const CROSS_GAP_MS := 35
 
 var enabled := true
+## Loudness from 0 (silent) to 1 (as recorded), for the desktop and web volume slider.
+var volume := 1.0:
+	set(value):
+		volume = clampf(value, 0.0, 1.0)
+		for player in _players:
+			player.volume_db = linear_to_db(volume)
 
 var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
@@ -21,6 +27,7 @@ var _reveal_task := -1
 func _ready() -> void:
 	for i in VOICES:
 		var player := AudioStreamPlayer.new()
+		player.volume_db = linear_to_db(volume)
 		add_child(player)
 		_players.append(player)
 	_streams.click = _render(0.05, func(t: float) -> float: return _knock(t, 1700.0, 0.006) * 0.22)

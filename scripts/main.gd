@@ -22,6 +22,8 @@ const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Leaderboards := preload("res://scripts/leaderboards.gd")
+const Editor := preload("res://scripts/editor.gd")
+const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 ## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
 ## system fonts, but browsers can't, so the web build needs them bundled.
 const SYMBOLS := preload("res://fonts/DejaVuSans-symbols.ttf")
@@ -49,7 +51,7 @@ const GOLD := Color("f4c542")
 ## Screens fade in over this many seconds.
 const FADE := 0.15
 
-enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL, SPEED }
+enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL, SPEED, CUSTOM }
 
 ## Sizes generated on the spot; larger ones come from pre-made packs (PuzzlePack).
 const SIZES := [5, 6, 7, 8, 9, 10]
@@ -130,6 +132,11 @@ var _run := {}
 ## Current speed run, like `_run` but never saved: leaving abandons it. Its
 ## "level" goes past SPEED_STAGES once the run is finished.
 var _speed_run := {}
+## The player-made puzzle being played: {"code", "size", "regions", "solution",
+## "difficulty"} as CustomPuzzle.check() gives it.
+var _custom := {}
+## The custom puzzle was opened from the editor, so leaving it returns there.
+var _from_editor := false
 var _elapsed := 0.0
 var _running := false
 ## The timer only counts while the window has focus.
@@ -165,6 +172,7 @@ var _menu: Menu
 var _settings: Settings
 var _stats: Stats
 var _archive: Archive
+var _editor: Editor
 var _play_games: PlayGames
 var _reminder: Reminder
 var _app_icon: AppIcon
@@ -244,6 +252,8 @@ func _ready() -> void:
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
 	_sounds.enabled = _progress.get_value("settings", "sound", true)
 	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
+	_sounds.volume = _progress.get_value("settings", "volume", 1.0)
+	_settings.show_volume(_sounds.volume, _sounds.enabled)
 	_haptics.enabled = _progress.get_value("settings", "vibration", true)
 	_settings.vibration_toggle.visible = _haptics.available()
 	_settings.vibration_toggle.set_pressed_no_signal(_haptics.enabled)
@@ -340,6 +350,7 @@ func _build_ui() -> void:
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.speed_chosen.connect(_start.bind(Mode.SPEED))
 	_menu.stats_chosen.connect(_show_stats)
+	_menu.create_chosen.connect(_show_editor)
 	_menu.leaderboards_chosen.connect(_show_leaderboards.bind("daily"))
 	_menu.settings_chosen.connect(_show_settings)
 	_menu.exit_chosen.connect(_exit)
@@ -354,6 +365,7 @@ func _build_ui() -> void:
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
+	_settings.volume_changed.connect(_on_volume_changed)
 	_settings.vibration_toggled.connect(_on_vibration_toggled)
 	_settings.reminder_toggled.connect(_on_reminder_toggled)
 	_settings.reminder_hour_chosen.connect(_on_reminder_hour_chosen)
@@ -369,6 +381,15 @@ func _build_ui() -> void:
 	_stats.back.connect(_show_menu)
 	_stats.achievements_chosen.connect(func() -> void: _play_games.show_achievements())
 	add_child(_stats)
+
+	_editor = Editor.new()
+	_editor.set_anchors_preset(PRESET_FULL_RECT)
+	_editor.visible = false
+	_editor.back.connect(_show_menu)
+	_editor.play.connect(func(code: String, size: int, regions: PackedInt32Array, solution: PackedInt32Array) -> void:
+		_play_custom(code, size, regions, solution, true))
+	_editor.changed.connect(_on_editor_changed)
+	add_child(_editor)
 
 	_archive = Archive.new()
 	_archive.set_anchors_preset(PRESET_FULL_RECT)
@@ -611,6 +632,7 @@ func _build_code_overlay() -> void:
 	box.add_child(heading)
 	_code_label = _label("", 40)
 	_code_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_code_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	box.add_child(_code_label)
 	var note := _label(tr("Share it so friends can play this same board."), 16)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -650,9 +672,12 @@ func _build_code_overlay() -> void:
 
 
 func _show_code() -> void:
-	if _generating or _mode != Mode.REGULAR:
+	if _generating or _mode not in [Mode.REGULAR, Mode.CUSTOM]:
 		return
-	_code_label.text = PuzzleCode.encode(_size, _difficulty, _number)
+	var custom := _mode == Mode.CUSTOM
+	_code_label.text = _custom.code if custom else PuzzleCode.encode(_size, _difficulty, _number)
+	# Custom codes hold the whole layout, so they're long.
+	_code_label.add_theme_font_size_override("font_size", 18 if custom else 40)
 	_code_copy_button.text = tr("Copy code")
 	_code_entry.text = ""
 	_code_error.visible = false
@@ -680,6 +705,18 @@ func _copy_code() -> void:
 
 
 func _enter_code() -> void:
+	# A custom code's layout could happen to contain a numbered code, so it's tried first.
+	var custom := CustomPuzzle.decode(_code_entry.text)
+	if not custom.is_empty():
+		var verdict := CustomPuzzle.check(custom.size, custom.regions)
+		if not verdict.problem.is_empty():
+			_code_error.visible = true
+			return
+		_code_paused = false
+		_hide_code()
+		_play_custom(CustomPuzzle.encode(custom.size, custom.regions), custom.size, custom.regions,
+				verdict.solution, false)
+		return
 	var code := PuzzleCode.decode(_code_entry.text, _sizes)
 	if code.is_empty():
 		_code_error.visible = true
@@ -691,7 +728,10 @@ func _enter_code() -> void:
 	_number = code["number"]
 	_size_picker.select(_sizes.find(_size))
 	_difficulty_picker.select(_difficulty)
-	_load_puzzle()
+	if _mode == Mode.REGULAR:
+		_load_puzzle()
+	else:
+		_start(Mode.REGULAR)
 
 
 ## Fades the win (or run over) panel in after `delay` seconds, springing it up to size.
@@ -781,6 +821,7 @@ func _show_menu() -> void:
 	_settings.visible = false
 	_stats.visible = false
 	_archive.visible = false
+	_editor.visible = false
 	_leaderboards.visible = false
 	_fade_in(_menu)
 	var started := _progress.has_section("last")
@@ -827,8 +868,42 @@ func _leave_game() -> void:
 		_set_tutorial_done()
 	if _mode == Mode.DAILY and _from_archive:
 		_show_archive()
+	elif _mode == Mode.CUSTOM and _from_editor:
+		_show_editor()
 	else:
 		_show_menu()
+
+
+## The editor, with the draft as the player left it.
+func _show_editor() -> void:
+	if _generating:
+		return
+	_save_board()
+	_running = false
+	_game.visible = false
+	_menu.visible = false
+	_editor.difficulty_names.assign(range(Generator.DIFFICULTY_NAMES.size()).map(_difficulty_name))
+	_editor.open(_progress.get_value("editor", "size", Editor.DEFAULT_SIZE),
+			_progress.get_value("editor", "regions", PackedInt32Array()))
+	_fade_in(_editor)
+	_editor.view.grab_focus()
+
+
+## Keeps the editor's draft, so it's there next time.
+func _on_editor_changed(size: int, regions: PackedInt32Array) -> void:
+	_progress.set_value("editor", "size", size)
+	_progress.set_value("editor", "regions", regions)
+	_progress.save(save_path)
+
+
+## Plays a player-made puzzle: one from the editor, or from a friend's code.
+func _play_custom(code: String, size: int, regions: PackedInt32Array, solution: PackedInt32Array,
+		from_editor: bool) -> void:
+	_custom = {"code": code, "size": size, "regions": regions, "solution": solution,
+			"difficulty": CustomPuzzle.check(size, regions).difficulty}
+	_from_editor = from_editor
+	_editor.visible = false
+	_start(Mode.CUSTOM)
 
 
 func _show_archive() -> void:
@@ -1069,8 +1144,17 @@ func _on_auto_cross_toggled(enabled: bool) -> void:
 
 func _on_sound_toggled(enabled: bool) -> void:
 	_sounds.enabled = enabled
+	_settings.show_volume(_sounds.volume, enabled)
 	_progress.set_value("settings", "sound", enabled)
 	_progress.save(save_path)
+
+
+func _on_volume_changed(volume: float, preview: bool) -> void:
+	_sounds.volume = volume
+	if preview:
+		_progress.set_value("settings", "volume", volume)
+		_progress.save(save_path)
+		_sounds.play("crown")
 
 
 func _on_reminder_toggled(enabled: bool) -> void:
@@ -1182,6 +1266,21 @@ func _apply_theme() -> void:
 		_theme.set_icon("unchecked" + suffix, "CheckButton", _switch_icon(off, mirrored))
 		_theme.set_icon("checked_disabled" + suffix, "CheckButton", _switch_icon(fills.disabled, not mirrored))
 		_theme.set_icon("unchecked_disabled" + suffix, "CheckButton", _switch_icon(Color(off, 0.45), mirrored))
+	# Sliders like the switches: the button colour up to a white knob, the off colour after.
+	var track := StyleBoxFlat.new()
+	track.bg_color = off
+	track.set_corner_radius_all(4)
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
+	_theme.set_stylebox("slider", "HSlider", track)
+	var filled := track.duplicate()
+	filled.bg_color = fills.normal
+	_theme.set_stylebox("grabber_area", "HSlider", filled)
+	_theme.set_stylebox("grabber_area_highlight", "HSlider", filled)
+	var knob := DPITexture.create_from_string("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
+			+ "<circle cx='12' cy='12' r='10' fill='#ffffff'/></svg>")
+	for icon in ["grabber", "grabber_highlight", "grabber_disabled"]:
+		_theme.set_icon(icon, "HSlider", knob)
 	# Text boxes, like the puzzle code entry: the page colour inset in the panel.
 	for state in ["normal", "focus"]:
 		var field := StyleBoxFlat.new()
@@ -1208,8 +1307,9 @@ func _apply_theme() -> void:
 	_theme.set_stylebox("hover", "PopupMenu", menu_hover)
 	_theme.set_color("font_color", "PopupMenu", on_button)
 	_theme.set_color("font_hover_color", "PopupMenu", GOLD if on_button == Color.WHITE else on_button)
-	_view.dark = colors.dark
-	_view.dim = colors.get("dim", colors.dark)
+	for view: BoardView in [_view, _editor.view]:
+		view.dark = colors.dark
+		view.dim = colors.get("dim", colors.dark)
 	# The player's own row: gold reads on a dark page, the button colour on a light one.
 	_leaderboards.highlight = GOLD if colors.dark else button
 
@@ -1228,7 +1328,8 @@ func _start(mode: Mode, date := "") -> void:
 	_mode = mode
 	_from_archive = not date.is_empty()
 	var tutorial := mode == Mode.TUTORIAL
-	_back_button.text = tr("Back") if _from_archive else tr("Skip") if tutorial else tr("Menu")
+	var returns := _from_archive or (mode == Mode.CUSTOM and _from_editor)
+	_back_button.text = tr("Back") if returns else tr("Skip") if tutorial else tr("Menu")
 	_win_back_button.text = tr("Menu") if tutorial else _back_button.text
 	if mode == Mode.DAILY:
 		_daily_date = date if _from_archive else _today()
@@ -1251,7 +1352,7 @@ func _start(mode: Mode, date := "") -> void:
 	_difficulty_picker.visible = regular
 	_prev_button.visible = regular
 	_next_button.visible = regular
-	_code_button.visible = regular
+	_code_button.visible = regular or mode == Mode.CUSTOM
 	_code_overlay.visible = false
 	_hint_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED]
 	_check_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED, Mode.TUTORIAL]
@@ -1387,6 +1488,9 @@ func _load_puzzle() -> void:
 	if _mode == Mode.TUTORIAL:
 		puzzle = _lesson_puzzle()
 		size = LESSONS[_lesson].layout.size()
+	elif _mode == Mode.CUSTOM:
+		puzzle = {"regions": _custom.regions.duplicate(), "solution": _custom.solution}
+		size = _custom.size
 	else:
 		var spec := _puzzle_spec()
 		size = spec[0]
@@ -1427,6 +1531,11 @@ func _load_puzzle() -> void:
 			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week)
 		Mode.CHALLENGE:
 			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(_challenge_stage()[1])]
+		Mode.CUSTOM:
+			var difficulty: int = _custom.difficulty
+			# TRANSLATORS: A player-made puzzle, with its difficulty: "Custom puzzle · Hard".
+			_puzzle_label.text = tr("Custom puzzle") if difficulty == CustomPuzzle.BEYOND_HINTS \
+					else tr("Custom puzzle · %s") % _difficulty_name(difficulty)
 		Mode.SPEED:
 			# TRANSLATORS: The board being played in a speed run, e.g. "Speed run · 2 of 5".
 			_puzzle_label.text = tr("Speed run · {board} of {boards}").format(
@@ -1889,6 +1998,9 @@ func _check_win() -> void:
 	if _mode == Mode.SPEED:
 		_speed_solved()
 		return
+	if _mode == Mode.CUSTOM:
+		_custom_solved()
+		return
 	var key := _puzzle_key()
 	var difficulty: int = _puzzle_spec()[1]
 	# Before this solve's time is saved, which a record worked out from old saves would count.
@@ -1935,6 +2047,22 @@ func _check_win() -> void:
 		_win_label.text += "\n" + tr("New {size} {difficulty} record!").format({
 			"size": "%d×%d" % [_board.size, _board.size], "difficulty": _difficulty_name(difficulty)}) \
 				+ "\n" + tr("Previous best: %s") % _format_time(beaten)
+	_update_best()
+	_show_win_overlay()
+
+
+## A player-made puzzle is solved: only its own best time is kept, as anyone
+## can make an easy one, so it counts for no stats, records or leaderboards.
+func _custom_solved() -> void:
+	var key := _puzzle_key()
+	var best: float = _progress.get_value("best", key, INF)
+	var record := not _hinted and _elapsed < best
+	if record:
+		_progress.set_value("best", key, _elapsed)
+	_progress.set_value("solved", key, true)
+	_progress.save(save_path)
+	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
+	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
 	_update_best()
 	_show_win_overlay()
 
@@ -2108,8 +2236,8 @@ func _has_mode_leaderboard() -> bool:
 			return _has_leaderboards() and _daily_live
 		Mode.WEEKLY:
 			return _play_games.has_weekly() or _silent_wolf_on()
-		Mode.SPEED:
-			# No speed board yet; runs only keep a personal best.
+		Mode.SPEED, Mode.CUSTOM:
+			# Speed runs only keep a personal best, and anyone can make an easy custom puzzle.
 			return false
 	return _has_leaderboards()
 
@@ -2244,6 +2372,8 @@ func _puzzle_key() -> String:
 		Mode.TUTORIAL, Mode.SPEED:
 			# Nothing from the tutorial or a speed run is saved.
 			return ""
+		Mode.CUSTOM:
+			return "custom_" + _custom.code
 	return "%dx%d_%s_%d" % [_size, _size, Generator.DIFFICULTY_NAMES[_difficulty].to_lower(), _number]
 
 
