@@ -68,9 +68,9 @@ func _run() -> void:
 	quit()
 
 
-## One worker: keeps making puzzles for whichever pack is furthest from its
-## target, counting puzzles other workers are making as made, so the workers
-## spread across the packs instead of all waiting on the slowest one.
+## One worker: keeps making puzzles for whichever unfinished pack has the
+## fewest workers on it, so each pack gets an even share of the workers and
+## fills at its own speed instead of waiting on the slowest one.
 func _work(worker: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
@@ -91,17 +91,18 @@ func _work(worker: int) -> void:
 		_mutex.unlock()
 
 
-## The unfinished pack with the fewest puzzles made or being made, or [] when
-## all are full. The caller is counted as making one for it.
+## The unfinished pack with the fewest workers on it (of those, the one with
+## the fewest puzzles), or [] when all are full. The caller is counted as one
+## of its workers.
 func _next_combo() -> Array:
 	_mutex.lock()
 	var best := []
-	var best_have := 0
 	for combo: Array in _combos:
-		var have: int = _packs[combo].size() + _busy[combo]
-		if _packs[combo].size() < _target and (best.is_empty() or have < best_have):
+		if _packs[combo].size() >= _target:
+			continue
+		if best.is_empty() or _busy[combo] < _busy[best] \
+				or (_busy[combo] == _busy[best] and _packs[combo].size() < _packs[best].size()):
 			best = combo
-			best_have = have
 	if not best.is_empty():
 		_busy[best] += 1
 	_mutex.unlock()
