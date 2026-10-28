@@ -1406,6 +1406,13 @@ func _check_cloud_save() -> void:
 	remote.set_value("challenge", "run", {"level": 4})
 	remote.set_value("speed", "best", 70.0)
 	local.set_value("speed", "best", 90.0)
+	local.set_value("history", "size_7", [[100, 50.0, 1], [300, 40.0, 1]])
+	var long_history := []
+	for i in 40:
+		long_history.append([1000 + i, 30.0 + i, 0])
+	local.set_value("history", "size_8", long_history)
+	remote.set_value("history", "size_7", [[200, 70.0, 2], [300, 40.0, 1]])
+	remote.set_value("history", "size_8", [[2000, 25.0, 3]])
 
 	var packed := CloudSave.pack(remote)
 	var unpacked := CloudSave.unpack(packed)
@@ -1429,6 +1436,11 @@ func _check_cloud_save() -> void:
 	_expect(local.get_value("challenge", "best") == 8 and local.get_value("challenge", "run").level == 4,
 			"The Climb's best and a run from the other device carry over")
 	_expect(local.get_value("speed", "best") == 70.0, "the faster speed run wins")
+	_expect(local.get_value("history", "size_7") == [[100, 50.0, 1], [200, 70.0, 2], [300, 40.0, 1]],
+			"solve histories merge in order without repeating shared solves")
+	var merged_8: Array = local.get_value("history", "size_8")
+	_expect(merged_8.size() == CloudSave.HISTORY_LENGTH and merged_8[-1] == [2000, 25.0, 3] and merged_8[0][0] == 1011,
+			"a merged history keeps only the most recent solves")
 	_expect(local.get_value("settings", "dark_mode") == true, "settings stay with the device")
 	_expect(CloudSave.solved_count(local) == 2, "the save's progress counts solves")
 
@@ -1496,6 +1508,10 @@ func _check_stats() -> void:
 	_expect(progress.get_value("stats", "timed_5", 0) == 1 and progress.get_value("stats", "best_5", INF) < 41.0,
 			"unhinted solves record their time")
 	_expect(progress.get_value("stats", "puzzles_unhinted", 0) == 1, "unhinted numbered solves are counted for the leaderboard")
+	var history: Array = progress.get_value("history", "size_5", [])
+	_expect(history.size() == 1 and history[0][1] < 41.0 and history[0][2] == game._difficulty_picker.selected,
+			"a timed solve joins its size's history, with its difficulty")
+	_expect(progress.get_value("history", "size_7", []).is_empty(), "hinted solves stay out of the history")
 
 	# Play Games only exists on Android; elsewhere its buttons stay hidden and calls do nothing.
 	_expect(not game._settings._test_reminder_button.visible, "the test reminder button needs reminders (Android)")
@@ -1528,6 +1544,21 @@ func _check_stats() -> void:
 		texts.append(label.text)
 	_expect(texts.has("5×5") and texts.has("0:40") and texts.has("5 days"), "stats screen shows sizes, times and streaks")
 	_expect(texts.has("Weeklies solved"), "stats screen counts weekly solves")
+	var stats: Control = game._stats
+	_expect(stats.history_picker != null and stats.history_picker.get_selected_id() == 5
+			and stats.history_graph.entries.size() == 1, "the solve history opens on the size solved last")
+	_expect(texts.any(func(text: String) -> bool: return text.begins_with("Last 1 solve · average 0:40")),
+			"the history sums up its solves")
+	for i in 3:
+		game._record_solve(6, 1, false, 60.0 + i)
+	game._show_stats()
+	await _frames(2)
+	var picker: OptionButton = game._stats.history_picker
+	_expect(picker.item_count == game._progress.get_section_keys("history").size() and picker.get_selected_id() == 6,
+			"each size with solves gets a graph, the newest first")
+	picker.select(picker.get_item_index(5))
+	picker.item_selected.emit(picker.get_item_index(5))
+	_expect(game._stats.history_graph.entries.size() == 1, "picking a size shows its own solves")
 	_screenshot("stats.png")
 	game._stats.back.emit()
 	_expect(game._menu.visible and not game._stats.visible, "back returns from stats")

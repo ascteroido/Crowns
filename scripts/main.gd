@@ -99,6 +99,8 @@ const REMINDER_HOURS := [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 const DEFAULT_REMINDER_HOUR := 19
 ## Save section for streaks and per-size totals.
 const STATS := "stats"
+## Recent timed solves per size, for the graph in Stats.
+const HISTORY := "history"
 ## The player's SilentWolf identity ("player_id", "player_name") and scores not yet sent.
 const ONLINE := "online"
 
@@ -977,6 +979,10 @@ func _show_stats() -> void:
 		[tr("Runs played"), _progress.get_value(STATS, "speed_runs", 0)],
 		[tr("Runs finished"), _progress.get_value(STATS, "speed_finished", 0)],
 	]
+	var histories := {}
+	for size: int in _sizes:
+		histories[size] = _progress.get_value(HISTORY, "size_%d" % size, [])
+	_stats.set_history(histories, _format_time, range(Generator.DIFFICULTY_NAMES.size()).map(_difficulty_name))
 	_stats.set_stats(daily, sizes, climb, speed)
 	_menu.visible = false
 	_fade_in(_stats)
@@ -991,6 +997,9 @@ func _record_solve(size: int, difficulty: int, hinted: bool, seconds: float) -> 
 		return INF
 	_add_stat("timed_%d" % size, 1)
 	_add_stat("time_%d" % size, seconds)
+	var history: Array = _progress.get_value(HISTORY, "size_%d" % size, [])
+	history.append([Time.get_unix_time_from_system(), seconds, difficulty])
+	_progress.set_value(HISTORY, "size_%d" % size, history.slice(-CloudSave.HISTORY_LENGTH))
 	if seconds < _progress.get_value(STATS, "best_%d" % size, INF):
 		_progress.set_value(STATS, "best_%d" % size, seconds)
 	var record := _size_record(size, difficulty)

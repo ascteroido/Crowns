@@ -5,6 +5,8 @@ extends RefCounted
 
 ## Sections that belong to the device, not the player.
 const LOCAL_ONLY := ["settings"]
+## Recent solves kept per size for the solve history graph.
+const HISTORY_LENGTH := 30
 
 
 ## The progress to upload: everything but the device's settings.
@@ -45,6 +47,7 @@ static func merge(local: ConfigFile, remote: ConfigFile) -> void:
 	for key in _keys(remote, "best"):
 		_keep_lower(local, remote, "best", key)
 	_merge_stats(local, remote)
+	_merge_history(local, remote)
 
 	_keep_higher(local, remote, "challenge", "best")
 	if remote.has_section_key("speed", "best"):
@@ -85,6 +88,18 @@ static func _merge_stats(local: ConfigFile, remote: ConfigFile) -> void:
 			and remote.get_value("stats", "streak", 0) > local.get_value("stats", "streak", 0)):
 		local.set_value("stats", "last_daily", remote_last)
 		local.set_value("stats", "streak", remote.get_value("stats", "streak", 0))
+
+
+## Each size's recent solves from both devices, in order, without the ones
+## both already share, trimmed to the most recent.
+static func _merge_history(local: ConfigFile, remote: ConfigFile) -> void:
+	for key in _keys(remote, "history"):
+		var merged: Array = local.get_value("history", key, []).duplicate()
+		for entry: Array in remote.get_value("history", key):
+			if not merged.has(entry):
+				merged.append(entry)
+		merged.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+		local.set_value("history", key, merged.slice(-HISTORY_LENGTH))
 
 
 static func _keys(progress: ConfigFile, section: String) -> PackedStringArray:
