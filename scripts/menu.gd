@@ -32,8 +32,15 @@ var _daily_detail: Label
 var _weekly_detail: Label
 var _challenge_detail: Label
 var _speed_detail: Label
+## The menu's sections: title, puzzles, then the rest. Down one column on tall
+## screens (_box), or side by side on wide ones (_row).
+var _sections := []
 var _box: VBoxContainer
-## [control, property, size at the desktop window's height], scaled up on taller screens.
+## Space under the title, which only the single column needs.
+var _title_gap: Control
+var _row: HBoxContainer
+var _wide := false
+## [control, property, size at the desktop window's height], scaled up on bigger screens.
 var _scaled := []
 
 
@@ -41,11 +48,21 @@ func _ready() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(center)
-	var box := VBoxContainer.new()
-	_box = box
-	_scale(box, "width", 320)
-	_scale(box, "separation", 10)
-	center.add_child(box)
+	_box = VBoxContainer.new()
+	_scale(_box, "separation", 10)
+	center.add_child(_box)
+	_row = HBoxContainer.new()
+	_scale(_row, "separation", 48)
+	_row.visible = false
+	center.add_child(_row)
+	for i in 3:
+		var section := VBoxContainer.new()
+		section.size_flags_vertical = SIZE_SHRINK_CENTER
+		_scale(section, "width", 320)
+		_scale(section, "separation", 10)
+		_sections.append(section)
+		_box.add_child(section)
+	var box: VBoxContainer = _sections[0]
 
 	var crown := CrownIcon.new()
 	_scale(crown, "height", 64)
@@ -55,8 +72,10 @@ func _ready() -> void:
 	var tagline := _label(tr("One crown per row, column and region."), 15)
 	tagline.modulate = Color(1, 1, 1, 0.65)
 	box.add_child(tagline)
-	box.add_child(_gap(24))
+	_title_gap = _gap(24)
+	box.add_child(_title_gap)
 
+	box = _sections[1]
 	continue_button = _button(tr("Continue"), continue_chosen.emit)
 	box.add_child(continue_button)
 	_continue_detail = _label("", 14)
@@ -84,6 +103,8 @@ func _ready() -> void:
 	_weekly_detail.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(_weekly_detail)
 	box.add_child(_gap(8))
+
+	box = _sections[2]
 
 	# The Climb and speed runs share a row, each with its detail beneath.
 	var runs_row := HBoxContainer.new()
@@ -141,15 +162,29 @@ func _notification(what: int) -> void:
 		_fit()
 
 
-## Grows the menu to fill tall phone screens; the 860 px desktop window keeps the
-## base sizes. Never past what fits, so every button stays on screen.
+## Lays the menu out in one column on tall screens, or its sections side by
+## side on wide ones, then grows it to fill big phone screens; the 860 px desktop
+## window keeps the base sizes. Never past what fits, so every button stays on screen.
 func _fit() -> void:
-	var factor := clampf(size.y / 860.0, 1.0, 1.6)
-	if size.y > 0.0 and _box:
+	if not _box:
+		return
+	var wide := size.x >= size.y * 1.25
+	if wide != _wide:
+		_wide = wide
+		var into: BoxContainer = _row if wide else _box
+		for section in _sections:
+			section.reparent(into, false)
+		_row.visible = wide
+		_box.visible = not wide
+		_title_gap.visible = not wide
+	var factor := clampf(maxf(size.x, size.y) / 860.0, 1.0, 1.6)
+	if size.y > 0.0:
 		_apply(1.0)
-		var base := _box.get_combined_minimum_size().y
-		if base > 0.0:
-			factor = minf(factor, (size.y - 48.0) / base)
+		var base := (_row if _wide else _box).get_combined_minimum_size()
+		if base.y > 0.0:
+			factor = minf(factor, (size.y - 48.0) / base.y)
+		if base.x > 0.0:
+			factor = minf(factor, (size.x - 48.0) / base.x)
 	_apply(factor)
 
 
@@ -160,7 +195,7 @@ func _apply(factor: float) -> void:
 		match entry[1]:
 			"width":
 				# Leave a margin at the screen edges, once the menu has a size.
-				if control == _box and size.x > 0.0:
+				if control in _sections and not _wide and size.x > 0.0:
 					value = mini(value, int(size.x) - 48)
 				control.custom_minimum_size.x = value
 			"height":

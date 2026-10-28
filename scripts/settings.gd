@@ -9,6 +9,8 @@ signal app_icon_chosen(icon: String)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
+## Whether wide layouts put the board on the right, beside the controls.
+signal board_side_toggled(right: bool)
 signal sound_toggled(enabled: bool)
 ## The volume slider moved; `preview` once it settles, to play a sample.
 signal volume_changed(volume: float, preview: bool)
@@ -39,6 +41,7 @@ var _app_icon_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var timer_toggle: CheckButton
+var board_side_toggle: CheckButton
 var sound_toggle: CheckButton
 ## Desktop and web only; phones have volume buttons.
 var volume_slider: HSlider
@@ -57,22 +60,50 @@ var _hours: Array[int] = []
 var language_picker: OptionButton
 ## Locale of each language_picker item, "" for the device's language.
 var _locales := PackedStringArray()
+## The settings rows, split into two columns on wide screens.
+var _rows: Array[Control] = []
+var _box: VBoxContainer
+var _columns: HBoxContainer
+var _footer: BoxContainer
+var _wide := false
 
 
 func _ready() -> void:
+	# Scrolls should the settings ever be taller than the screen.
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(scroll)
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = SIZE_EXPAND_FILL
+	margin.size_flags_vertical = SIZE_EXPAND_FILL
+	for side in ["top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 16)
+	scroll.add_child(margin)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(center)
-	var box := VBoxContainer.new()
-	box.custom_minimum_size.x = 280
-	box.add_theme_constant_override("separation", 16)
-	center.add_child(box)
+	margin.add_child(center)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 16)
+	center.add_child(outer)
 
 	var title := Label.new()
 	title.text = tr("Settings")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 40)
-	box.add_child(title)
+	outer.add_child(title)
+	_columns = HBoxContainer.new()
+	_columns.add_theme_constant_override("separation", 56)
+	outer.add_child(_columns)
+	_box = VBoxContainer.new()
+	_box.custom_minimum_size.x = 280
+	_box.add_theme_constant_override("separation", 16)
+	_columns.add_child(_box)
+	var right := VBoxContainer.new()
+	right.custom_minimum_size.x = 280
+	right.add_theme_constant_override("separation", 16)
+	right.visible = false
+	_columns.add_child(right)
+	var box := _box
 
 	var theme_row := HBoxContainer.new()
 	theme_row.add_theme_constant_override("separation", 12)
@@ -137,6 +168,13 @@ func _ready() -> void:
 	timer_toggle.add_theme_font_size_override("font_size", 20)
 	timer_toggle.toggled.connect(timer_toggled.emit)
 	box.add_child(timer_toggle)
+
+	board_side_toggle = CheckButton.new()
+	# TRANSLATORS: In the side-by-side layout of wide screens, put the board right of the buttons instead of left.
+	board_side_toggle.text = tr("Board on the right (wide screens)")
+	board_side_toggle.add_theme_font_size_override("font_size", 20)
+	board_side_toggle.toggled.connect(board_side_toggled.emit)
+	box.add_child(board_side_toggle)
 
 	sound_toggle = CheckButton.new()
 	sound_toggle.text = tr("Sound effects")
@@ -223,19 +261,49 @@ func _ready() -> void:
 	language_picker.item_selected.connect(func(index: int) -> void: language_chosen.emit(_locales[index]))
 	language_row.add_child(language_picker)
 
+	_rows.assign(box.get_children())
+	_footer = BoxContainer.new()
+	_footer.vertical = true
+	_footer.add_theme_constant_override("separation", 16)
+	outer.add_child(_footer)
+
 	var tutorial_button := Button.new()
 	tutorial_button.text = tr("How to play")
 	tutorial_button.custom_minimum_size = Vector2(0, 52)
 	tutorial_button.add_theme_font_size_override("font_size", 20)
 	tutorial_button.pressed.connect(how_to_play.emit)
-	box.add_child(tutorial_button)
+	tutorial_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	_footer.add_child(tutorial_button)
 
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
-	box.add_child(back_button)
+	back_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	_footer.add_child(back_button)
+	_fit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _box:
+		_fit()
+
+
+## One column on tall screens; on wide ones, the rows after the sound settings
+## move to a second column beside them.
+func _fit() -> void:
+	var wide := size.x >= size.y * 1.25 and size.x >= 720.0
+	if wide == _wide:
+		return
+	_wide = wide
+	var right: VBoxContainer = _columns.get_child(1)
+	var split := _rows.find(vibration_toggle)
+	for index in range(split, _rows.size()):
+		_rows[index].reparent(right if wide else _box, false)
+	right.visible = wide
+	# Side by side under the two columns; stacked under the one.
+	_footer.vertical = not wide
 
 
 ## Selects `theme_name` and shows the custom colours, which only it uses.

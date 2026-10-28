@@ -483,6 +483,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_editor()
 	await _frames(2)
+	await _check_wide_layout()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
@@ -511,6 +513,70 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
+
+
+func _check_wide_layout() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	_expect(view.get_parent() == game._column, "a tall screen keeps the one-column layout")
+	var portrait := root.size
+	root.size = Vector2i(1600, 900)
+	await _frames(3)
+	_expect(view.get_parent() == game._wide_row and game._hint_button.get_parent().get_parent() == game._side,
+			"a wide screen puts the board beside the controls")
+	_expect(game.get_window().content_scale_size == Vector2i(860, 640),
+			"a wide window turns the base size on its side, so the interface keeps its size")
+	_expect(view.size.x >= 480 and view.size.x + game.SIDE_WIDTH <= game._game.size.x,
+			"the wide layout's board fills the space beside the controls")
+	_expect(game._wide_row.get_child(0) == view, "the board starts on the left")
+	game._settings.board_side_toggle.button_pressed = true
+	await _frames(2)
+	_expect(game._wide_row.get_child(-1) == view and game._progress.get_value("settings", "board_right") == true,
+			"the setting moves the board to the right")
+	var crown_cell := Vector2i(0, game._board.solution[0])
+	await _right_click(view, crown_cell)
+	_expect(game._board.get_mark(crown_cell) == Board.Mark.CROWN, "the board still plays in the wide layout")
+	root.size = Vector2i(1200, 900)
+	await _frames(3)
+	_expect(view.get_parent() == game._column, "a 4:3 screen, too narrow for a good board beside the controls, keeps the column")
+	root.size = Vector2i(2560, 1600)
+	await _frames(3)
+	_expect(view.get_parent() == game._wide_row, "a 16:10 tablet on its side gets the wide layout")
+	game._show_menu()
+	await _frames(2)
+	_expect(game._menu._row.visible and game._menu._sections.all(func(section: Control) -> bool:
+			return section.get_parent() == game._menu._row), "the menu spreads into columns on wide screens")
+	var menu_rect: Rect2 = game._menu._row.get_global_rect()
+	_expect(menu_rect.position.y >= 0.0 and menu_rect.end.y <= game._menu.size.y, "the wide menu fits the screen")
+	game._show_settings()
+	await _frames(2)
+	_expect(game._settings.vibration_toggle.get_parent() != game._settings._box, "settings split into two columns on wide screens")
+	game._show_stats()
+	await _frames(2)
+	_expect(not game._stats._content.vertical, "stats sit in two columns on wide screens")
+	root.size = portrait
+	await _frames(3)
+	_expect(game.get_window().content_scale_size == Vector2i(640, 860), "a tall window keeps the base size upright")
+	_expect(game._settings.vibration_toggle.get_parent() == game._settings._box and not game._menu._row.visible,
+			"settings and the menu go back to one column")
+	_expect(game._stats._content.vertical, "stats go back to one column")
+	game._show_editor()
+	root.size = Vector2i(1600, 900)
+	await _frames(3)
+	_expect(game._editor._wide_row.get_child(-1) == game._editor.view, "the editor's board follows the side setting")
+	game._settings.board_side_toggle.button_pressed = false
+	_expect(game._editor._wide_row.get_child(0) == game._editor.view, "and moves back to the left")
+	root.size = portrait
+	await _frames(3)
+	_expect(view.get_parent() == game._column and game._column.get_child(2) == view
+			and game._column.get_child(0).get_child(0) == game._back_button, "turning back puts everything in its column again")
+	game._board.clear()
+	game.queue_free()
 
 
 ## Applies hints until solved, checking no hint ever makes a wrong mark. Returns the step count.
@@ -1704,9 +1770,14 @@ func _mouse_button(view: Control, pos: Vector2, pressed: bool, button := MOUSE_B
 	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.pressed = pressed
-	event.position = view.get_global_transform() * pos
+	event.position = _to_window(view, pos)
 	event.global_position = event.position
 	Input.parse_input_event(event)
+
+
+## A point in `view` as the window sees it, through any scaling of the interface.
+func _to_window(view: Control, pos: Vector2) -> Vector2:
+	return view.get_viewport().get_final_transform() * view.get_global_transform_with_canvas() * pos
 
 
 func _click(view: Control, cell: Vector2i, button := MOUSE_BUTTON_LEFT) -> void:
@@ -1724,7 +1795,7 @@ func _drag_row(view: Control, row: int, fast := false) -> void:
 	_mouse_button(view, _cell_center(view, Vector2i(row, 0)), true)
 	for col in range(cols - 1 if fast else 1, cols):
 		var motion := InputEventMouseMotion.new()
-		motion.position = view.get_global_transform() * _cell_center(view, Vector2i(row, col))
+		motion.position = _to_window(view, _cell_center(view, Vector2i(row, col)))
 		motion.global_position = motion.position
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		Input.parse_input_event(motion)
@@ -1745,7 +1816,7 @@ func _touch(view: Control, cell: Vector2i) -> void:
 	for pressed in [true, false]:
 		var event := InputEventScreenTouch.new()
 		event.pressed = pressed
-		event.position = view.get_global_transform() * _cell_center(view, cell)
+		event.position = _to_window(view, _cell_center(view, cell))
 		Input.parse_input_event(event)
 		await _frames(1)
 

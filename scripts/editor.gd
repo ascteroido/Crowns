@@ -14,6 +14,9 @@ signal play(code: String, size: int, regions: PackedInt32Array, solution: Packed
 signal changed(size: int, regions: PackedInt32Array)
 
 const DEFAULT_SIZE := 7
+## The space around the editor, and the width of the controls beside the board on wide screens.
+const MARGIN := 24
+const SIDE_WIDTH := 480.0
 
 var view: BoardView
 var size_picker: OptionButton
@@ -28,17 +31,31 @@ var _color := 0
 var _check := {}
 ## Difficulty names as shown, set by the game.
 var difficulty_names: Array[String] = []
+## The editor's column, and its parts in order down it. On wide screens the
+## board moves to a row of its own, beside the rest (_side).
+var _column: VBoxContainer
+var _parts: Array[Control] = []
+var _wide_row: HBoxContainer
+var _side: VBoxContainer
+var _wide := false
+## Whether the wide layout puts the board on the right of the controls.
+var board_right := false:
+	set(value):
+		board_right = value
+		if view and view.get_parent() == _wide_row:
+			_wide_row.move_child(view, -1 if value else 0)
 
 
 func _ready() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 24)
+		margin.add_theme_constant_override("margin_" + side, MARGIN)
 	add_child(margin)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 14)
 	margin.add_child(column)
+	_column = column
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
@@ -92,6 +109,52 @@ func _ready() -> void:
 	for control: Control in header.get_children() + actions.get_children():
 		if control is Button:
 			control.focus_mode = FOCUS_NONE
+
+	_parts.assign(column.get_children())
+	_wide_row = HBoxContainer.new()
+	_wide_row.size_flags_vertical = SIZE_EXPAND_FILL
+	_wide_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_wide_row.add_theme_constant_override("separation", 32)
+	_side = VBoxContainer.new()
+	_side.alignment = BoxContainer.ALIGNMENT_CENTER
+	_side.custom_minimum_size.x = SIDE_WIDTH
+	_side.add_theme_constant_override("separation", 14)
+	_wide_row.add_child(_side)
+	_fit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _column:
+		_fit()
+
+
+## Like the game screen: the board beside everything else on wide screens,
+## as big as fits, and one column otherwise.
+func _fit() -> void:
+	var room := size - Vector2(MARGIN, MARGIN) * 2.0
+	var board := minf(room.y, room.x - SIDE_WIDTH - _wide_row.get_theme_constant("separation"))
+	var wide := room.x >= room.y * 1.25 and board >= room.y * 0.6
+	view.custom_minimum_size = Vector2(300, 300)
+	if wide:
+		view.custom_minimum_size.x = board
+	if wide == _wide:
+		return
+	_wide = wide
+	for part in _parts:
+		if part.get_parent():
+			part.get_parent().remove_child(part)
+	if _wide_row.get_parent():
+		_column.remove_child(_wide_row)
+	if wide:
+		_column.add_child(_wide_row)
+		_wide_row.add_child(view)
+		_wide_row.move_child(view, -1 if board_right else 0)
+		for part in _parts:
+			if part != view:
+				_side.add_child(part)
+	else:
+		for part in _parts:
+			_column.add_child(part)
 
 
 ## Opens `regions` (unpainted cells -1) at `size`, or a blank board when they don't fit it.

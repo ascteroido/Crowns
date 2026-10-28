@@ -26,6 +26,11 @@ var _trophy: CrownIcon
 var _grid: GridContainer
 var _summary: Label
 var _year := 0
+## Everything but the calendar: beside it on wide screens, around it otherwise.
+var _box: VBoxContainer
+var _row: HBoxContainer
+var _parts: Array[Control] = []
+var _wide := false
 var _month := 0
 
 
@@ -33,10 +38,15 @@ func _ready() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(center)
+	_row = HBoxContainer.new()
+	_row.add_theme_constant_override("separation", 40)
+	center.add_child(_row)
 	var box := VBoxContainer.new()
 	box.custom_minimum_size.x = 460
+	box.size_flags_vertical = SIZE_SHRINK_CENTER
 	box.add_theme_constant_override("separation", 12)
-	center.add_child(box)
+	_row.add_child(box)
+	_box = box
 
 	var title := _label(tr("Archive"), 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -78,6 +88,28 @@ func _ready() -> void:
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
 	box.add_child(back_button)
+	_parts.assign(box.get_children())
+	_fit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _box:
+		_fit()
+
+
+## On wide screens too short for the calendar under its heading, as phones on
+## their side, the calendar moves beside the title, month and buttons.
+func _fit() -> void:
+	var wide := size.x >= size.y * 1.25
+	if wide == _wide:
+		return
+	_wide = wide
+	_box.custom_minimum_size.x = 320 if wide else 460
+	if wide:
+		_grid.reparent(_row, false)
+	else:
+		_grid.reparent(_box, false)
+		_box.move_child(_grid, _parts.find(_grid))
 
 
 ## Shows the month holding `date` ("YYYY-MM-DD").

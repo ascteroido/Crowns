@@ -8,7 +8,11 @@ signal back
 signal achievements_chosen
 
 var _box: VBoxContainer
-var _content: VBoxContainer
+var _content: BoxContainer
+## The half set_stats is filling.
+var _column: VBoxContainer
+## The achievements and back buttons.
+var _footer: BoxContainer
 ## Shown only where Google Play Games is available.
 var achievements_button: Button
 ## The solve history section's size picker and graph.
@@ -36,17 +40,26 @@ func _ready() -> void:
 	var center := CenterContainer.new()
 	margin.add_child(center)
 	_box = VBoxContainer.new()
-	_box.custom_minimum_size.x = 380
 	_box.add_theme_constant_override("separation", 12)
-
 	center.add_child(_box)
 
 	var title := _label(tr("Stats"), 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_box.add_child(title)
-	_content = VBoxContainer.new()
+	# Two halves, stacked on tall screens and side by side on wide ones.
+	_content = BoxContainer.new()
+	_content.vertical = true
 	_content.add_theme_constant_override("separation", 8)
 	_box.add_child(_content)
+	for i in 2:
+		var column := VBoxContainer.new()
+		column.custom_minimum_size.x = 380
+		column.add_theme_constant_override("separation", 8)
+		_content.add_child(column)
+	_footer = BoxContainer.new()
+	_footer.vertical = true
+	_footer.add_theme_constant_override("separation", 12)
+	_box.add_child(_footer)
 
 	achievements_button = Button.new()
 	achievements_button.text = tr("Achievements")
@@ -54,21 +67,39 @@ func _ready() -> void:
 	achievements_button.add_theme_font_size_override("font_size", 20)
 	achievements_button.pressed.connect(achievements_chosen.emit)
 	achievements_button.visible = false
-	_box.add_child(achievements_button)
+	achievements_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	_footer.add_child(achievements_button)
 
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
-	_box.add_child(back_button)
+	back_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	_footer.add_child(back_button)
+	_fit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _content:
+		_fit()
+
+
+## Side by side when there's room for both halves, else one column.
+func _fit() -> void:
+	var wide := size.x >= size.y * 1.25 and size.x >= 880.0
+	_content.vertical = not wide
+	_content.add_theme_constant_override("separation", 56 if wide else 8)
+	_footer.vertical = not wide
 
 
 ## `daily`, `climb` and `speed` are [label, value] pairs; `sizes` rows are
 ## [size label, solved, average, best].
 func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
-	for child in _content.get_children():
-		child.queue_free()
+	for column in _content.get_children():
+		for child in column.get_children():
+			child.queue_free()
+	_column = _content.get_child(0)
 	_section(tr("Daily and weekly"), _pairs(daily))
 	var table := GridContainer.new()
 	table.columns = 4
@@ -82,6 +113,7 @@ func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
 		for value in row:
 			table.add_child(_table_cell(str(value), 17, table.get_child_count()))
 	_section(tr("Puzzles"), table)
+	_column = _content.get_child(1)
 	_section(tr("Solve history"), _history_section())
 	_section(tr("The Climb"), _pairs(climb))
 	_section(tr("Speed run"), _pairs(speed))
@@ -158,13 +190,14 @@ func _legend() -> HFlowContainer:
 	return legend
 
 
+## Adds a section to the half being filled (_column).
 func _section(heading: String, body: Control) -> void:
 	var label := _label(heading, 22)
-	_content.add_child(label)
-	_content.add_child(body)
+	_column.add_child(label)
+	_column.add_child(body)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 6
-	_content.add_child(gap)
+	_column.add_child(gap)
 
 
 func _pairs(pairs: Array) -> GridContainer:

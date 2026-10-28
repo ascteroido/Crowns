@@ -35,7 +35,7 @@
 - [x] Right-to-left layout for Arabic and Hebrew translations
 - [ ] More translations from native speakers (the game is ready for them)
 - [ ] Steam or Flathub release for the desktop builds
-- [ ] Tablet and landscape layout: board on one side, controls on the other, for wide screens
+- [x] Tablet and landscape layout: board on one side, controls on the other, for wide screens
 - [ ] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
 
 ## Feel and polish

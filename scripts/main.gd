@@ -99,6 +99,17 @@ const REMINDER_HOURS := [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 const DEFAULT_REMINDER_HOUR := 19
 ## Save section for streaks and per-size totals.
 const STATS := "stats"
+## How much wider than tall the game needs to be for the side-by-side layout,
+## and the width of its controls' panel.
+const WIDE_RATIO := 1.25
+const SIDE_WIDTH := 552.0
+## The smallest board, as a share of the screen's height, the wide layout settles for.
+const WIDE_MIN_BOARD := 0.6
+## The project's window size, the size the interface is designed for.
+const BASE_WIDTH := 640
+const BASE_HEIGHT := 860
+## The space around the game screen.
+const GAME_MARGIN := 24
 ## Recent timed solves per size, for the graph in Stats.
 const HISTORY := "history"
 ## The player's SilentWolf identity ("player_id", "player_name") and scores not yet sent.
@@ -198,6 +209,13 @@ var _next_button: Button
 var _puzzle_label: Label
 var _timer_label: Label
 var _best_label: Label
+## The game's single column, and the row and side panel of the wide layout.
+var _column: VBoxContainer
+var _wide_row: HBoxContainer
+var _side: VBoxContainer
+## The game screen's parts in their order down the column.
+var _game_parts: Array[Control] = []
+var _wide := false
 var _view: BoardView
 var _undo_button: Button
 var _redo_button: Button
@@ -240,9 +258,12 @@ func _ready() -> void:
 	Language.apply(_progress.get_value("settings", "language", ""))
 	# Text is translated with tr() as it's set, so Godot mustn't translate it again.
 	auto_translate_mode = AUTO_TRANSLATE_MODE_DISABLED
+	get_window().size_changed.connect(_fit_window)
+	_fit_window()
 	# Every button, whenever it's made, clicks when pressed.
 	get_tree().node_added.connect(_on_node_added)
 	_build_ui()
+	_place_board()
 	_settings.show_theme(_theme_name(), _custom_color("background"), _custom_color("button"))
 	_apply_theme()
 	_settings.show_app_icon(_app_icon.available(), _progress.get_value("settings", "app_icon", "theme"))
@@ -428,6 +449,8 @@ func _build_ui() -> void:
 	_settings.silent_wolf_toggled.connect(_on_silent_wolf_toggled)
 	_settings.timer_toggle.set_pressed_no_signal(_progress.get_value("settings", "show_timer", true))
 	_settings.timer_toggled.connect(_on_timer_toggled)
+	_settings.board_side_toggle.set_pressed_no_signal(_progress.get_value("settings", "board_right", false))
+	_settings.board_side_toggled.connect(_on_board_side_toggled)
 	if _silent_wolf_on():
 		# Scores that couldn't be sent last time, e.g. while offline.
 		_silent_wolf.retry()
@@ -443,12 +466,13 @@ func _build_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 24)
+		margin.add_theme_constant_override("margin_" + side, GAME_MARGIN)
 	_game.add_child(margin)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 14)
-	margin.add_child(column)
+	_column = VBoxContainer.new()
+	_column.add_theme_constant_override("separation", 14)
+	margin.add_child(_column)
+	var column := _column
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
@@ -507,9 +531,11 @@ func _build_ui() -> void:
 	_view.marked.connect(_on_marked)
 	column.add_child(_view)
 
-	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 12)
+	# Wraps onto a second line when the side panel of the wide layout is too narrow.
+	var actions := HFlowContainer.new()
+	actions.alignment = FlowContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("h_separation", 12)
+	actions.add_theme_constant_override("v_separation", 12)
 	column.add_child(actions)
 	_undo_button = _button(tr("Undo"), _on_undo)
 	_undo_button.tooltip_text = "Ctrl+Z"
@@ -549,8 +575,72 @@ func _build_ui() -> void:
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(help)
 
+	# The wide layout: the board on one side, everything else on the other.
+	_wide_row = HBoxContainer.new()
+	_wide_row.size_flags_vertical = SIZE_EXPAND_FILL
+	_wide_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_wide_row.add_theme_constant_override("separation", 32)
+	_side = VBoxContainer.new()
+	_side.alignment = BoxContainer.ALIGNMENT_CENTER
+	_side.add_theme_constant_override("separation", 14)
+	_wide_row.add_child(_side)
+	_game_parts = [header, nav, _view, actions, _hint_label, help]
+	_game.resized.connect(_fit_layout)
+	_fit_layout()
+
 	_build_win_overlay()
 	_build_code_overlay()
+
+
+## Keeps the interface the same size however the screen is turned: the base
+## 640×860 window is turned on its side when the screen is wider than tall, so
+## a phone scales by its short side either way, rather than shrinking in landscape.
+func _fit_window() -> void:
+	var window := get_window()
+	var base := Vector2i(BASE_WIDTH, BASE_HEIGHT)
+	if window.size.x > window.size.y:
+		base = Vector2i(BASE_HEIGHT, BASE_WIDTH)
+	if window.content_scale_size != base:
+		window.content_scale_size = base
+
+
+## Lays the game out side by side on wide screens, as on tablets, landscape
+## phones and wide windows, and in one column otherwise.
+func _fit_layout() -> void:
+	# The screen less the margins; the column itself stretches to fit a board that's too big.
+	var room := _game.size - Vector2(GAME_MARGIN, GAME_MARGIN) * 2.0
+	# As big a board as fits beside the panel, the pair centred; only worth it
+	# when that board isn't much smaller than the column's would be.
+	var board := minf(room.y, room.x - SIDE_WIDTH - _wide_row.get_theme_constant("separation"))
+	var wide := room.x >= room.y * WIDE_RATIO and board >= room.y * WIDE_MIN_BOARD
+	if wide:
+		_view.custom_minimum_size = Vector2(board, 300.0)
+	else:
+		_view.custom_minimum_size = Vector2(300, 300)
+	if wide == _wide:
+		return
+	_wide = wide
+	var focused := _view.has_focus()
+	for part: Control in _game_parts:
+		if part.get_parent():
+			part.get_parent().remove_child(part)
+	if _wide_row.get_parent():
+		_column.remove_child(_wide_row)
+	if wide:
+		_column.add_child(_wide_row)
+		_wide_row.add_child(_view)
+		_place_board()
+		_view.size_flags_horizontal = SIZE_FILL
+		_side.custom_minimum_size.x = SIDE_WIDTH
+		for part: Control in _game_parts:
+			if part != _view:
+				_side.add_child(part)
+	else:
+		_view.size_flags_horizontal = SIZE_FILL
+		for part: Control in _game_parts:
+			_column.add_child(part)
+	if focused:
+		_view.grab_focus()
 
 
 func _build_win_overlay() -> void:
@@ -769,8 +859,10 @@ func _fade_in(screen: Control) -> void:
 
 
 func _on_node_added(node: Node) -> void:
-	if node is BaseButton:
-		(node as BaseButton).pressed.connect(_sounds.play.bind("click"))
+	# Buttons moved between layouts are added again, but keep their sound.
+	var click := _sounds.play.bind("click")
+	if node is BaseButton and not (node as BaseButton).pressed.is_connected(click):
+		(node as BaseButton).pressed.connect(click)
 
 
 ## Sounds and vibration for each cell the player changes; auto crosses stay quiet.
@@ -2349,6 +2441,20 @@ func _update_clock() -> void:
 	var shown: bool = _mode != Mode.TUTORIAL and _progress.get_value("settings", "show_timer", true)
 	_timer_label.visible = shown
 	_best_label.visible = shown
+
+
+func _on_board_side_toggled(right: bool) -> void:
+	_progress.set_value("settings", "board_right", right)
+	_progress.save(save_path)
+	_place_board()
+
+
+## Puts the board on the side the player chose, for when the layout is wide.
+func _place_board() -> void:
+	var right: bool = _progress.get_value("settings", "board_right", false)
+	if _view.get_parent() == _wide_row:
+		_wide_row.move_child(_view, -1 if right else 0)
+	_editor.board_right = right
 
 
 func _on_timer_toggled(shown: bool) -> void:
