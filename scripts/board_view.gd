@@ -94,10 +94,15 @@ var patterns := false:
 	set(value):
 		patterns = value
 		queue_redraw()
-## Dims the region colours so they don't glare on a dark background.
+## A dark tray and a light cursor, to sit on a dark page.
 var dark := false:
 	set(value):
 		dark = value
+		queue_redraw()
+## Dims the region colours so they don't glare on a dark page; high contrast keeps them bright.
+var dim := false:
+	set(value):
+		dim = value
 		queue_redraw()
 
 ## The keyboard's cell; it shows once a key is used and hides on a click.
@@ -365,7 +370,7 @@ func _draw() -> void:
 			var radius := cs * grow * RADIUS
 			var outline := _tile_outline(tile, radius)
 			var fill := REGION_COLORS[board.region_at(cell) % REGION_COLORS.size()]
-			draw_style_box(_rounded(fill.darkened(0.18) if dark else fill, radius), tile)
+			draw_style_box(_rounded(fill.darkened(0.18) if dim else fill, radius), tile)
 			if patterns:
 				_draw_pattern(tile, board.region_at(cell), outline)
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake

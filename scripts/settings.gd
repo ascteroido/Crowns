@@ -1,7 +1,9 @@
 extends Control
 ## Settings screen.
 
-signal dark_mode_toggled(enabled: bool)
+signal theme_chosen(theme_name: String)
+## A custom theme colour changed; `done` once the picker closes.
+signal custom_colors_changed(background: Color, button: Color, done: bool)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
@@ -17,7 +19,14 @@ signal language_chosen(locale: String)
 signal how_to_play
 signal back
 
-var dark_mode_toggle: CheckButton
+## Theme names in picker order, matching the game's THEMES plus "custom".
+const THEMES := ["light", "dark", "midnight", "forest", "contrast", "custom"]
+
+var theme_picker: OptionButton
+var background_picker: ColorPickerButton
+var button_color_picker: ColorPickerButton
+## The custom theme's colours, shown only while it's chosen.
+var _custom_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var timer_toggle: CheckButton
@@ -52,11 +61,36 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 40)
 	box.add_child(title)
 
-	dark_mode_toggle = CheckButton.new()
-	dark_mode_toggle.text = tr("Dark mode")
-	dark_mode_toggle.add_theme_font_size_override("font_size", 20)
-	dark_mode_toggle.toggled.connect(dark_mode_toggled.emit)
-	box.add_child(dark_mode_toggle)
+	var theme_row := HBoxContainer.new()
+	theme_row.add_theme_constant_override("separation", 12)
+	box.add_child(theme_row)
+	# TRANSLATORS: The colour theme setting.
+	theme_row.add_child(_row_label(tr("Theme")))
+	theme_picker = OptionButton.new()
+	theme_picker.add_theme_font_size_override("font_size", 20)
+	# TRANSLATORS: Colour theme names.
+	var names := {"light": tr("Light"), "dark": tr("Dark"), "midnight": tr("Midnight"), "forest": tr("Forest"),
+			"contrast": tr("High contrast"), "custom": tr("Custom")}
+	for theme_name: String in THEMES:
+		theme_picker.add_item(names[theme_name])
+	theme_picker.item_selected.connect(func(index: int) -> void: theme_chosen.emit(THEMES[index]))
+	theme_row.add_child(theme_picker)
+
+	_custom_row = HBoxContainer.new()
+	_custom_row.add_theme_constant_override("separation", 10)
+	_custom_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_custom_row.visible = false
+	box.add_child(_custom_row)
+	# TRANSLATORS: The custom theme's colours: the page behind everything, and the buttons.
+	_custom_row.add_child(_row_label(tr("Background")))
+	background_picker = _color_button()
+	_custom_row.add_child(background_picker)
+	var gap := Control.new()
+	gap.custom_minimum_size.x = 8
+	_custom_row.add_child(gap)
+	_custom_row.add_child(_row_label(tr("Buttons")))
+	button_color_picker = _color_button()
+	_custom_row.add_child(button_color_picker)
 
 	auto_cross_toggle = CheckButton.new()
 	auto_cross_toggle.text = tr("Auto-place × around crowns")
@@ -152,6 +186,44 @@ func _ready() -> void:
 	back_button.add_theme_font_size_override("font_size", 20)
 	back_button.pressed.connect(back.emit)
 	box.add_child(back_button)
+
+
+## Selects `theme_name` and shows the custom colours, which only it uses.
+func show_theme(theme_name: String, background: Color, button: Color) -> void:
+	theme_picker.select(maxi(0, THEMES.find(theme_name)))
+	background_picker.color = background
+	button_color_picker.color = button
+	_custom_row.visible = theme_name == "custom"
+
+
+func _row_label(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.size_flags_horizontal = SIZE_EXPAND_FILL
+	label.add_theme_font_size_override("font_size", 20)
+	return label
+
+
+## A swatch that opens a colour picker kept simple for phones: a colour wheel
+## and a hex box, no alpha, presets or screen sampling.
+func _color_button() -> ColorPickerButton:
+	var button := ColorPickerButton.new()
+	button.edit_alpha = false
+	button.custom_minimum_size = Vector2(56, 40)
+	var picker := button.get_picker()
+	picker.picker_shape = ColorPicker.SHAPE_OKHSL_CIRCLE
+	picker.color_modes_visible = false
+	picker.sliders_visible = false
+	picker.presets_visible = false
+	picker.sampler_visible = false
+	picker.hex_visible = true
+	button.color_changed.connect(func(_color: Color) -> void: _emit_custom_colors(false))
+	button.popup_closed.connect(_emit_custom_colors.bind(true))
+	return button
+
+
+func _emit_custom_colors(done: bool) -> void:
+	custom_colors_changed.emit(background_picker.color, button_color_picker.color, done)
 
 
 ## Fills the language picker with `names` (locale -> name) and selects `current`.

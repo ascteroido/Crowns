@@ -103,7 +103,7 @@ func _run() -> void:
 
 	# The daily puzzle in dark mode with region patterns.
 	main._show_menu()
-	main._on_dark_mode_toggled(true)
+	main._on_theme_chosen("dark")
 	main._on_patterns_toggled(true)
 	main._start(main.Mode.DAILY)
 	await _wait_ready(main)
@@ -115,7 +115,7 @@ func _run() -> void:
 
 	# The Climb, a few puzzles in.
 	main._show_menu()
-	main._on_dark_mode_toggled(false)
+	main._on_theme_chosen("light")
 	main._on_patterns_toggled(false)
 	main._run = {"seed": 271828, "level": 7, "elapsed": 612.0}
 	main._start(main.Mode.CHALLENGE)

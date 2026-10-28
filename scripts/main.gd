@@ -28,17 +28,23 @@ const SYMBOLS := preload("res://fonts/DejaVuSans-symbols.ttf")
 const SCRIPTS: Array[Font] = [preload("res://fonts/NotoSansArabic-Regular.ttf"),
 		preload("res://fonts/NotoSansHebrew-Regular.ttf")]
 
-const LIGHT := {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8")}
-const DARK := {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f")}
-## Button fills, matching the purple of the app icon; deeper in dark mode.
-const BUTTON_LIGHT := {"normal": Color("5b4a9e"), "hover": Color("6b59b3"), "pressed": Color("483a85"),
-		"hover_pressed": Color("483a85"), "disabled": Color("5b4a9e", 0.45)}
-const BUTTON_DARK := {"normal": Color("46397f"), "hover": Color("554794"), "pressed": Color("372c66"),
-		"hover_pressed": Color("372c66"), "disabled": Color("46397f", 0.45)}
+## Colour themes: the page, its text, raised panels, the button fill and a
+## switch's track when off. `dark` darkens the board's tray to suit a dark page,
+## and dims its tiles unless `dim` says otherwise. Custom themes are worked out
+## from two colours the player picks (_custom_theme).
+const THEMES := {
+	"light": {"background": Color("f4f1ea"), "text": Color("1e1e1e"), "panel": Color("fffdf8"),
+			"button": Color("5b4a9e"), "switch_off": Color("bdb6a8"), "dark": false},
+	"dark": {"background": Color("1c1c1e"), "text": Color("ebe8e1"), "panel": Color("2c2c2f"),
+			"button": Color("46397f"), "switch_off": Color("55545b"), "dark": true},
+	"midnight": {"background": Color("0f1a2e"), "text": Color("e6ecf5"), "panel": Color("1a2a45"),
+			"button": Color("2f6fb0"), "switch_off": Color("3a4a66"), "dark": true},
+	"forest": {"background": Color("eef2e6"), "text": Color("1f2a1c"), "panel": Color("fafcf5"),
+			"button": Color("3f6e3a"), "switch_off": Color("b4bfa6"), "dark": false},
+	"contrast": {"background": Color("000000"), "text": Color("ffffff"), "panel": Color("161616"),
+			"button": Color("ffd60a"), "switch_off": Color("707070"), "dark": true, "dim": false},
+}
 const GOLD := Color("f4c542")
-## Toggle switch tracks when off; when on they take the button purple.
-const SWITCH_OFF_LIGHT := Color("bdb6a8")
-const SWITCH_OFF_DARK := Color("55545b")
 ## Screens fade in over this many seconds.
 const FADE := 0.15
 
@@ -225,9 +231,8 @@ func _ready() -> void:
 	# Every button, whenever it's made, clicks when pressed.
 	get_tree().node_added.connect(_on_node_added)
 	_build_ui()
-	var dark: bool = _progress.get_value("settings", "dark_mode", false)
-	_settings.dark_mode_toggle.set_pressed_no_signal(dark)
-	_apply_dark_mode(dark)
+	_settings.show_theme(_theme_name(), _custom_color("background"), _custom_color("button"))
+	_apply_theme()
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false)
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
@@ -338,7 +343,8 @@ func _build_ui() -> void:
 	_settings = Settings.new()
 	_settings.set_anchors_preset(PRESET_FULL_RECT)
 	_settings.visible = false
-	_settings.dark_mode_toggled.connect(_on_dark_mode_toggled)
+	_settings.theme_chosen.connect(_on_theme_chosen)
+	_settings.custom_colors_changed.connect(_on_custom_colors_changed)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
@@ -974,10 +980,58 @@ func _show_settings() -> void:
 	_fade_in(_settings)
 
 
-func _on_dark_mode_toggled(enabled: bool) -> void:
-	_apply_dark_mode(enabled)
-	_progress.set_value("settings", "dark_mode", enabled)
+func _on_theme_chosen(theme_name: String) -> void:
+	# Custom starts from the colours on screen, unless the player has picked some before.
+	if theme_name == "custom" and not _progress.has_section_key("settings", "custom_background"):
+		var current := _theme_colors()
+		_progress.set_value("settings", "custom_background", current.background)
+		_progress.set_value("settings", "custom_button", current.button)
+	_progress.set_value("settings", "theme", theme_name)
 	_progress.save(save_path)
+	_settings.show_theme(theme_name, _custom_color("background"), _custom_color("button"))
+	_apply_theme()
+
+
+## Applies colours as they're picked; `done` once the picker closes, to save them.
+func _on_custom_colors_changed(background: Color, button: Color, done: bool) -> void:
+	_progress.set_value("settings", "custom_background", background)
+	_progress.set_value("settings", "custom_button", button)
+	if done:
+		_progress.save(save_path)
+	_apply_theme()
+
+
+## The chosen theme's name; saves from before themes chose by the dark mode switch.
+func _theme_name() -> String:
+	var fallback := "dark" if _progress.get_value("settings", "dark_mode", false) else "light"
+	var theme_name: String = _progress.get_value("settings", "theme", fallback)
+	return theme_name if theme_name == "custom" or THEMES.has(theme_name) else "light"
+
+
+## A custom theme colour ("background" or "button"), or the light theme's until picked.
+func _custom_color(key: String) -> Color:
+	return _progress.get_value("settings", "custom_" + key, THEMES.light[key])
+
+
+## The chosen theme's colours, as in THEMES.
+func _theme_colors() -> Dictionary:
+	var theme_name := _theme_name()
+	if theme_name != "custom":
+		return THEMES[theme_name]
+	return _custom_theme(_custom_color("background"), _custom_color("button"))
+
+
+## A whole theme from a page and a button colour, keeping text readable on both.
+static func _custom_theme(background: Color, button: Color) -> Dictionary:
+	var dark := background.get_luminance() < 0.5
+	var text: Color = THEMES.dark.text if dark else THEMES.light.text
+	return {"background": background, "text": text, "panel": background.lerp(Color.WHITE, 0.07 if dark else 0.6),
+			"button": button, "switch_off": background.lerp(text, 0.3), "dark": dark}
+
+
+## Text colour that reads on `fill`: white on most buttons, near black on light ones.
+static func _text_on(fill: Color) -> Color:
+	return Color.WHITE if fill.get_luminance() < 0.6 else THEMES.light.text
 
 
 func _on_auto_cross_toggled(enabled: bool) -> void:
@@ -1064,17 +1118,20 @@ func _on_language_chosen(locale: String) -> void:
 	queue_free()
 
 
-func _apply_dark_mode(enabled: bool) -> void:
-	var colors: Dictionary = DARK if enabled else LIGHT
+func _apply_theme() -> void:
+	var colors := _theme_colors()
+	var on_button := _text_on(colors.button)
 	_background.color = colors.background
 	_panel_style.bg_color = colors.panel
 	_theme.set_color("font_color", "Label", colors.text)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		_theme.set_color(state, "CheckButton", colors.text)
-		_theme.set_color(state, "Button", Color.WHITE)
-	_theme.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.5))
-	# Rounded purple buttons; dropdowns pick these up too.
-	var fills: Dictionary = BUTTON_DARK if enabled else BUTTON_LIGHT
+		_theme.set_color(state, "Button", on_button)
+	_theme.set_color("font_disabled_color", "Button", Color(on_button, 0.5))
+	# Rounded buttons in the theme's colour; dropdowns pick these up too.
+	var button: Color = colors.button
+	var fills := {"normal": button, "hover": button.lightened(0.12), "pressed": button.darkened(0.2),
+			"hover_pressed": button.darkened(0.2), "disabled": Color(button, 0.45)}
 	for state: String in fills:
 		var box := StyleBoxFlat.new()
 		box.bg_color = fills[state]
@@ -1091,7 +1148,7 @@ func _apply_dark_mode(enabled: bool) -> void:
 	_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	_theme.set_stylebox("focus", "CheckButton", StyleBoxEmpty.new())
 	# Switches drawn to match, so they read clearly on or off against either background.
-	var off: Color = SWITCH_OFF_DARK if enabled else SWITCH_OFF_LIGHT
+	var off: Color = colors.switch_off
 	for mirrored in [false, true]:
 		var suffix := "_mirrored" if mirrored else ""
 		_theme.set_icon("checked" + suffix, "CheckButton", _switch_icon(fills.normal, not mirrored))
@@ -1122,11 +1179,12 @@ func _apply_dark_mode(enabled: bool) -> void:
 	menu_hover.bg_color = fills.hover
 	menu_hover.set_corner_radius_all(6)
 	_theme.set_stylebox("hover", "PopupMenu", menu_hover)
-	_theme.set_color("font_color", "PopupMenu", Color.WHITE)
-	_theme.set_color("font_hover_color", "PopupMenu", GOLD)
-	_view.dark = enabled
-	# The player's own row: gold reads on the dark page, purple on the light one.
-	_leaderboards.highlight = GOLD if enabled else BUTTON_LIGHT.normal
+	_theme.set_color("font_color", "PopupMenu", on_button)
+	_theme.set_color("font_hover_color", "PopupMenu", GOLD if on_button == Color.WHITE else on_button)
+	_view.dark = colors.dark
+	_view.dim = colors.get("dim", colors.dark)
+	# The player's own row: gold reads on a dark page, the button colour on a light one.
+	_leaderboards.highlight = GOLD if colors.dark else button
 
 
 ## A toggle switch: a rounded `track` with a white knob at the right or left end.

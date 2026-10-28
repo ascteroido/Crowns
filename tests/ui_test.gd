@@ -55,23 +55,65 @@ func _run() -> void:
 	main._menu.exit_button.visible = OS.has_feature("pc")
 	_screenshot("menu.png")
 
-	# Settings: dark mode recolours the screen and is saved.
+	# Settings: a theme recolours the screen and is saved.
 	main._menu.settings_button.pressed.emit()
 	_expect(main._settings.visible and not main._menu.visible, "settings opens from the menu")
-	main._settings.dark_mode_toggle.button_pressed = true
+	var picker: OptionButton = main._settings.theme_picker
+	_expect(picker.selected == 0 and not main._settings._custom_row.visible, "the light theme comes first")
+	picker.select(1)
+	picker.item_selected.emit(1)
 	await _frames(3)
-	_expect(main._background.color == main.DARK.background and main._view.dark, "dark mode applies")
+	_expect(main._background.color == main.THEMES.dark.background and main._view.dark, "the dark theme applies")
 	var saved := ConfigFile.new()
 	saved.load(TEST_SAVE)
-	_expect(saved.get_value("settings", "dark_mode", false) == true, "dark mode is saved")
+	_expect(saved.get_value("settings", "theme", "") == "dark", "the theme is saved")
 	_screenshot("settings_dark.png")
 	main._settings.back.emit()
 	_expect(main._menu.visible and not main._settings.visible, "back returns to the menu")
 	await _frames(2)
 	_screenshot("menu_dark.png")
 	main._show_settings()
-	main._settings.dark_mode_toggle.button_pressed = false
-	_expect(main._background.color == main.LIGHT.background and not main._view.dark, "light mode restores")
+
+	# High contrast: yellow buttons need dark text.
+	var contrast: int = main._settings.THEMES.find("contrast")
+	picker.select(contrast)
+	picker.item_selected.emit(contrast)
+	_expect(main._background.color == Color.BLACK and main._theme.get_color("font_color", "Button") == main.THEMES.light.text,
+			"high contrast has dark text on its light buttons")
+
+	# Custom starts from the theme on screen, then follows the picked colours.
+	var custom: int = main._settings.THEMES.find("custom")
+	picker.select(custom)
+	picker.item_selected.emit(custom)
+	_expect(main._settings._custom_row.visible and main._settings.background_picker.color == Color.BLACK,
+			"custom shows its colours, starting from the last theme")
+	main._settings.background_picker.color = Color("f0e0f0")
+	main._settings.button_color_picker.color = Color("204060")
+	main._settings._emit_custom_colors(false)
+	_expect(main._background.color == Color("f0e0f0") and not main._view.dark
+			and main._theme.get_color("font_color", "Label") == main.THEMES.light.text
+			and main._theme.get_color("font_color", "Button") == Color.WHITE, "a light custom page gets dark text, a dark button white")
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "custom_background", Color.BLACK) == Color.BLACK, "colours save once picking is done")
+	main._settings._emit_custom_colors(true)
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "theme", "") == "custom"
+			and saved.get_value("settings", "custom_background", Color.BLACK) == Color("f0e0f0"), "custom colours are saved")
+	main._settings.background_picker.color = Color("102030")
+	main._settings._emit_custom_colors(true)
+	_expect(main._view.dark and main._theme.get_color("font_color", "Label") == main.THEMES.dark.text,
+			"a dark custom page gets light text and a dimmed board")
+	_screenshot("settings_custom.png")
+
+	# Saves from before themes keep their dark mode.
+	main._progress.erase_section_key("settings", "theme")
+	main._progress.set_value("settings", "dark_mode", true)
+	_expect(main._theme_name() == "dark", "an old dark mode save opens in the dark theme")
+	main._progress.erase_section_key("settings", "dark_mode")
+	picker.select(0)
+	picker.item_selected.emit(0)
+	_expect(main._background.color == main.THEMES.light.background and not main._view.dark
+			and not main._settings._custom_row.visible, "the light theme restores")
 	main._show_menu()
 
 	main._menu.continue_button.pressed.emit()
@@ -333,12 +375,12 @@ func _run() -> void:
 	main._menu.continue_button.pressed.emit()
 	await _settle()
 	_expect(main._mode == main.Mode.REGULAR and main._number == 2 and main._next_button.visible, "continue resumes the regular puzzles")
-	main._on_dark_mode_toggled(true)
+	main._on_theme_chosen("dark")
 	await _right_click(view, Vector2i(0, 0))
 	await _click(view, Vector2i(2, 2))
 	await _frames(2)
 	_screenshot("game_dark.png")
-	main._on_dark_mode_toggled(false)
+	main._on_theme_chosen("light")
 
 	# The timer stops while the window is unfocused or the app is in the background.
 	for pair in [[Node.NOTIFICATION_APPLICATION_FOCUS_OUT, Node.NOTIFICATION_APPLICATION_FOCUS_IN],
@@ -1411,7 +1453,7 @@ func _check_languages() -> void:
 	var german := Translation.new()
 	german.locale = "de"
 	german.add_message("English", "Deutsch", "language name")
-	german.add_message("Dark mode", "Dunkelmodus")
+	german.add_message("Dark", "Dunkel")
 	german.add_plural_message("%d puzzle", PackedStringArray(["%d Rätsel", "%d Rätsel"]))
 	TranslationServer.add_translation(german)
 
@@ -1431,7 +1473,7 @@ func _check_languages() -> void:
 	var keys := Language.template_keys()
 	# Every msgid but the header's empty one.
 	_expect(keys.size() == FileAccess.get_file_as_string(Language.TEMPLATE).count("\nmsgid ") - 1
-			and "language name\u0004English" in keys and "Dark mode" in keys, "the template's strings are all counted")
+			and "language name\u0004English" in keys and "Dark" in keys, "the template's strings are all counted")
 	_expect(Language.completion("en") == 1.0 and is_equal_approx(Language.completion("de"), 3.0 / keys.size()),
 			"a translation's completion is its share of the template")
 
@@ -1441,7 +1483,7 @@ func _check_languages() -> void:
 	var fresh: Control = root.get_children().filter(func(node: Node) -> bool:
 		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
 	_expect(fresh != null and not is_instance_valid(game), "choosing a language rebuilds the game")
-	_expect(fresh._settings.visible and fresh._settings.dark_mode_toggle.text == "Dunkelmodus",
+	_expect(fresh._settings.visible and fresh._settings.theme_picker.get_item_text(1) == "Dunkel",
 			"the rebuilt game shows Settings in the new language")
 	_expect(fresh._puzzles(2) == "2 Rätsel" and fresh._settings.language_picker.selected == german_index, "plurals and the picker follow the language")
 	var saved := ConfigFile.new()
@@ -1452,7 +1494,7 @@ func _check_languages() -> void:
 	await _frames(3)
 	var english: Control = root.get_children().filter(func(node: Node) -> bool:
 		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
-	_expect(english._settings.dark_mode_toggle.text == "Dark mode", "device language switches back")
+	_expect(english._settings.theme_picker.get_item_text(1) == "Dark", "device language switches back")
 	_expect(not english.is_layout_rtl(), "English lays out left to right")
 	english.queue_free()
 	TranslationServer.remove_translation(german)

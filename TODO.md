@@ -47,7 +47,7 @@
 - [x] Haptics: short vibration on Android when placing a crown and on a win
 
 ## Look and accessibility
-- [ ] Themes: a few colour palettes beyond light and dark, including high contrast
+- [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
 - [ ] Text size setting
 - [ ] Screen reader labels for menus and buttons
 - [ ] Android app icon variants to match the theme
