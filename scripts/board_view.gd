@@ -152,6 +152,8 @@ var _pops := {}
 var _celebrate_at := -1
 ## Time the opening reveal started, or -1.
 var _reveal_at := -1
+## Skips the reveal, pop-ins and win wave, and holds the hint ring still.
+var reduce_motion := false
 
 
 func _ready() -> void:
@@ -173,6 +175,8 @@ func _process(_delta: float) -> void:
 
 ## Sends a wave of hopping crowns down the board.
 func celebrate() -> void:
+	if reduce_motion:
+		return
 	_celebrate_at = Time.get_ticks_msec()
 	queue_redraw()
 
@@ -180,6 +184,9 @@ func celebrate() -> void:
 ## Grows the tiles into place from the bottom-left corner to the top-right, or
 ## mirrored for right-to-left languages.
 func reveal() -> void:
+	if reduce_motion:
+		queue_redraw()
+		return
 	_reveal_at = Time.get_ticks_msec()
 	queue_redraw()
 
@@ -536,7 +543,7 @@ func _draw() -> void:
 	if reveal > reveal_ms():
 		_reveal_at = -1
 		reveal = -1.0
-	var pulse := 0.65 + 0.35 * sin(now / 1000.0 * TAU * 1.2)
+	var pulse := 0.85 if reduce_motion else 0.65 + 0.35 * sin(now / 1000.0 * TAU * 1.2)
 
 	# The tray behind the tiles, its edge as wide as the gaps between them.
 	draw_style_box(_rounded(TRAY_DARK if dark else TRAY_LIGHT, cs * RADIUS * 1.3),
@@ -760,7 +767,7 @@ func _update_pops(now: int) -> void:
 	if _shown_marks.size() == marks.size():
 		for i in marks.size():
 			if marks[i] != _shown_marks[i]:
-				if marks[i] == Board.Mark.EMPTY:
+				if marks[i] == Board.Mark.EMPTY or reduce_motion:
 					_pops.erase(i)
 				else:
 					_pops[i] = now

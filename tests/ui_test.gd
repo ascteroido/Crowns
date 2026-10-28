@@ -510,6 +510,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_patterns()
 	await _frames(2)
+	await _check_reduce_motion()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -1792,6 +1794,51 @@ func _check_stats() -> void:
 	game._stats.back.emit()
 	_expect(game._menu.visible and not game._stats.visible, "back returns from stats")
 	game.queue_free()
+
+
+func _check_reduce_motion() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.settings_button.pressed.emit()
+	game._settings.reduce_motion_toggle.button_pressed = true
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(game._view.reduce_motion and game._editor.view.reduce_motion
+			and saved.get_value("settings", "reduce_motion", false) == true, "reduce motion turns on from settings and is saved")
+	game.queue_free()
+	await _frames(2)
+
+	game = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(game._settings.reduce_motion_toggle.button_pressed and game._view.reduce_motion, "reduce motion stays on after a restart")
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	_expect(view._reveal_at < 0, "with reduced motion the board appears without the reveal")
+	game._on_clear()
+	await _frames(1)
+	await _click(view, Vector2i(0, 0))
+	await _frames(1)
+	_expect(view._pops.is_empty() and game._board.get_mark(Vector2i(0, 0)) != Board.Mark.EMPTY,
+			"marks appear without popping in")
+	view.celebrate()
+	_expect(view._celebrate_at < 0, "no win wave")
+	game._show_win_overlay()
+	await _wait_ms(700)
+	await _frames(2)
+	_expect(game._win_overlay.visible and game._win_panel.scale == Vector2.ONE, "the win panel appears without springing")
+	game._hide_overlay()
+	# Later checks play this puzzle again from its saved state.
+	game._on_clear()
+	game._menu.settings_button.pressed.emit()
+	game._settings.reduce_motion_toggle.button_pressed = false
+	_expect(not view.reduce_motion, "reduce motion turns off again")
+	game.queue_free()
+	await _frames(2)
 
 
 func _check_patterns() -> void:

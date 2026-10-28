@@ -279,6 +279,8 @@ func _ready() -> void:
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
+	_set_reduce_motion(_progress.get_value("settings", "reduce_motion", false))
+	_settings.reduce_motion_toggle.set_pressed_no_signal(_view.reduce_motion)
 	_sounds.enabled = _progress.get_value("settings", "sound", true)
 	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
 	_sounds.volume = _progress.get_value("settings", "volume", 1.0)
@@ -405,6 +407,7 @@ func _build_ui() -> void:
 	_settings.app_icon_chosen.connect(_on_app_icon_chosen)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
+	_settings.reduce_motion_toggled.connect(_on_reduce_motion_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
 	_settings.volume_changed.connect(_on_volume_changed)
 	_settings.vibration_toggled.connect(_on_vibration_toggled)
@@ -915,15 +918,19 @@ func _show_overlay(delay: float) -> void:
 	_win_overlay.modulate.a = 0.0
 	_overlay_tween = create_tween()
 	_overlay_tween.tween_interval(delay)
+	var still := _view.reduce_motion
 	_overlay_tween.tween_callback(func() -> void:
-		_win_panel.pivot_offset = _win_panel.size / 2.0
-		_win_panel.scale = Vector2(0.85, 0.85)
-		_win_crown.hop()
+		if not still:
+			_win_panel.pivot_offset = _win_panel.size / 2.0
+			_win_panel.scale = Vector2(0.85, 0.85)
+			_win_crown.hop()
 		# Enter carries on from the keyboard.
 		(_next_puzzle_button if _next_puzzle_button.visible else _win_back_button).grab_focus())
+	# With reduced motion it only fades in.
 	_overlay_tween.tween_property(_win_overlay, "modulate:a", 1.0, 0.2)
-	_overlay_tween.parallel().tween_property(_win_panel, "scale", Vector2.ONE, 0.35) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if not still:
+		_overlay_tween.parallel().tween_property(_win_panel, "scale", Vector2.ONE, 0.35) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _hide_overlay() -> void:
@@ -1397,6 +1404,17 @@ func _on_patterns_toggled(enabled: bool) -> void:
 	_view.patterns = enabled
 	_progress.set_value("settings", "patterns", enabled)
 	_progress.save(save_path)
+
+
+func _on_reduce_motion_toggled(enabled: bool) -> void:
+	_set_reduce_motion(enabled)
+	_progress.set_value("settings", "reduce_motion", enabled)
+	_progress.save(save_path)
+
+
+func _set_reduce_motion(enabled: bool) -> void:
+	for view: BoardView in [_view, _editor.view]:
+		view.reduce_motion = enabled
 
 
 ## Saves the choice, then rebuilds every screen in the new language, back on Settings.
@@ -2299,9 +2317,10 @@ func _speed_solved() -> void:
 	_show_win_overlay()
 
 
-## The panel waits for most of the crowns' victory wave first.
+## The panel waits for most of the crowns' victory wave first, or with reduced
+## motion just long enough to see the last crown go down.
 func _show_win_overlay() -> void:
-	_show_overlay(_view.celebration_ms() / 1000.0 * 0.7)
+	_show_overlay(0.5 if _view.reduce_motion else _view.celebration_ms() / 1000.0 * 0.7)
 
 
 ## A wrong crown ends the challenge run.

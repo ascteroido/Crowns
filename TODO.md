@@ -56,7 +56,7 @@
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
 - [ ] Text size setting
 - [ ] Screen reader labels for menus and buttons
-- [ ] Reduce motion setting: turn off the reveal, pop-ins and win wave
+- [x] Reduce motion setting: turn off the reveal, pop-ins and win wave
 - [x] Android app icon variants to match the theme
 
 ## Later

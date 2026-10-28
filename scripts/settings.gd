@@ -8,6 +8,7 @@ signal custom_colors_changed(background: Color, button: Color, done: bool)
 signal app_icon_chosen(icon: String)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
+signal reduce_motion_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
 ## Whether wide layouts put the board on the right, beside the controls.
 signal board_side_toggled(right: bool)
@@ -40,6 +41,7 @@ var app_icon_picker: OptionButton
 var _app_icon_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
+var reduce_motion_toggle: CheckButton
 var timer_toggle: CheckButton
 var board_side_toggle: CheckButton
 var sound_toggle: CheckButton
@@ -164,6 +166,13 @@ func _ready() -> void:
 	patterns_toggle.add_theme_font_size_override("font_size", 20)
 	patterns_toggle.toggled.connect(patterns_toggled.emit)
 	box.add_child(patterns_toggle)
+
+	reduce_motion_toggle = CheckButton.new()
+	# TRANSLATORS: Turns off the board's animations, for players sensitive to motion.
+	reduce_motion_toggle.text = tr("Disable animations")
+	reduce_motion_toggle.add_theme_font_size_override("font_size", 20)
+	reduce_motion_toggle.toggled.connect(reduce_motion_toggled.emit)
+	box.add_child(reduce_motion_toggle)
 
 	timer_toggle = CheckButton.new()
 	timer_toggle.text = tr("Show timer")
