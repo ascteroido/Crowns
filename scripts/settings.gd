@@ -4,6 +4,8 @@ extends Control
 signal theme_chosen(theme_name: String)
 ## A custom theme colour changed; `done` once the picker closes.
 signal custom_colors_changed(background: Color, button: Color, done: bool)
+## "theme" to match the theme, or one of the game's app icons.
+signal app_icon_chosen(icon: String)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
@@ -21,12 +23,17 @@ signal back
 
 ## Theme names in picker order, matching the game's THEMES plus "custom".
 const THEMES := ["light", "dark", "midnight", "forest", "contrast", "custom"]
+## App icon choices in picker order: matching the theme, then each icon.
+const APP_ICONS := ["theme", "classic", "dark", "midnight", "forest", "contrast"]
 
 var theme_picker: OptionButton
 var background_picker: ColorPickerButton
 var button_color_picker: ColorPickerButton
 ## The custom theme's colours, shown only while it's chosen.
 var _custom_row: HBoxContainer
+var app_icon_picker: OptionButton
+## Shown only where the icon can change (Android).
+var _app_icon_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var timer_toggle: CheckButton
@@ -91,6 +98,21 @@ func _ready() -> void:
 	_custom_row.add_child(_row_label(tr("Buttons")))
 	button_color_picker = _color_button()
 	_custom_row.add_child(button_color_picker)
+
+	_app_icon_row = HBoxContainer.new()
+	_app_icon_row.add_theme_constant_override("separation", 12)
+	_app_icon_row.visible = false
+	box.add_child(_app_icon_row)
+	_app_icon_row.add_child(_row_label(tr("App icon")))
+	app_icon_picker = OptionButton.new()
+	app_icon_picker.add_theme_font_size_override("font_size", 20)
+	# TRANSLATORS: App icon choices: following the colour theme, or the original purple icon.
+	var icon_names := {"theme": tr("Match theme"), "classic": tr("Classic")}
+	icon_names.merge(names)
+	for icon: String in APP_ICONS:
+		app_icon_picker.add_item(icon_names[icon])
+	app_icon_picker.item_selected.connect(func(index: int) -> void: app_icon_chosen.emit(APP_ICONS[index]))
+	_app_icon_row.add_child(app_icon_picker)
 
 	auto_cross_toggle = CheckButton.new()
 	auto_cross_toggle.text = tr("Auto-place × around crowns")
@@ -194,6 +216,12 @@ func show_theme(theme_name: String, background: Color, button: Color) -> void:
 	background_picker.color = background
 	button_color_picker.color = button
 	_custom_row.visible = theme_name == "custom"
+
+
+## Shows the app icon choice where the icon can change, with `icon` selected.
+func show_app_icon(available: bool, icon: String) -> void:
+	_app_icon_row.visible = available
+	app_icon_picker.select(maxi(0, APP_ICONS.find(icon)))
 
 
 func _row_label(text: String) -> Label:

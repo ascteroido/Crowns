@@ -16,6 +16,7 @@ const Haptics := preload("res://scripts/haptics.gd")
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
+const AppIcon := preload("res://scripts/app_icon.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
@@ -166,6 +167,7 @@ var _stats: Stats
 var _archive: Archive
 var _play_games: PlayGames
 var _reminder: Reminder
+var _app_icon: AppIcon
 ## Desktop and web leaderboards; Android uses Play Games instead.
 var _silent_wolf: SilentWolf
 var _leaderboards: Leaderboards
@@ -233,6 +235,9 @@ func _ready() -> void:
 	_build_ui()
 	_settings.show_theme(_theme_name(), _custom_color("background"), _custom_color("button"))
 	_apply_theme()
+	_settings.show_app_icon(_app_icon.available(), _progress.get_value("settings", "app_icon", "theme"))
+	# Catches up if the icon and the settings differ, e.g. after an update reset it.
+	_update_app_icon()
 	_view.auto_cross = _progress.get_value("settings", "auto_cross", false)
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
@@ -345,6 +350,7 @@ func _build_ui() -> void:
 	_settings.visible = false
 	_settings.theme_chosen.connect(_on_theme_chosen)
 	_settings.custom_colors_changed.connect(_on_custom_colors_changed)
+	_settings.app_icon_chosen.connect(_on_app_icon_chosen)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
@@ -376,6 +382,8 @@ func _build_ui() -> void:
 	add_child(_play_games)
 	_reminder = Reminder.new()
 	add_child(_reminder)
+	_app_icon = AppIcon.new()
+	add_child(_app_icon)
 	_reminder.permission_answered.connect(_on_reminder_permission)
 	_silent_wolf = SilentWolf.new()
 	add_child(_silent_wolf)
@@ -990,6 +998,25 @@ func _on_theme_chosen(theme_name: String) -> void:
 	_progress.save(save_path)
 	_settings.show_theme(theme_name, _custom_color("background"), _custom_color("button"))
 	_apply_theme()
+	_update_app_icon()
+
+
+func _on_app_icon_chosen(icon: String) -> void:
+	_progress.set_value("settings", "app_icon", icon)
+	_progress.save(save_path)
+	_update_app_icon()
+
+
+## Shows the app icon for the chosen setting and theme.
+func _update_app_icon() -> void:
+	_app_icon.set_icon(_app_icon_for(_progress.get_value("settings", "app_icon", "theme"), _theme_name()))
+
+
+## The icon for an app icon `choice`: itself, or with "theme" the icon of the
+## same name as `theme_name`, and the classic one for themes without an icon.
+static func _app_icon_for(choice: String, theme_name: String) -> String:
+	var icon := theme_name if choice == "theme" else choice
+	return icon if icon in AppIcon.ICONS else "classic"
 
 
 ## Applies colours as they're picked; `done` once the picker closes, to save them.

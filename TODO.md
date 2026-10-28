@@ -50,7 +50,7 @@
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
 - [ ] Text size setting
 - [ ] Screen reader labels for menus and buttons
-- [ ] Android app icon variants to match the theme
+- [x] Android app icon variants to match the theme
 
 ## Later
 - [ ] Pre-made puzzles: generate 11×11–14×14 boards offline and bundle them, so large sizes don't depend on generation speed

@@ -105,6 +105,13 @@ func _run() -> void:
 			"a dark custom page gets light text and a dimmed board")
 	_screenshot("settings_custom.png")
 
+	# The app icon follows the theme unless chosen; it can only change on Android.
+	_expect(not main._settings._app_icon_row.visible and not main._app_icon.available(), "the app icon choice is Android only")
+	_expect(main._app_icon_for("theme", "midnight") == "midnight" and main._app_icon_for("theme", "light") == "classic"
+			and main._app_icon_for("theme", "custom") == "classic" and main._app_icon_for("forest", "dark") == "forest",
+			"the app icon matches the theme, or the chosen one")
+	_expect(main._settings.APP_ICONS.slice(1) == main.AppIcon.ICONS, "Settings offers every app icon")
+
 	# Saves from before themes keep their dark mode.
 	main._progress.erase_section_key("settings", "theme")
 	main._progress.set_value("settings", "dark_mode", true)
@@ -724,7 +731,7 @@ func _check_keyboard() -> void:
 			await _key(KEY_LEFT)
 		await _key(KEY_C)
 	_expect(board.is_solved() and game._win_overlay.visible, "the keyboard can solve a puzzle")
-	await create_timer(1.2).timeout
+	await _overlay_shown(game)
 	_expect(game._next_puzzle_button.has_focus(), "the win panel's Next puzzle takes the keyboard")
 	await _key(KEY_ENTER)
 	await _settle()
@@ -771,6 +778,14 @@ func _check_mistakes() -> void:
 		await _settle()
 		_expect(not game._check_button.visible, "no Check in mode %d" % mode)
 	game.queue_free()
+
+
+## Waits for the win panel to finish appearing, which takes longer on a busy
+## machine than any fixed wait would allow for.
+func _overlay_shown(game: Control) -> void:
+	var started := Time.get_ticks_msec()
+	while game._overlay_tween and game._overlay_tween.is_running() and Time.get_ticks_msec() - started < 10000:
+		await process_frame
 
 
 func _key(keycode: Key, shift := false, ctrl := false) -> void:

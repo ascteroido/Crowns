@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Builds bin/DailyReminder.aar from android/: the receiver compiled against the
-# Android SDK's android.jar, plus its manifest and icon. No Gradle needed; the
-# game's Gradle export dexes and merges the library into the APK.
+# Builds bin/DailyReminder.aar from android/: the reminder and the app icon
+# switcher compiled against the Android SDK's android.jar, plus the manifest and
+# resources (the notification icon, and the app icon variants that
+# tools/make_icons.gd makes). No Gradle needed; the game's Gradle export dexes
+# and merges the library into the APK.
 #   addons/DailyReminder/build.sh
 set -euo pipefail
 
@@ -17,7 +19,15 @@ javac --release 11 -classpath "$android_jar" -d "$work/classes" \
 (cd "$work/classes" && jar cf "$work/aar/classes.jar" .)
 cp "$here/android/AndroidManifest.xml" "$work/aar/"
 cp -r "$here/android/res" "$work/aar/"
-echo "int drawable crowns_reminder_icon 0x7f010000" > "$work/aar/R.txt"
+# R.txt lists each resource once by type and name, whatever its folder's qualifiers.
+find "$here/android/res" -type f | while read -r file; do
+	folder="$(basename "$(dirname "$file")")"
+	name="$(basename "$file")"
+	echo "${folder%%-*} ${name%%.*}"
+done | sort -u | awk '{
+	if (!($1 in types)) types[$1] = length(types) + 1
+	printf "int %s %s 0x7f%02x%04x\n", $1, $2, types[$1], count[$1]++
+}' > "$work/aar/R.txt"
 
 mkdir -p "$here/bin"
 rm -f "$here/bin/DailyReminder.aar"

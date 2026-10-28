@@ -103,11 +103,11 @@ public class Reminder extends BroadcastReceiver {
 				.setContentTitle(prefs.getString("title", ""))
 				.setContentText(prefs.getString("text", ""))
 				.setAutoCancel(true);
-		Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-		if (launch != null) {
-			builder.setContentIntent(PendingIntent.getActivity(context, 0, launch,
-					PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-		}
+		// Straight to the launcher step, which works whichever app icon is on.
+		Intent launch = new Intent().setClassName(context, "com.ascathelstan.crowns.icon.Launch")
+				.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+		builder.setContentIntent(PendingIntent.getActivity(context, 0, launch,
+				PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
 		// Without the notification permission (Android 13+) this does nothing.
 		manager.notify(NOTIFICATION_ID, builder.build());
 	}
