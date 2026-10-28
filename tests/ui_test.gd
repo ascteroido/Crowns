@@ -485,6 +485,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_wide_layout()
 	await _frames(2)
+	await _check_gamepad()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
@@ -513,6 +515,150 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
+
+
+func _pad_button(button: JoyButton, pressed: bool) -> void:
+	var event := InputEventJoypadButton.new()
+	event.button_index = button
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	await _frames(1)
+
+
+func _pad_press(button: JoyButton) -> void:
+	await _pad_button(button, true)
+	await _pad_button(button, false)
+
+
+func _pad_axis(axis: JoyAxis, value: float) -> void:
+	var event := InputEventJoypadMotion.new()
+	event.axis = axis
+	event.axis_value = value
+	Input.parse_input_event(event)
+	await _frames(1)
+
+
+func _check_gamepad() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game.get_viewport().gui_release_focus()
+	await _pad_press(JOY_BUTTON_DPAD_DOWN)
+	_expect(game.get_viewport().gui_get_focus_owner() == game._menu.continue_button,
+			"a gamepad's first press focuses the menu's first button")
+	var ring := game._menu.continue_button.get_theme_stylebox("focus") as StyleBoxFlat
+	_expect(ring != null and not ring.draw_center and ring.border_width_top > 0,
+			"the focused button wears a ring")
+	await _pad_press(JOY_BUTTON_A)
+	await _settle()
+	_expect(game._game.visible, "A presses the focused button")
+	var view: Control = game._view
+	var board: Board = game._board
+	board.clear()
+	game._undo.clear()
+	view.grab_focus()
+	view.cursor = Vector2i.ZERO
+	view._cursor_shown = false
+	await _pad_press(JOY_BUTTON_DPAD_RIGHT)
+	_expect(view.cursor_shown() and view.cursor == Vector2i.ZERO, "the first press shows the cursor without moving it")
+	await _pad_press(JOY_BUTTON_DPAD_RIGHT)
+	_expect(view.cursor == Vector2i(0, 1), "the D-pad moves the cursor")
+	await _pad_press(JOY_BUTTON_A)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.CROSS, "A crosses out")
+	await _pad_press(JOY_BUTTON_Y)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.CROWN, "Y places a crown")
+	await _pad_press(JOY_BUTTON_X)
+	_expect(board.get_mark(Vector2i(0, 1)) == Board.Mark.EMPTY, "X empties the cell")
+
+	# Holding A while moving crosses out the way, as one move.
+	var moves: int = game._undo.size()
+	await _pad_button(JOY_BUTTON_A, true)
+	await _pad_press(JOY_BUTTON_DPAD_DOWN)
+	await _pad_press(JOY_BUTTON_DPAD_DOWN)
+	await _pad_button(JOY_BUTTON_A, false)
+	var swept := [Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)]
+	_expect(swept.all(func(cell: Vector2i) -> bool: return board.get_mark(cell) == Board.Mark.CROSS)
+			and game._undo.size() == moves + 1, "holding A while moving crosses out each cell, as one move")
+	# And from a cross, it clears them.
+	await _pad_button(JOY_BUTTON_A, true)
+	await _pad_press(JOY_BUTTON_DPAD_UP)
+	await _pad_button(JOY_BUTTON_A, false)
+	_expect(board.get_mark(Vector2i(2, 1)) == Board.Mark.EMPTY and board.get_mark(Vector2i(1, 1)) == Board.Mark.EMPTY
+			and board.get_mark(Vector2i(0, 1)) == Board.Mark.CROSS, "holding A from a cross clears the way")
+	await _pad_press(JOY_BUTTON_LEFT_SHOULDER)
+	_expect(board.get_mark(Vector2i(1, 1)) == Board.Mark.CROSS, "LB undoes")
+	await _pad_press(JOY_BUTTON_RIGHT_SHOULDER)
+	_expect(board.get_mark(Vector2i(1, 1)) == Board.Mark.EMPTY, "RB redoes")
+
+	# The stick moves once per lean, not once per event.
+	view.cursor = Vector2i(3, 3)
+	await _pad_axis(JOY_AXIS_LEFT_X, 0.9)
+	await _pad_axis(JOY_AXIS_LEFT_X, 1.0)
+	await _pad_axis(JOY_AXIS_LEFT_X, 0.0)
+	_expect(view.cursor == Vector2i(3, 4), "a stick lean moves the cursor one cell")
+	await _pad_axis(JOY_AXIS_LEFT_Y, -1.0)
+	await _pad_axis(JOY_AXIS_LEFT_Y, 0.0)
+	_expect(view.cursor == Vector2i(2, 4), "the stick moves up and down too")
+	# Held, it repeats.
+	await _pad_button(JOY_BUTTON_DPAD_LEFT, true)
+	await _wait_ms(view.REPEAT_DELAY_MS + view.REPEAT_EVERY_MS * 2 + 30)
+	await _pad_button(JOY_BUTTON_DPAD_LEFT, false)
+	_expect(view.cursor.y <= 1, "a held direction repeats")
+	await _pad_button(JOY_BUTTON_DPAD_LEFT, true)
+	await _wait_ms(view.REPEAT_DELAY_MS + view.REPEAT_EVERY_MS * 6)
+	await _pad_button(JOY_BUTTON_DPAD_LEFT, false)
+	_expect(view.cursor == Vector2i(2, 0), "a held direction stops at the edge")
+	await _pad_press(JOY_BUTTON_DPAD_LEFT)
+	_expect(view.cursor == Vector2i(2, board.size - 1), "pressing left at the edge wraps to the right side")
+	await _pad_press(JOY_BUTTON_DPAD_RIGHT)
+	_expect(view.cursor == Vector2i(2, 0), "and right wraps back")
+	await _pad_press(JOY_BUTTON_DPAD_UP)
+	await _pad_press(JOY_BUTTON_DPAD_UP)
+	await _pad_press(JOY_BUTTON_DPAD_UP)
+	_expect(view.cursor == Vector2i(board.size - 1, 0), "pressing up at the top wraps to the bottom")
+	await _pad_press(JOY_BUTTON_DPAD_DOWN)
+	_expect(view.cursor == Vector2i(0, 0), "and down wraps back")
+
+	await _pad_press(JOY_BUTTON_BACK)
+	_expect(not game._hint_label.text.is_empty(), "Select asks for a hint")
+	await _pad_press(JOY_BUTTON_START)
+	_expect(game.get_viewport().gui_get_focus_owner() == game._hint_button, "Start moves to the buttons")
+	await _pad_press(JOY_BUTTON_DPAD_RIGHT)
+	_expect(game.get_viewport().gui_get_focus_owner() == game._check_button, "the D-pad moves between them")
+	await _pad_press(JOY_BUTTON_B)
+	_expect(view.has_focus() and game._hint_button.focus_mode == Control.FOCUS_NONE and game._game.visible,
+			"B goes back to the board, and the buttons stop taking focus")
+	await _pad_press(JOY_BUTTON_B)
+	await _frames(2)
+	_expect(game._menu.visible, "B on the board goes back to the menu")
+
+	game._show_editor()
+	await _frames(3)
+	var color: int = game._editor._color
+	await _pad_press(JOY_BUTTON_RIGHT_SHOULDER)
+	_expect(game._editor._color == color + 1, "RB picks the editor's next colour")
+	await _pad_press(JOY_BUTTON_LEFT_SHOULDER)
+	await _pad_press(JOY_BUTTON_LEFT_SHOULDER)
+	_expect(game._editor._color == wrapi(color - 1, 0, game._editor._size), "LB goes back, wrapping round")
+	game._editor.view.grab_focus()
+	game._editor.view.cursor = Vector2i.ZERO
+	game._editor.view._cursor_shown = true
+	await _pad_button(JOY_BUTTON_A, true)
+	await _pad_press(JOY_BUTTON_DPAD_RIGHT)
+	await _pad_button(JOY_BUTTON_A, false)
+	var painted: PackedInt32Array = game._editor.view.board.regions
+	_expect(painted[0] == game._editor._color and painted[1] == game._editor._color, "A paints, and keeps painting while held")
+	await _pad_press(JOY_BUTTON_B)
+	await _frames(2)
+	_expect(game._menu.visible, "B leaves the editor")
+	game.queue_free()
+
+
+func _wait_ms(ms: int) -> void:
+	var until := Time.get_ticks_msec() + ms
+	while Time.get_ticks_msec() < until:
+		await process_frame
 
 
 func _check_wide_layout() -> void:
@@ -760,10 +906,27 @@ func _check_keyboard() -> void:
 	await _key(KEY_DOWN)
 	_expect(view.cursor == Vector2i(1, 1), "arrow keys move the cursor")
 	await _key(KEY_UP)
+	await _key(KEY_LEFT)
+	_expect(view.cursor == Vector2i.ZERO, "arrow keys move back to the corner")
+	await _key(KEY_LEFT)
+	_expect(view.cursor == Vector2i(0, board.size - 1), "left off the edge wraps to the right side")
+	await _key(KEY_RIGHT)
+	_expect(view.cursor == Vector2i.ZERO, "right off the edge wraps to the left side")
 	await _key(KEY_UP)
+	_expect(view.cursor == Vector2i(board.size - 1, 0), "up off the top wraps to the bottom")
+	await _key(KEY_DOWN)
+	_expect(view.cursor == Vector2i.ZERO, "down off the bottom wraps to the top")
+	# A held key repeating stops at the edge instead of going round and round.
+	var held := InputEventKey.new()
+	held.keycode = KEY_LEFT
+	held.physical_keycode = KEY_LEFT
+	held.pressed = true
+	held.echo = true
+	Input.parse_input_event(held)
+	await _frames(1)
 	await _key(KEY_LEFT)
-	await _key(KEY_LEFT)
-	_expect(view.cursor == Vector2i.ZERO, "the cursor stops at the edges")
+	_expect(view.cursor == Vector2i(0, board.size - 1), "a held key doesn't wrap")
+	await _key(KEY_RIGHT)
 	await _key(KEY_SPACE)
 	_expect(board.get_mark(Vector2i.ZERO) == Board.Mark.CROSS, "Space crosses out")
 	await _key(KEY_SPACE)
@@ -1709,11 +1872,17 @@ func _check_languages() -> void:
 	saved.load(TEST_SAVE)
 	_expect(saved.get_value("settings", "language", "") == "de", "language choice is saved")
 
+	_expect(fresh.get_viewport().gui_get_focus_owner() == null, "a language tapped in leaves nothing selected")
+
+	# Chosen with a gamepad or the keyboard: the picker stays selected after the rebuild.
+	fresh._settings.language_picker.grab_focus()
 	fresh._settings.language_picker.item_selected.emit(0)
 	await _frames(3)
 	var english: Control = root.get_children().filter(func(node: Node) -> bool:
 		return node.get("open_settings") == true and not node.is_queued_for_deletion()).back()
 	_expect(english._settings.theme_picker.get_item_text(1) == "Dark", "device language switches back")
+	_expect(english.get_viewport().gui_get_focus_owner() == english._settings.language_picker,
+			"a language chosen with a gamepad keeps the language picker selected")
 	_expect(not english.is_layout_rtl(), "English lays out left to right")
 	english.queue_free()
 	TranslationServer.remove_translation(german)

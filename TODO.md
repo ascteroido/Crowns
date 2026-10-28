@@ -36,7 +36,7 @@
 - [ ] More translations from native speakers (the game is ready for them)
 - [ ] Steam or Flathub release for the desktop builds
 - [x] Tablet and landscape layout: board on one side, controls on the other, for wide screens
-- [ ] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
+- [x] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
 
 ## Feel and polish
 - [x] Redo (Ctrl+Shift+Z, and a button beside Undo)

@@ -23,6 +23,7 @@ const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Leaderboards := preload("res://scripts/leaderboards.gd")
 const Editor := preload("res://scripts/editor.gd")
+const Gamepad := preload("res://scripts/gamepad.gd")
 const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 ## Symbols the default font lacks (→, ✓). Desktops and phones borrow them from
 ## system fonts, but browsers can't, so the web build needs them bundled.
@@ -119,6 +120,8 @@ const ONLINE := "online"
 var save_path := "user://queens_progress.cfg"
 ## Opens on Settings instead of the menu, for the rebuild after a language change.
 var open_settings := false
+## Selects the language picker there, when a gamepad or the keyboard chose the language.
+var focus_language := false
 ## Starts the tutorial when there's no save yet, i.e. on a first launch.
 var first_run_tutorial := true
 
@@ -216,6 +219,8 @@ var _side: VBoxContainer
 ## The game screen's parts in their order down the column.
 var _game_parts: Array[Control] = []
 var _wide := false
+## The gamepad's controls under the board, shown while one is plugged in.
+var _pad_help: Label
 var _view: BoardView
 var _undo_button: Button
 var _redo_button: Button
@@ -260,6 +265,7 @@ func _ready() -> void:
 	auto_translate_mode = AUTO_TRANSLATE_MODE_DISABLED
 	get_window().size_changed.connect(_fit_window)
 	_fit_window()
+	Gamepad.setup()
 	# Every button, whenever it's made, clicks when pressed.
 	get_tree().node_added.connect(_on_node_added)
 	_build_ui()
@@ -294,6 +300,8 @@ func _ready() -> void:
 	_show_menu()
 	if open_settings:
 		_show_settings()
+		if focus_language:
+			_settings.language_picker.grab_focus()
 	elif first_launch and first_run_tutorial:
 		_start_lesson(0)
 
@@ -327,6 +335,9 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _pad_focus(event):
+		get_viewport().set_input_as_handled()
+		return
 	if (_settings.visible or _stats.visible or _archive.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
@@ -336,15 +347,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _game.visible:
 		return
-	if event.is_action_pressed("ui_redo", true) and not _code_overlay.visible:
+	if (event.is_action_pressed("ui_redo", true) or event.is_action_pressed(Gamepad.REDO)) and not _code_overlay.visible:
 		_on_redo()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_undo", true) and not _code_overlay.visible:
+	elif (event.is_action_pressed("ui_undo", true) or event.is_action_pressed(Gamepad.UNDO)) and not _code_overlay.visible:
 		_on_undo()
 		get_viewport().set_input_as_handled()
-	elif event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_H \
-			and not (event as InputEventKey).ctrl_pressed and _hint_button.visible and not _code_overlay.visible:
+	elif (event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_H
+			and not (event as InputEventKey).ctrl_pressed or event.is_action_pressed(Gamepad.HINT)) \
+			and _hint_button.visible and not _code_overlay.visible:
 		_on_hint()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(Gamepad.CONTROLS) and not _code_overlay.visible and not _win_overlay.visible:
+		_toggle_pad_controls()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_cancel") and _pad_controls_focused():
+		_view.grab_focus()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") and _code_overlay.visible:
 		_hide_code()
@@ -553,9 +571,7 @@ func _build_ui() -> void:
 	_check_button = _button(tr("Check"), _on_check)
 	actions.add_child(_check_button)
 	# The board keeps the keyboard; these buttons have shortcuts or need a click.
-	for control: Control in [_back_button, _size_picker, _difficulty_picker, _prev_button, _next_button,
-			_code_button, _undo_button, _redo_button, _clear_button, _hint_button, _check_button]:
-		control.focus_mode = FOCUS_NONE
+	_set_pad_controls(false)
 
 	_hint_label = _label("", 16)
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -574,6 +590,18 @@ func _build_ui() -> void:
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(help)
+	# TRANSLATORS: Gamepad controls, shown under the board while one is plugged in. A, B, X, Y, LB, RB,
+	# Select and Start are the buttons' names on most gamepads.
+	_pad_help = _label(tr("Gamepad: A ×, Y crown, X clear, LB/RB undo/redo, Select hint, Start buttons, B menu."), 14)
+	_pad_help.modulate = Color(1, 1, 1, 0.65)
+	_pad_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pad_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pad_help.visible = Gamepad.connected()
+	Input.joy_connection_changed.connect(func(_device: int, _connected: bool) -> void:
+		_pad_help.visible = Gamepad.connected())
+	column.add_child(_pad_help)
+	# Once the board has the focus again, the buttons around it give it up.
+	_view.focus_entered.connect(_set_pad_controls.bind(false))
 
 	# The wide layout: the board on one side, everything else on the other.
 	_wide_row = HBoxContainer.new()
@@ -584,12 +612,66 @@ func _build_ui() -> void:
 	_side.alignment = BoxContainer.ALIGNMENT_CENTER
 	_side.add_theme_constant_override("separation", 14)
 	_wide_row.add_child(_side)
-	_game_parts = [header, nav, _view, actions, _hint_label, help]
+	_game_parts = [header, nav, _view, actions, _hint_label, help, _pad_help]
 	_game.resized.connect(_fit_layout)
 	_fit_layout()
 
 	_build_win_overlay()
 	_build_code_overlay()
+
+
+## The game's buttons, which a gamepad reaches with Start; otherwise the board
+## keeps the focus, so clicking them leaves the keys working the board.
+func _pad_controls() -> Array[Control]:
+	return [_back_button, _size_picker, _difficulty_picker, _prev_button, _next_button, _code_button,
+			_undo_button, _redo_button, _clear_button, _hint_button, _check_button]
+
+
+func _set_pad_controls(reachable: bool) -> void:
+	for control in _pad_controls():
+		control.focus_mode = FOCUS_ALL if reachable else FOCUS_NONE
+
+
+func _pad_controls_focused() -> bool:
+	return get_viewport().gui_get_focus_owner() in _pad_controls()
+
+
+## Start: from the board to the buttons around it, or back.
+func _toggle_pad_controls() -> void:
+	if _pad_controls_focused():
+		_view.grab_focus()
+		return
+	_set_pad_controls(true)
+	(_hint_button if _hint_button.visible else _back_button).grab_focus()
+
+
+## A gamepad's first press with nothing focused focuses the screen's main
+## control, so menus can be worked from the gamepad. Returns whether it did.
+func _pad_focus(event: InputEvent) -> bool:
+	var pressed := event.is_pressed() if event is InputEventJoypadButton \
+			else absf((event as InputEventJoypadMotion).axis_value) >= 0.5
+	if not pressed or get_viewport().gui_get_focus_owner() != null:
+		return false
+	var target: Control = null
+	if _win_overlay.visible:
+		target = _next_puzzle_button if _next_puzzle_button.visible else _win_back_button
+	elif _code_overlay.visible:
+		return false
+	elif _game.visible:
+		target = _view
+	elif _editor.visible:
+		target = _editor.view
+	elif _menu.visible:
+		target = _menu.continue_button
+	else:
+		for screen: Control in [_settings, _stats, _archive, _leaderboards]:
+			if screen.visible:
+				target = screen.find_next_valid_focus()
+				break
+	if target == null or not target.is_visible_in_tree():
+		return false
+	target.grab_focus()
+	return true
 
 
 ## Keeps the interface the same size however the screen is turned: the base
@@ -877,6 +959,7 @@ func _on_marked(_cell: Vector2i, old_mark: int, new_mark: int) -> void:
 		Board.Mark.EMPTY:
 			if old_mark in [Board.Mark.CROSS, Board.Mark.CROWN]:
 				_sounds.play("erase")
+				_haptics.erase()
 
 
 ## One sound for a batch made outside the board, like an applied hint or Clear.
@@ -889,6 +972,7 @@ func _play_changes(changes: Array) -> void:
 		_haptics.cross()
 	else:
 		_sounds.play("erase")
+		_haptics.erase()
 
 
 func _label(text: String, font_size: int) -> Label:
@@ -1324,6 +1408,8 @@ func _on_language_chosen(locale: String) -> void:
 	var fresh: Control = load(scene_file_path).instantiate()
 	fresh.save_path = save_path
 	fresh.open_settings = true
+	# A tap leaves its focus hidden, and the rebuilt screen should too.
+	fresh.focus_language = _settings.language_picker.has_focus(true)
 	add_sibling(fresh)
 	if get_tree().current_scene == self:
 		get_tree().current_scene = fresh
@@ -1357,8 +1443,20 @@ func _apply_theme() -> void:
 		_theme.set_stylebox(state + "_mirrored", "OptionButton", box)
 		# Keep the toggle switch borderless; it would otherwise inherit the button fill.
 		_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
-	_theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	_theme.set_stylebox("focus", "CheckButton", StyleBoxEmpty.new())
+	# A ring around whatever a gamepad or the keyboard has selected. Godot leaves it
+	# off for buttons clicked or tapped, so it only shows while navigating.
+	var ring := StyleBoxFlat.new()
+	ring.draw_center = false
+	ring.border_color = GOLD if colors.dark else colors.text
+	ring.set_border_width_all(3)
+	ring.set_corner_radius_all(13)
+	ring.set_expand_margin_all(4)
+	_theme.set_stylebox("focus", "Button", ring)
+	# Switch rows have no padding of their own; keep the ring off their text.
+	var switch_ring := ring.duplicate()
+	switch_ring.expand_margin_left = 10
+	switch_ring.expand_margin_right = 10
+	_theme.set_stylebox("focus", "CheckButton", switch_ring)
 	# Switches drawn to match, so they read clearly on or off against either background.
 	var off: Color = colors.switch_off
 	for mirrored in [false, true]:
@@ -1380,8 +1478,13 @@ func _apply_theme() -> void:
 	_theme.set_stylebox("grabber_area_highlight", "HSlider", filled)
 	var knob := DPITexture.create_from_string("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>"
 			+ "<circle cx='12' cy='12' r='10' fill='#ffffff'/></svg>")
-	for icon in ["grabber", "grabber_highlight", "grabber_disabled"]:
+	for icon in ["grabber", "grabber_disabled"]:
 		_theme.set_icon(icon, "HSlider", knob)
+	# Sliders have no focus box; their knob wears the ring when selected (or hovered).
+	_theme.set_icon("grabber_highlight", "HSlider", DPITexture.create_from_string(
+			"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'>"
+			+ "<circle cx='16' cy='16' r='14' fill='none' stroke='#%s' stroke-width='3'/>" % ring.border_color.to_html(false)
+			+ "<circle cx='16' cy='16' r='10' fill='#ffffff'/></svg>"))
 	# Text boxes, like the puzzle code entry: the page colour inset in the panel.
 	for state in ["normal", "focus"]:
 		var field := StyleBoxFlat.new()

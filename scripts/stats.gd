@@ -30,6 +30,8 @@ func _ready() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(PRESET_FULL_RECT)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Keeps what a gamepad or the keyboard selects in view.
+	scroll.follow_focus = true
 	add_child(scroll)
 	var margin := MarginContainer.new()
 	margin.size_flags_horizontal = SIZE_EXPAND_FILL

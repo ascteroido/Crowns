@@ -6,6 +6,7 @@ const Board := preload("res://scripts/board.gd")
 const BoardView := preload("res://scripts/board_view.gd")
 const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 const Generator := preload("res://scripts/generator.gd")
+const Gamepad := preload("res://scripts/gamepad.gd")
 
 signal back
 ## The layout is a fair puzzle and the player wants to play it.
@@ -38,6 +39,10 @@ var _parts: Array[Control] = []
 var _wide_row: HBoxContainer
 var _side: VBoxContainer
 var _wide := false
+## The editor's buttons, reached from a gamepad with Start; otherwise the board
+## keeps the focus, as in the game.
+var _buttons: Array[Control] = []
+var _pad_help: Label
 ## Whether the wide layout puts the board on the right of the controls.
 var board_right := false:
 	set(value):
@@ -106,9 +111,18 @@ func _ready() -> void:
 	# TRANSLATORS: Copies the editor puzzle's code to share it.
 	share_button = _button(tr("Share"), _share)
 	actions.add_child(share_button)
-	for control: Control in header.get_children() + actions.get_children():
-		if control is Button:
-			control.focus_mode = FOCUS_NONE
+	_buttons.assign((header.get_children() + actions.get_children()).filter(func(control: Node) -> bool:
+		return control is Button))
+	_set_buttons_reachable(false)
+	view.focus_entered.connect(_set_buttons_reachable.bind(false))
+	# TRANSLATORS: The editor's gamepad controls, shown while one is plugged in.
+	_pad_help = _label(tr("Gamepad: A paint, LB/RB colour, Start buttons, B back."), 14)
+	_pad_help.modulate = Color(1, 1, 1, 0.65)
+	_pad_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pad_help.visible = Gamepad.connected()
+	Input.joy_connection_changed.connect(func(_device: int, _connected: bool) -> void:
+		_pad_help.visible = Gamepad.connected())
+	column.add_child(_pad_help)
 
 	_parts.assign(column.get_children())
 	_wide_row = HBoxContainer.new()
@@ -121,6 +135,33 @@ func _ready() -> void:
 	_side.add_theme_constant_override("separation", 14)
 	_wide_row.add_child(_side)
 	_fit()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed(Gamepad.UNDO) or event.is_action_pressed(Gamepad.REDO):
+		var step := -1 if event.is_action_pressed(Gamepad.UNDO) else 1
+		_select_color(wrapi(_color + step, 0, _size))
+	elif event.is_action_pressed(Gamepad.CONTROLS):
+		if get_viewport().gui_get_focus_owner() in _buttons:
+			view.grab_focus()
+		else:
+			_set_buttons_reachable(true)
+			_buttons[0].grab_focus()
+	elif event.is_action_pressed("ui_cancel"):
+		if get_viewport().gui_get_focus_owner() in _buttons:
+			view.grab_focus()
+		else:
+			back.emit()
+	else:
+		return
+	get_viewport().set_input_as_handled()
+
+
+func _set_buttons_reachable(reachable: bool) -> void:
+	for button in _buttons:
+		button.focus_mode = FOCUS_ALL if reachable else FOCUS_NONE
 
 
 func _notification(what: int) -> void:

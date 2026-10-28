@@ -8,9 +8,18 @@ extends Control
 ##
 ## With keyboard focus, the arrow keys move a cursor (Shift crosses out the empty
 ## cells it moves onto), Space or X crosses out or clears the cell, Enter or C
-## toggles a crown, and Backspace or Delete empties it.
+## toggles a crown, and Backspace or Delete empties it. A gamepad (see
+## gamepad.gd) moves the cursor with the D-pad or left stick, which repeat when
+## held; A crosses out or clears, and held while moving keeps doing so, like a
+## drag; Y toggles a crown and X empties the cell.
 
 const Board := preload("res://scripts/board.gd")
+const Gamepad := preload("res://scripts/gamepad.gd")
+## A held direction waits this long, then repeats this often, in milliseconds.
+const REPEAT_DELAY_MS := 350
+const REPEAT_EVERY_MS := 90
+## How far the stick must lean to count as a direction.
+const STICK_DEADZONE := 0.5
 const CrownArt := preload("res://scripts/crown_art.gd")
 
 ## Emitted once per click or drag with every change it made, as
@@ -116,6 +125,13 @@ var dim := false:
 
 ## The keyboard's cell; it shows once a key is used and hides on a click.
 var cursor := Vector2i.ZERO
+## The direction the gamepad holds, and when it next repeats.
+var _held := Vector2i.ZERO
+var _repeat_at := 0
+## Where the left stick leans, a cell's step on each axis.
+var _stick := Vector2i.ZERO
+## While A is held: the mark it set, which the cursor spreads as it moves.
+var _pad_stroke := -1
 var _cursor_shown := false
 var _stroke: Array = []
 var _painting := false
@@ -143,10 +159,14 @@ func _ready() -> void:
 	focus_mode = FOCUS_ALL if interactive else FOCUS_NONE
 	focus_entered.connect(queue_redraw)
 	focus_exited.connect(queue_redraw)
+	focus_exited.connect(_release_pad)
 	resized.connect(queue_redraw)
 
 
 func _process(_delta: float) -> void:
+	if _held != Vector2i.ZERO and Time.get_ticks_msec() >= _repeat_at:
+		_repeat_at += REPEAT_EVERY_MS
+		_pad_move(_held, false)
 	if not _pops.is_empty() or _celebrate_at >= 0 or _reveal_at >= 0 or not hint_targets.is_empty():
 		queue_redraw()
 
@@ -187,6 +207,9 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey:
 		_key_input(event)
+		return
+	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+		_pad_input(event)
 		return
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
@@ -305,7 +328,7 @@ func _key_input(key: InputEventKey) -> void:
 		queue_redraw()
 		return
 	if move != Vector2i.ZERO:
-		cursor = (cursor + move).clamp(Vector2i.ZERO, Vector2i(board.size - 1, board.size - 1))
+		cursor = _step(cursor, move, not key.is_echo())
 		queue_redraw()
 		if key.shift_pressed and board.get_mark(cursor) == Board.Mark.EMPTY:
 			mark = Board.Mark.CROSS
@@ -315,6 +338,131 @@ func _key_input(key: InputEventKey) -> void:
 	elif mark >= 0:
 		_change(cursor, mark)
 		_finish_stroke()
+
+
+func _pad_input(event: InputEvent) -> void:
+	if _painting or _erasing:
+		return
+	if event is InputEventJoypadMotion:
+		var motion := event as InputEventJoypadMotion
+		if motion.axis not in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y]:
+			return
+		var lean := 0
+		if absf(motion.axis_value) >= STICK_DEADZONE:
+			lean = int(signf(motion.axis_value))
+		var stick := _stick
+		if motion.axis == JOY_AXIS_LEFT_X:
+			stick.y = lean
+		else:
+			stick.x = lean
+		if stick == _stick:
+			return
+		_stick = stick
+		accept_event()
+		# The axis that just leaned moves the cursor; letting go stops the repeat.
+		var step := Vector2i(0, lean) if motion.axis == JOY_AXIS_LEFT_X else Vector2i(lean, 0)
+		_hold(step if lean != 0 else Vector2i.ZERO)
+		return
+	var button := event as InputEventJoypadButton
+	var directions := {"ui_up": Vector2i(-1, 0), "ui_down": Vector2i(1, 0), "ui_left": Vector2i(0, -1), "ui_right": Vector2i(0, 1)}
+	for action: String in directions:
+		if button.is_action(action):
+			accept_event()
+			if button.pressed:
+				_hold(directions[action])
+			elif _held == directions[action]:
+				_held = Vector2i.ZERO
+			return
+	if button.is_action(Gamepad.CROSS) and not button.pressed:
+		if _pad_stroke >= 0:
+			_pad_stroke = -1
+			accept_event()
+			if paint >= 0:
+				painted.emit()
+			else:
+				_finish_stroke()
+		return
+	if not button.pressed:
+		return
+	var mark := -1
+	if button.is_action(Gamepad.CROSS):
+		mark = Board.Mark.CROSS if board.get_mark(cursor) == Board.Mark.EMPTY else Board.Mark.EMPTY
+	elif button.is_action(Gamepad.CROWN):
+		mark = Board.Mark.EMPTY if board.get_mark(cursor) == Board.Mark.CROWN else Board.Mark.CROWN
+	elif button.is_action(Gamepad.CLEAR):
+		mark = Board.Mark.EMPTY
+	if mark < 0:
+		return
+	accept_event()
+	if not _show_cursor():
+		return
+	if paint >= 0:
+		# In the editor, A paints, and keeps painting while held.
+		if button.is_action(Gamepad.CROSS):
+			_pad_stroke = paint
+			_paint_cell(cursor)
+		return
+	_change(cursor, mark)
+	if button.is_action(Gamepad.CROSS):
+		_pad_stroke = mark
+	else:
+		_finish_stroke()
+
+
+## Lets go of whatever the gamepad held, as when the board loses focus mid-press.
+func _release_pad() -> void:
+	_held = Vector2i.ZERO
+	_stick = Vector2i.ZERO
+	if _pad_stroke >= 0:
+		_pad_stroke = -1
+		if paint >= 0:
+			painted.emit()
+		else:
+			_finish_stroke()
+
+
+## Starts moving the cursor in `direction`, repeating while it's held.
+func _hold(direction: Vector2i) -> void:
+	_held = direction
+	if direction == Vector2i.ZERO:
+		return
+	_repeat_at = Time.get_ticks_msec() + REPEAT_DELAY_MS
+	if _show_cursor():
+		_pad_move(direction)
+
+
+## Moves the cursor, spreading the held A button's mark onto the cell it reaches.
+## Only a fresh press, not a held one repeating, wraps around the sides.
+func _pad_move(direction: Vector2i, wrap := true) -> void:
+	cursor = _step(cursor, direction, wrap)
+	queue_redraw()
+	if _pad_stroke < 0:
+		return
+	if paint >= 0:
+		_paint_cell(cursor)
+	elif _pad_stroke == Board.Mark.CROSS and board.get_mark(cursor) == Board.Mark.EMPTY:
+		_change(cursor, Board.Mark.CROSS)
+	elif _pad_stroke == Board.Mark.EMPTY and board.is_cross(cursor):
+		_change(cursor, Board.Mark.EMPTY)
+
+
+## The cell one step from `from`. Stepping off an edge comes back in on the
+## opposite side when `wrap`; otherwise it stays put.
+func _step(from: Vector2i, direction: Vector2i, wrap: bool) -> Vector2i:
+	var to := from + direction
+	if wrap:
+		return Vector2i(posmod(to.x, board.size), posmod(to.y, board.size))
+	return to.clamp(Vector2i.ZERO, Vector2i(board.size - 1, board.size - 1))
+
+
+## Shows the cursor if it's hidden. Returns whether it was already showing, as
+## the first press only brings it up, without acting.
+func _show_cursor() -> bool:
+	if _cursor_shown:
+		return true
+	_cursor_shown = true
+	queue_redraw()
+	return false
 
 
 ## Whether the keyboard cursor is showing.
