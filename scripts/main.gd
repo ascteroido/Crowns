@@ -185,6 +185,7 @@ var _undo_button: Button
 var _redo_button: Button
 var _clear_button: Button
 var _hint_button: Button
+var _check_button: Button
 var _hint_label: Label
 var _win_overlay: Control
 var _win_panel: PanelContainer
@@ -485,9 +486,12 @@ func _build_ui() -> void:
 	_hint_button.custom_minimum_size.x = 120
 	_hint_button.tooltip_text = "H"
 	actions.add_child(_hint_button)
+	# TRANSLATORS: Checks the board for mistakes without saying where they are.
+	_check_button = _button(tr("Check"), _on_check)
+	actions.add_child(_check_button)
 	# The board keeps the keyboard; these buttons have shortcuts or need a click.
 	for control: Control in [_back_button, _size_picker, _difficulty_picker, _prev_button, _next_button,
-			_code_button, _undo_button, _redo_button, _clear_button, _hint_button]:
+			_code_button, _undo_button, _redo_button, _clear_button, _hint_button, _check_button]:
 		control.focus_mode = FOCUS_NONE
 
 	_hint_label = _label("", 16)
@@ -1165,6 +1169,7 @@ func _start(mode: Mode, date := "") -> void:
 	_code_button.visible = regular
 	_code_overlay.visible = false
 	_hint_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED]
+	_check_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED, Mode.TUTORIAL]
 	# The tutorial is untimed, and its Hint button turns the intro cards.
 	_clear_button.visible = not tutorial
 	_win_play_button.visible = false
@@ -1497,6 +1502,33 @@ func _on_hint() -> void:
 	_view.hint_focus = _hint.focus
 	_view.hint_targets = _hint.targets
 	_hint_button.text = tr("Apply hint")
+
+
+## Says whether the board has mistakes so far, and how many, but not where.
+## Like a hint, it marks the puzzle as hinted.
+func _on_check() -> void:
+	if not _view.interactive or not _check_button.visible:
+		return
+	_clear_hint()
+	_hinted = true
+	_save_board()
+	_sounds.play("hint")
+	var mistakes := _mistakes()
+	_hint_label.text = tr("No mistakes so far.") if mistakes == 0 \
+			else tr_n("%d mistake so far.", "%d mistakes so far.", mistakes) % mistakes
+
+
+## Crowns off the solution, and solution cells crossed out by hand. Auto crosses
+## on solution cells aren't counted: only a wrong crown puts them there.
+func _mistakes() -> int:
+	var count := 0
+	for cell in _board.crowns():
+		if _board.solution[cell.x] != cell.y:
+			count += 1
+	for row in _board.size:
+		if _board.get_mark(Vector2i(row, _board.solution[row])) == Board.Mark.CROSS:
+			count += 1
+	return count
 
 
 func _clear_hint() -> void:

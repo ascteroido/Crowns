@@ -18,6 +18,8 @@ func _init() -> void:
 	out_dir = OS.get_cmdline_user_args()[0]
 	itch = OS.get_cmdline_user_args().size() > 1 and OS.get_cmdline_user_args()[1] == "itch"
 	SilentWolf.offline = true
+	# Silent, as it runs with a window.
+	AudioServer.set_bus_mute(0, true)
 	_run.call_deferred()
 
 

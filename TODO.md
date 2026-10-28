@@ -37,7 +37,7 @@
 - [x] Redo (Ctrl+Shift+Z, and a button beside Undo)
 - [x] Keyboard play: arrow keys to move, keys to place × and crown
 - [ ] Pencil marks: a third mark (a dot) for "maybe a crown here"
-- [ ] Mistake check: say whether the board has an error so far, without a full hint (counts as a hint)
+- [x] Mistake check: say whether the board has an error so far, without a full hint (counts as a hint)
 - [ ] Pinch to zoom on large boards on small phones
 - [x] Win animation
 - [x] Optional sound effects

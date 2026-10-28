@@ -29,6 +29,8 @@ func _init() -> void:
 func _run() -> void:
 	# Never post to the real leaderboards from tests.
 	SilentWolf.offline = true
+	# Silent, as these also run with a window for screenshots.
+	AudioServer.set_bus_mute(0, true)
 	var main: Control = load("res://main.tscn").instantiate()
 	main.save_path = TEST_SAVE
 	# The tutorial's own test covers a first launch.
@@ -129,6 +131,12 @@ func _run() -> void:
 	_expect(_count_row(board, last, Board.Mark.CROSS) == board.size, "undo restores the erased crosses")
 	main._on_undo()
 	_expect(board.get_mark(Vector2i(last, 3)) == Board.Mark.EMPTY, "undo removes the dragged crosses")
+
+	# A swipe too fast for a motion event per cell still marks every cell it crosses.
+	await _drag_row(view, last, true)
+	_expect(_count_row(board, last, Board.Mark.CROSS) == board.size, "a fast swipe crosses every cell")
+	await _drag_row(view, last, true)
+	_expect(_count_row(board, last, Board.Mark.EMPTY) == board.size, "a fast swipe from a cross erases every cross")
 
 	# Auto crosses: a crown rules out its row, column, region and neighbours.
 	main._on_auto_cross_toggled(true)
@@ -407,6 +415,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_keyboard()
 	await _frames(2)
+	await _check_mistakes()
+	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
 	await _check_puzzle_code()
@@ -677,6 +687,47 @@ func _check_keyboard() -> void:
 	await _key(KEY_ENTER)
 	await _settle()
 	_expect(game._number == number + 1 and view.has_focus(), "Enter moves on, and the board has the keyboard again")
+	game.queue_free()
+
+
+func _check_mistakes() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	var board: Board = game._board
+	game._on_clear()
+	game._hinted = false
+	_expect(game._check_button.visible, "regular puzzles offer Check")
+	game._check_button.pressed.emit()
+	_expect(game._hint_label.text == "No mistakes so far." and game._hinted, "Check on a clean board, counted as a hint")
+
+	# A wrong crown and a crossed-out crown cell are two mistakes, without saying where.
+	var wrong := Vector2i(0, (board.solution[0] + 2) % board.size)
+	await _right_click(view, wrong)
+	var needed := Vector2i(board.size - 1, board.solution[board.size - 1])
+	await _slow_click(view, needed)
+	_expect(game._hint_label.text.is_empty(), "a move clears Check's message")
+	game._check_button.pressed.emit()
+	_expect(game._hint_label.text == "2 mistakes so far." and view.hint_targets.is_empty(),
+			"Check counts mistakes without pointing them out")
+	game._on_clear()
+
+	# The auto crosses a wrong crown brings don't count again.
+	game._on_auto_cross_toggled(true)
+	await _right_click(view, wrong)
+	game._check_button.pressed.emit()
+	_expect(game._hint_label.text == "1 mistake so far.", "a wrong crown's auto crosses aren't extra mistakes")
+	game._on_auto_cross_toggled(false)
+	game._on_clear()
+
+	for mode in [game.Mode.CHALLENGE, game.Mode.SPEED, game.Mode.TUTORIAL]:
+		game._start(mode)
+		await _settle()
+		_expect(not game._check_button.visible, "no Check in mode %d" % mode)
 	game.queue_free()
 
 
@@ -1471,10 +1522,12 @@ func _click(view: Control, cell: Vector2i, button := MOUSE_BUTTON_LEFT) -> void:
 	await _frames(1)
 
 
-func _drag_row(view: Control, row: int) -> void:
+## Drags along `row` from its first cell to its last, with a motion event on
+## every cell, or only one at the far end when `fast`.
+func _drag_row(view: Control, row: int, fast := false) -> void:
 	var cols: int = view.board.size
 	_mouse_button(view, _cell_center(view, Vector2i(row, 0)), true)
-	for col in range(1, cols):
+	for col in range(cols - 1 if fast else 1, cols):
 		var motion := InputEventMouseMotion.new()
 		motion.position = view.get_global_transform() * _cell_center(view, Vector2i(row, col))
 		motion.global_position = motion.position

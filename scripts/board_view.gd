@@ -81,8 +81,12 @@ var mistake := Vector2i(-1, -1):
 	set(value):
 		mistake = value
 		queue_redraw()
-## When false the board ignores input, e.g. after the puzzle is solved.
-var interactive := true
+## When false the board ignores input, e.g. after the puzzle is solved, and
+## can't take the keyboard (stray clicks on it would leave the win panel without it).
+var interactive := true:
+	set(value):
+		interactive = value
+		focus_mode = FOCUS_ALL if value else FOCUS_NONE
 ## Placing or removing a crown also adds or removes the auto crosses it implies.
 var auto_cross := false
 ## Gives each region its own texture so regions can be told apart without colour.
@@ -102,6 +106,8 @@ var _cursor_shown := false
 var _stroke: Array = []
 var _painting := false
 var _erasing := false
+## Where the drag was at its last event, so a fast swipe marks every cell between.
+var _drag_from := Vector2.ZERO
 ## Cross pressed to start a possible erase stroke; becomes a crown if the
 ## press is released without leaving it.
 var _press_cell := Vector2i(-1, -1)
@@ -120,7 +126,7 @@ var _reveal_at := -1
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
-	focus_mode = FOCUS_ALL
+	focus_mode = FOCUS_ALL if interactive else FOCUS_NONE
 	focus_entered.connect(queue_redraw)
 	focus_exited.connect(queue_redraw)
 	resized.connect(queue_redraw)
@@ -177,6 +183,7 @@ func _gui_input(event: InputEvent) -> void:
 				_cursor_shown = false
 				queue_redraw()
 		if button.pressed and cell.x >= 0:
+			_drag_from = button.position
 			if button.button_index == MOUSE_BUTTON_LEFT:
 				var old := board.get_mark(cell)
 				var now := Time.get_ticks_msec()
@@ -198,21 +205,34 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 		elif not button.pressed:
 			_finish_stroke()
-	elif event is InputEventMouseMotion and _painting:
-		var cell := _cell_at((event as InputEventMouseMotion).position)
-		if cell != _tap_cell:
-			_tap_cell = Vector2i(-1, -1)
-		if cell.x >= 0 and board.get_mark(cell) == Board.Mark.EMPTY:
-			_change(cell, Board.Mark.CROSS)
+	elif event is InputEventMouseMotion and (_painting or _erasing):
+		var to := (event as InputEventMouseMotion).position
+		for cell in _cells_along(_drag_from, to):
+			if _painting:
+				if cell != _tap_cell:
+					_tap_cell = Vector2i(-1, -1)
+				if cell.x >= 0 and board.get_mark(cell) == Board.Mark.EMPTY:
+					_change(cell, Board.Mark.CROSS)
+			elif cell.x >= 0 and cell != _press_cell:
+				_tap_cell = Vector2i(-1, -1)
+				_change(_press_cell, Board.Mark.EMPTY)
+				if board.is_cross(cell):
+					_change(cell, Board.Mark.EMPTY)
+		_drag_from = to
 		accept_event()
-	elif event is InputEventMouseMotion and _erasing:
-		var cell := _cell_at((event as InputEventMouseMotion).position)
-		if cell.x >= 0 and cell != _press_cell:
-			_tap_cell = Vector2i(-1, -1)
-			_change(_press_cell, Board.Mark.EMPTY)
-			if board.is_cross(cell):
-				_change(cell, Board.Mark.EMPTY)
-		accept_event()
+
+
+## The cells a drag from `from` to `to` passes through, in order, as
+## _cell_at() gives them. Motion events can be far apart on a fast swipe, so
+## the path between is checked every third of a cell.
+func _cells_along(from: Vector2, to: Vector2) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var steps := maxi(1, ceili(from.distance_to(to) / (_cell_size() / 3.0)))
+	for step in range(1, steps + 1):
+		var cell := _cell_at(from.lerp(to, float(step) / steps))
+		if cells.is_empty() or cells[-1] != cell:
+			cells.append(cell)
+	return cells
 
 
 func _key_input(key: InputEventKey) -> void:
