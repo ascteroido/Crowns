@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dltu8lkiwt2w2"
-path="res://.godot/imported/4_climb.png-802e28dc5781c7bf70cbd08afc0541d0.ctex"
+uid="uid://r128rwvmmhp1"
+path="res://.godot/imported/4_big_board.png-f263e095fe2cc2153bdfb6c9cbb643b5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://store/screenshots/4_climb.png"
-dest_files=["res://.godot/imported/4_climb.png-802e28dc5781c7bf70cbd08afc0541d0.ctex"]
+source_file="res://store/itch_screenshots/4_big_board.png"
+dest_files=["res://.godot/imported/4_big_board.png-f263e095fe2cc2153bdfb6c9cbb643b5.ctex"]
 
 [params]
 

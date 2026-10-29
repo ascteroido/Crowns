@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://csnuhk1bnrtjy"
-path="res://.godot/imported/8_leaderboards.png-2772a195d5c5c391ae3efa060ac98aed.ctex"
+uid="uid://2eguacfgal54"
+path="res://.godot/imported/8_editor.png-4df6d9d71ff85b6d3cefa5b6cfc035e8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://store/itch_screenshots/8_leaderboards.png"
-dest_files=["res://.godot/imported/8_leaderboards.png-2772a195d5c5c391ae3efa060ac98aed.ctex"]
+source_file="res://store/itch_screenshots/8_editor.png"
+dest_files=["res://.godot/imported/8_editor.png-4df6d9d71ff85b6d3cefa5b6cfc035e8.ctex"]
 
 [params]
 
