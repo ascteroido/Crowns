@@ -15,10 +15,20 @@ Achievements**, in this order, then put each one's ID next to its key in
 | `streak_30` | Monthly Monarch | Solve the daily puzzle 30 days in a row. | `streak_30.png` | 100 | Standard |
 | `climb_10` | Base Camp | Clear 10 puzzles in one run of The Climb. | `climb_10.png` | 20 | Standard |
 | `climb_25` | Summit | Clear 25 puzzles in one run of The Climb. | `climb_25.png` | 75 | Standard |
-| `quick` | Quick Thinker | Solve a daily puzzle in under a minute without hints. | `quick.png` | 30 | Standard |
+| `quick` | Quick Thinker | Solve a daily puzzle in under a minute without hints. | `quick.png` | 10 | Standard |
 | `century` | Hundred Crowns | Solve 100 puzzles. | `century.png` | 50 | Standard |
+| `tutorial` | Royal Training | Finish the tutorial. | `tutorial.png` | 5 | Standard |
+| `custom` | Puzzle Maker | Solve a puzzle made in the editor or shared as a code. | `custom.png` | 10 | Standard |
+| `speed_run` | Against the Clock | Finish a speed run. | `speed_run.png` | 15 | Standard |
+| `weekly_10` | Ten Weeks | Solve 10 weekly challenges. | `weekly_10.png` | 30 | Standard |
+| `hard_plus` | Beyond Hard | Solve a Hard+ puzzle without using a hint. | `hard_plus.png` | 40 | Standard |
+| `giant` | Giant Board | Solve a 14×14 puzzle. | `giant.png` | 40 | Standard |
+| `every_size` | Every Size | Solve a puzzle of every size from 5×5 to 14×14. | `every_size.png` | 50 | Standard |
+| `perfect_month` | Perfect Month | Solve every daily puzzle in a calendar month. | `perfect_month.png` | 50 | Standard |
+| `streak_100` | Unbroken Reign | Solve the daily puzzle 100 days in a row. | `streak_100.png` | 100 | Standard |
+| `thousand` | Thousand Crowns | Solve 1,000 puzzles. | `thousand.png` | 100 | Standard |
 
-All start **Revealed**. The points add up to 380 of the 1,000 Play Games allows,
+All start **Revealed**. The points add up to 800 of the 1,000 Play Games allows,
 leaving room for more later.
 
 Names and descriptions can be translated in the Play Console, under each achievement's

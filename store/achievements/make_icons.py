@@ -84,6 +84,27 @@ GLYPHS = {
     "quick": gold('<circle cx="256" cy="372" r="72"/>') + line('<polyline points="256,326 256,372 290,394"/>', 12)
     + gold('<rect x="236" y="282" width="40" height="22" rx="6"/>'),
     "century": text("100", 140),
+    "tutorial": gold('<polygon points="256,300 376,346 256,392 136,346"/>')
+    + line('<path d="M186,366 V410 Q256,448 326,410 V366"/>', 14)
+    + line('<polyline points="356,354 356,420"/>', 8),
+    "custom": gold('<polygon points="184,436 200,380 330,250 366,286 236,416"/>')
+    + [f'<polygon points="184,436 200,380 236,416" fill="{GOLD_DARK}"/>'],
+    "speed_run": gold('<polygon points="282,282 182,384 246,384 222,458 330,350 266,350"/>'),
+    "weekly_10": gold('<rect x="166" y="300" width="180" height="140" rx="18"/>')
+    + [f'<rect x="166" y="300" width="180" height="40" rx="18" fill="{GOLD_DARK}"/>']
+    + [f'<text x="256" y="428" font-family="Open Sans" font-weight="800" font-size="80" text-anchor="middle" fill="{INK}">10</text>'],
+    "hard_plus": gold(star(172, 372, 56)) + gold(star(272, 372, 56))
+    + line('<path d="M358,340 V404 M326,372 H390"/>', 14),
+    "giant": text("14×14", 100, 410),
+    "every_size": [part for w in [176, 136, 96, 56] for part in
+                   gold(f'<rect x="{256 - w / 2}" y="{440 - w}" width="{w}" height="{w}" rx="8"/>')],
+    "perfect_month": gold('<path d="M196,296 H316 V330 Q316,400 256,410 Q196,400 196,330 Z"/>')
+    + line('<path d="M196,314 Q156,314 166,350 Q174,372 202,374 M316,314 Q356,314 346,350 Q338,372 310,374"/>', 10)
+    + gold('<rect x="244" y="404" width="24" height="26"/>') + gold('<rect x="206" y="426" width="100" height="22" rx="6"/>'),
+    "streak_100": gold('<path d="M256,446 C186,446 160,396 178,350 C190,320 214,306 218,276 C246,298 250,320 246,342 '
+                       'C262,326 268,306 266,288 C320,320 350,370 334,404 C322,432 292,446 256,446 Z"/>')
+    + [f'<text x="256" y="428" font-family="Open Sans" font-weight="800" font-size="62" text-anchor="middle" fill="{INK}">100</text>'],
+    "thousand": text("1000", 120, 415),
 }
 
 

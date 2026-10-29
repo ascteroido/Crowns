@@ -33,6 +33,16 @@ const ACHIEVEMENTS := {
 	"climb_25": "CgkIs_CWu6AOEAIQDg",
 	"quick": "CgkIs_CWu6AOEAIQDw",
 	"century": "CgkIs_CWu6AOEAIQEA",
+	"tutorial": "CgkIs_CWu6AOEAIQEQ",
+	"custom": "CgkIs_CWu6AOEAIQEg",
+	"speed_run": "CgkIs_CWu6AOEAIQEw",
+	"weekly_10": "CgkIs_CWu6AOEAIQFA",
+	"hard_plus": "CgkIs_CWu6AOEAIQFQ",
+	"giant": "CgkIs_CWu6AOEAIQFg",
+	"every_size": "CgkIs_CWu6AOEAIQFw",
+	"perfect_month": "CgkIs_CWu6AOEAIQGA",
+	"streak_100": "CgkIs_CWu6AOEAIQGQ",
+	"thousand": "CgkIs_CWu6AOEAIQGg",
 }
 ## The saved game's name in the player's cloud storage.
 const SAVE_NAME := "progress"

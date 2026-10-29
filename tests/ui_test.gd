@@ -1704,6 +1704,24 @@ func _check_achievements() -> void:
 	for i in 99:
 		progress.set_value("solved", "puzzle_%d" % i, true)
 	_expect(game._earned_achievements().century, "100 solves earn Hundred Crowns")
+	_expect(not earned.tutorial and not earned.custom and not earned.hard_plus and not earned.every_size
+			and not earned.perfect_month and not earned.thousand, "the newer achievements start locked")
+	progress.set_value("settings", "tutorial_done", true)
+	progress.set_value("solved", "custom_ABC", true)
+	progress.set_value("best", "12x12_hard+_3", 900.0)
+	progress.set_value("stats", "speed_finished", 1)
+	progress.set_value("stats", "weeklies_solved", 10)
+	progress.set_value("stats", "longest_streak", 100)
+	for size in range(5, 15):
+		progress.set_value("stats", "solved_%d" % size, 1)
+	earned = game._earned_achievements()
+	_expect(earned.tutorial and earned.custom and earned.hard_plus and earned.speed_run and earned.weekly_10
+			and earned.giant and earned.every_size and earned.streak_100, "the newer achievements follow the saved progress")
+	progress.set_value("stats", "solved_9", 0)
+	_expect(not game._earned_achievements().every_size, "Every Size needs every size")
+	for i in 900:
+		progress.set_value("solved", "more_%d" % i, true)
+	_expect(game._earned_achievements().thousand, "1,000 solves earn Thousand Crowns")
 	game.queue_free()
 
 

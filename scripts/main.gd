@@ -2090,6 +2090,7 @@ func _show_tutorial_step(text: String, focus: PackedInt32Array, targets: PackedI
 func _set_tutorial_done() -> void:
 	_progress.set_value("settings", "tutorial_done", true)
 	_progress.save(save_path)
+	_check_achievements()
 
 
 func _make_hint(message: String, targets: Array, changes: Array) -> Dictionary:
@@ -2283,6 +2284,7 @@ func _custom_solved() -> void:
 		_progress.set_value("best", key, _elapsed)
 	_progress.set_value("solved", key, true)
 	_progress.save(save_path)
+	_on_progress_made()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
 	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
 	_update_best()
@@ -2410,11 +2412,19 @@ func _earned_achievements() -> Dictionary:
 	var climb_best: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
 	var longest: int = _progress.get_value(STATS, "longest_streak", 0)
 	var hard := false
+	var hard_plus := false
 	var quick := false
 	for key in bests:
 		# The weekly challenge is always Hard.
 		hard = hard or key.contains("_hard_") or key.contains("_hard+_") or key.begins_with("weekly_")
+		hard_plus = hard_plus or key.contains("_hard+_")
 		quick = quick or (key.begins_with("daily_") and _progress.get_value("best", key) < 60.0)
+	var custom := false
+	for key in (_progress.get_section_keys("solved") if _progress.has_section("solved") else PackedStringArray()):
+		custom = custom or key.begins_with("custom_")
+	var every_size := true
+	for size in range(SIZES[0], 15):
+		every_size = every_size and _progress.get_value(STATS, "solved_%d" % size, 0) > 0
 	var solved := CloudSave.solved_count(_progress)
 	return {
 		"first_crown": solved > 0,
@@ -2429,6 +2439,16 @@ func _earned_achievements() -> Dictionary:
 		"climb_25": climb_best >= 25,
 		"quick": quick,
 		"century": solved >= 100,
+		"tutorial": _progress.get_value("settings", "tutorial_done", false),
+		"custom": custom,
+		"speed_run": _progress.get_value(STATS, "speed_finished", 0) > 0,
+		"weekly_10": _progress.get_value(STATS, "weeklies_solved", 0) >= 10,
+		"hard_plus": hard_plus,
+		"giant": _progress.get_value(STATS, "solved_14", 0) > 0,
+		"every_size": every_size,
+		"perfect_month": _perfect_months() > 0,
+		"streak_100": longest >= 100,
+		"thousand": solved >= 1000,
 	}
 
 
