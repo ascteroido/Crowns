@@ -512,6 +512,10 @@ func _run() -> void:
 	await _frames(2)
 	await _check_reduce_motion()
 	await _frames(2)
+	await _check_text_size()
+	await _frames(2)
+	await _check_pinch_zoom()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -552,6 +556,26 @@ func _check_gamepad() -> void:
 	var ring := game._menu.continue_button.get_theme_stylebox("focus") as StyleBoxFlat
 	_expect(ring != null and not ring.draw_center and ring.border_width_top > 0,
 			"the focused button wears a ring")
+	var ring_shown := func() -> bool: return game._menu.continue_button.get_theme_stylebox("focus") is StyleBoxFlat
+	var click := func() -> void:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.position = Vector2(2, 2)
+		for pressed in [true, false]:
+			event.pressed = pressed
+			Input.parse_input_event(event.duplicate())
+		# Controls see theme changes a couple of frames later.
+		await _frames(3)
+	await click.call()
+	_expect(not ring_shown.call(), "clicking or tapping hides the ring")
+	await _pad_press(JOY_BUTTON_LEFT_STICK)
+	await _frames(3)
+	_expect(ring_shown.call(), "a gamepad shows the ring again")
+	await click.call()
+	await _key(KEY_SHIFT)
+	await _frames(3)
+	_expect(ring_shown.call(), "so does the keyboard")
+	game._menu.continue_button.grab_focus()
 	await _pad_press(JOY_BUTTON_A)
 	await _settle()
 	_expect(game._game.visible, "A presses the focused button")
@@ -1857,6 +1881,125 @@ func _check_reduce_motion() -> void:
 	_expect(not view.reduce_motion, "reduce motion turns off again")
 	game.queue_free()
 	await _frames(2)
+
+
+func _check_text_size() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var picker: OptionButton = game._settings.text_size_picker
+	_expect(picker.get_theme_font_size("font_size") == 20 and game._theme.default_font_size == 16,
+			"text starts at its normal size")
+	game._menu.settings_button.pressed.emit()
+	picker.select(TextSize.NAMES.find("larger"))
+	picker.item_selected.emit(picker.selected)
+	await _frames(2)
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(picker.get_theme_font_size("font_size") == 26 and game._theme.default_font_size == 21
+			and saved.get_value("settings", "text_size", "") == "larger", "larger text resizes what's on screen and is saved")
+	game.queue_free()
+	await _frames(2)
+
+	game = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	picker = game._settings.text_size_picker
+	_expect(picker.selected == TextSize.NAMES.find("larger") and picker.get_theme_font_size("font_size") == 26,
+			"larger text stays after a restart")
+	game._menu.stats_button.pressed.emit()
+	await _frames(2)
+	var title: Label = game._stats.find_children("*", "Label", true, false)[0]
+	_expect(title.get_theme_font_size("font_size") == TextSize.scaled(title.get_meta(&"base_font_size"))
+			and TextSize.scaled(20) == 26, "text made later is larger too")
+	picker.select(TextSize.NAMES.find("normal"))
+	picker.item_selected.emit(picker.selected)
+	_expect(picker.get_theme_font_size("font_size") == 20 and game._theme.default_font_size == 16,
+			"text goes back to normal")
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_pinch_zoom() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(not game._view.zoomable and not game._editor.view.zoomable, "pinch to zoom starts off")
+	game._settings.pinch_zoom_toggle.button_pressed = true
+	_expect(game._view.zoomable and game._editor.view.zoomable, "the setting turns pinch to zoom on")
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	view._reveal_at = -1
+	game._on_clear()
+	await _frames(1)
+	var size: int = view.board.size
+	var cell_px: float = view._cell_size()
+	var first := _cell_center(view, Vector2i(2, 2))
+	var second := _cell_center(view, Vector2i(3, 3))
+	_finger(view, 0, first, true)
+	await _frames(1)
+	_expect(view.board.get_mark(Vector2i(2, 2)) == Board.Mark.CROSS, "one finger still crosses out")
+	_finger(view, 1, second, true)
+	await _frames(1)
+	_expect(view._pinching and view.board.get_mark(Vector2i(2, 2)) == Board.Mark.EMPTY,
+			"a second finger starts a pinch and takes back the first finger's cross")
+	for step in range(1, 6):
+		_finger(view, 1, second + Vector2(step, step) * cell_px * 0.4, true, true)
+		await _frames(1)
+	_expect(view._zoom > 1.5 and view._cell_size() > cell_px * 1.5 and view.clip_contents, "spreading the fingers zooms in")
+	_finger(view, 0, first, false)
+	_finger(view, 1, second, false)
+	await _frames(2)
+	_expect(not view._pinching and view.board.marks.count(Board.Mark.EMPTY) == size * size,
+			"the pinch leaves no marks behind")
+	var middle: Vector2i = view._cell_at(view._base_origin() + Vector2.ONE * view._base_cell_size() * size / 2.0)
+	await _slow_click(view, middle)
+	_expect(view.board.get_mark(middle) == Board.Mark.CROSS
+			and view.board.marks.count(Board.Mark.CROSS) == 1, "taps land on the zoomed cell")
+	var base: Vector2 = view._base_origin()
+	var side: float = view._base_cell_size() * size
+	view.grab_focus()
+	await _key(KEY_RIGHT)
+	for i in size:
+		await _key(KEY_DOWN)
+		await _key(KEY_RIGHT)
+	var corner: Vector2 = view._origin() + Vector2(view.cursor.y + 1, view.cursor.x + 1) * view._cell_size()
+	_expect(corner.x <= base.x + side + 0.5 and corner.y <= base.y + side + 0.5, "the keyboard cursor stays in view")
+	game._on_clear()
+	view.board = view.board
+	_expect(view._zoom == 1.0 and not view.clip_contents, "a new board starts unzoomed")
+
+	game._settings.pinch_zoom_toggle.button_pressed = false
+	_finger(view, 0, first, true)
+	_finger(view, 1, second, true)
+	await _frames(1)
+	_expect(not view._pinching and not view.zoomable, "with pinch to zoom off, two fingers don't zoom")
+	_finger(view, 0, first, false)
+	_finger(view, 1, second, false)
+	await _frames(2)
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "pinch_zoom", true) == false, "turning pinch to zoom off is saved")
+	game._on_clear()
+	game.queue_free()
+	await _frames(2)
+
+
+## Presses, moves or lifts finger `index` at `pos` in `view`.
+func _finger(view: Control, index: int, pos: Vector2, down: bool, drag := false) -> void:
+	var event: InputEvent
+	if drag:
+		event = InputEventScreenDrag.new()
+	else:
+		event = InputEventScreenTouch.new()
+		event.pressed = down
+	event.index = index
+	event.position = _to_window(view, pos)
+	Input.parse_input_event(event)
 
 
 func _check_patterns() -> void:

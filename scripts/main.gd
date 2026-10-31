@@ -219,6 +219,11 @@ var _side: VBoxContainer
 ## The game screen's parts in their order down the column.
 var _game_parts: Array[Control] = []
 var _wide := false
+## Whether the player last used the keyboard or a gamepad rather than the mouse
+## or touch; the selection ring only shows while they do.
+var _navigating := false
+## The selection rings for buttons and switches, kept while they're hidden.
+var _focus_rings := {}
 ## The gamepad's controls under the board, shown while one is plugged in.
 var _pad_help: Label
 var _view: BoardView
@@ -272,6 +277,8 @@ func _ready() -> void:
 	_place_board()
 	_settings.show_theme(_theme_name(), _custom_color("background"), _custom_color("button"))
 	_apply_theme()
+	_settings.show_text_size(_text_size())
+	_apply_text_size()
 	_settings.show_app_icon(_app_icon.available(), _progress.get_value("settings", "app_icon", "theme"))
 	# Catches up if the icon and the settings differ, e.g. after an update reset it.
 	_update_app_icon()
@@ -281,6 +288,8 @@ func _ready() -> void:
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
 	_set_reduce_motion(_progress.get_value("settings", "reduce_motion", false))
 	_settings.reduce_motion_toggle.set_pressed_no_signal(_view.reduce_motion)
+	_set_pinch_zoom(_progress.get_value("settings", "pinch_zoom", false))
+	_settings.pinch_zoom_toggle.set_pressed_no_signal(_view.zoomable)
 	_sounds.enabled = _progress.get_value("settings", "sound", true)
 	_settings.sound_toggle.set_pressed_no_signal(_sounds.enabled)
 	_sounds.volume = _progress.get_value("settings", "volume", 1.0)
@@ -334,6 +343,24 @@ func _process(delta: float) -> void:
 	if _running and _focused:
 		_elapsed += delta
 		_timer_label.text = _format_time(_elapsed)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton or event is InputEventScreenTouch:
+		if _navigating:
+			_show_focus_rings(false)
+	elif event is InputEventKey or event is InputEventJoypadButton \
+			or event is InputEventJoypadMotion and absf((event as InputEventJoypadMotion).axis_value) >= 0.5:
+		if not _navigating:
+			_show_focus_rings(true)
+
+
+## Shows the selection ring on buttons and switches, or hides it, as when the
+## player clicks or taps and has no need of it.
+func _show_focus_rings(shown: bool) -> void:
+	_navigating = shown
+	for type: String in _focus_rings:
+		_theme.set_stylebox("focus", type, _focus_rings[type] if shown else StyleBoxEmpty.new())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -403,11 +430,13 @@ func _build_ui() -> void:
 	_settings.set_anchors_preset(PRESET_FULL_RECT)
 	_settings.visible = false
 	_settings.theme_chosen.connect(_on_theme_chosen)
+	_settings.text_size_chosen.connect(_on_text_size_chosen)
 	_settings.custom_colors_changed.connect(_on_custom_colors_changed)
 	_settings.app_icon_chosen.connect(_on_app_icon_chosen)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
 	_settings.reduce_motion_toggled.connect(_on_reduce_motion_toggled)
+	_settings.pinch_zoom_toggled.connect(_on_pinch_zoom_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
 	_settings.volume_changed.connect(_on_volume_changed)
 	_settings.vibration_toggled.connect(_on_vibration_toggled)
@@ -832,7 +861,7 @@ func _build_code_overlay() -> void:
 	_code_entry.placeholder_text = tr("e.g. %s") % PuzzleCode.encode(8, 1, 142)
 	_code_entry.size_flags_horizontal = SIZE_EXPAND_FILL
 	_code_entry.custom_minimum_size.y = 40
-	_code_entry.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(_code_entry, 20)
 	_code_entry.text_submitted.connect(func(_text: String) -> void: _enter_code())
 	_code_entry.text_changed.connect(func(_text: String) -> void: _code_error.visible = false)
 	row.add_child(_code_entry)
@@ -854,7 +883,7 @@ func _show_code() -> void:
 	var custom := _mode == Mode.CUSTOM
 	_code_label.text = _custom.code if custom else PuzzleCode.encode(_size, _difficulty, _number)
 	# Custom codes hold the whole layout, so they're long.
-	_code_label.add_theme_font_size_override("font_size", 18 if custom else 40)
+	TextSize.set_font(_code_label, 18 if custom else 40)
 	_code_copy_button.text = tr("Copy code")
 	_code_entry.text = ""
 	_code_error.visible = false
@@ -985,7 +1014,7 @@ func _play_changes(changes: Array) -> void:
 func _label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
+	TextSize.set_font(label, font_size)
 	return label
 
 
@@ -1268,6 +1297,21 @@ func _on_theme_chosen(theme_name: String) -> void:
 	_update_app_icon()
 
 
+func _on_text_size_chosen(text_size: String) -> void:
+	_progress.set_value("settings", "text_size", text_size)
+	_progress.save(save_path)
+	_apply_text_size()
+
+
+func _apply_text_size() -> void:
+	TextSize.apply(_text_size(), self, _theme)
+	_menu.refit()
+
+
+func _text_size() -> String:
+	return _progress.get_value("settings", "text_size", "normal")
+
+
 func _on_app_icon_chosen(icon: String) -> void:
 	_progress.set_value("settings", "app_icon", icon)
 	_progress.save(save_path)
@@ -1417,6 +1461,17 @@ func _set_reduce_motion(enabled: bool) -> void:
 		view.reduce_motion = enabled
 
 
+func _on_pinch_zoom_toggled(enabled: bool) -> void:
+	_set_pinch_zoom(enabled)
+	_progress.set_value("settings", "pinch_zoom", enabled)
+	_progress.save(save_path)
+
+
+func _set_pinch_zoom(enabled: bool) -> void:
+	for view: BoardView in [_view, _editor.view]:
+		view.zoomable = enabled
+
+
 ## Saves the choice, then rebuilds every screen in the new language, back on Settings.
 func _on_language_chosen(locale: String) -> void:
 	_progress.set_value("settings", "language", locale)
@@ -1461,20 +1516,21 @@ func _apply_theme() -> void:
 		_theme.set_stylebox(state + "_mirrored", "OptionButton", box)
 		# Keep the toggle switch borderless; it would otherwise inherit the button fill.
 		_theme.set_stylebox(state, "CheckButton", StyleBoxEmpty.new())
-	# A ring around whatever a gamepad or the keyboard has selected. Godot leaves it
-	# off for buttons clicked or tapped, so it only shows while navigating.
+	# A ring around whatever a gamepad or the keyboard has selected, shown only
+	# while they're in use (_show_focus_rings).
 	var ring := StyleBoxFlat.new()
 	ring.draw_center = false
 	ring.border_color = GOLD if colors.dark else colors.text
 	ring.set_border_width_all(3)
 	ring.set_corner_radius_all(13)
 	ring.set_expand_margin_all(4)
-	_theme.set_stylebox("focus", "Button", ring)
+	_focus_rings["Button"] = ring
 	# Switch rows have no padding of their own; keep the ring off their text.
 	var switch_ring := ring.duplicate()
 	switch_ring.expand_margin_left = 10
 	switch_ring.expand_margin_right = 10
-	_theme.set_stylebox("focus", "CheckButton", switch_ring)
+	_focus_rings["CheckButton"] = switch_ring
+	_show_focus_rings(_navigating)
 	# Switches drawn to match, so they read clearly on or off against either background.
 	var off: Color = colors.switch_off
 	for mirrored in [false, true]:

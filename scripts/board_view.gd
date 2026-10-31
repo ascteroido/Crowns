@@ -12,6 +12,9 @@ extends Control
 ## gamepad.gd) moves the cursor with the D-pad or left stick, which repeat when
 ## held; A crosses out or clears, and held while moving keeps doing so, like a
 ## drag; Y toggles a crown and X empties the cell.
+##
+## When zoomable, two fingers pinch the board bigger or smaller and move it
+## around; whatever the first finger had marked is taken back.
 
 const Board := preload("res://scripts/board.gd")
 const Gamepad := preload("res://scripts/gamepad.gd")
@@ -66,6 +69,8 @@ const HOP_MS := 420.0
 ## one before, each tile taking REVEAL_MS.
 const REVEAL_STEP_MS := 36.0
 const REVEAL_MS := 380.0
+## The most a pinch can enlarge the board.
+const MAX_ZOOM := 3.0
 
 var board: Board:
 	set(value):
@@ -80,6 +85,7 @@ var board: Board:
 		hint_targets = PackedInt32Array()
 		if board and (cursor.x >= board.size or cursor.y >= board.size):
 			cursor = Vector2i(board.size / 2, board.size / 2)
+		reset_zoom()
 		queue_redraw()
 ## Cell indices a hint is about; every other cell is dimmed while it's set.
 var hint_focus := PackedInt32Array():
@@ -154,6 +160,27 @@ var _celebrate_at := -1
 var _reveal_at := -1
 ## Skips the reveal, pop-ins and win wave, and holds the hint ring still.
 var reduce_motion := false
+## Whether two fingers can pinch to zoom and move the board.
+var zoomable := false:
+	set(value):
+		zoomable = value
+		if not value:
+			reset_zoom()
+var _zoom := 1.0
+## Where the zoomed board's corner sits from the unzoomed board's, in pixels;
+## never past zero, so the board always fills its unzoomed square.
+var _offset := Vector2.ZERO
+## Finger index -> position, for fingers that started on the board.
+var _touches := {}
+## From a second finger touching until every finger lifts; the first finger's
+## mouse events are ignored meanwhile.
+var _pinching := false
+## The two fingers' spread and midpoint at the last move.
+var _pinch_spread := 0.0
+var _pinch_mid := Vector2.ZERO
+## Region changes painted by the current press, as [index, old region], so a
+## pinch can take them back.
+var _painted: Array = []
 
 
 func _ready() -> void:
@@ -209,8 +236,98 @@ func region_name(region: int) -> String:
 	return names[region % names.size()]
 
 
+## Back to the whole board.
+func reset_zoom() -> void:
+	_zoom = 1.0
+	_offset = Vector2.ZERO
+	clip_contents = false
+	queue_redraw()
+
+
+func _input(event: InputEvent) -> void:
+	if not (zoomable and board and interactive and is_visible_in_tree()):
+		return
+	if event is InputEventScreenTouch:
+		var touch := make_input_local(event) as InputEventScreenTouch
+		if not touch.pressed:
+			_touches.erase(touch.index)
+			if _touches.is_empty():
+				_pinching = false
+			elif _pinching:
+				_measure_pinch()
+		elif _touches.size() == 1 or Rect2(Vector2.ZERO, size).has_point(touch.position):
+			_touches[touch.index] = touch.position
+			if _touches.size() == 2:
+				_start_pinch()
+	elif event is InputEventScreenDrag and _touches.has((event as InputEventScreenDrag).index):
+		var drag := make_input_local(event) as InputEventScreenDrag
+		_touches[drag.index] = drag.position
+		if _pinching and _touches.size() >= 2:
+			_move_pinch()
+
+
+## A second finger is down: the first finger's press was the start of a pinch.
+func _start_pinch() -> void:
+	_pinching = true
+	for index in range(_stroke.size() - 1, -1, -1):
+		board.set_mark(_stroke[index][0], _stroke[index][1])
+	for index in range(_painted.size() - 1, -1, -1):
+		board.regions[_painted[index][0]] = _painted[index][1]
+	_stroke = []
+	_painted = []
+	_painting = false
+	_erasing = false
+	_press_cell = Vector2i(-1, -1)
+	_tap_cell = Vector2i(-1, -1)
+	_measure_pinch()
+	queue_redraw()
+
+
+func _measure_pinch() -> void:
+	var fingers: Array = _touches.values()
+	if fingers.size() < 2:
+		return
+	_pinch_spread = maxf(1.0, (fingers[0] as Vector2).distance_to(fingers[1]))
+	_pinch_mid = ((fingers[0] as Vector2) + fingers[1]) / 2.0
+
+
+## Zooms by how much the fingers spread, about their midpoint, and moves the
+## board with the midpoint.
+func _move_pinch() -> void:
+	var fingers: Array = _touches.values()
+	var spread := maxf(1.0, (fingers[0] as Vector2).distance_to(fingers[1]))
+	var mid: Vector2 = ((fingers[0] as Vector2) + fingers[1]) / 2.0
+	var under := (_pinch_mid - _origin()) / _cell_size()
+	_zoom = clampf(_zoom * spread / _pinch_spread, 1.0, MAX_ZOOM)
+	_offset = _clamp_offset(mid - under * _cell_size() - _base_origin())
+	_pinch_spread = spread
+	_pinch_mid = mid
+	clip_contents = _zoom > 1.0
+	queue_redraw()
+
+
+## Moves a zoomed board so `cell` is on screen, for the keyboard and gamepad.
+func _keep_in_view(cell: Vector2i) -> void:
+	if _zoom <= 1.0:
+		return
+	var cs := _cell_size()
+	var base := _base_origin()
+	var side := _base_cell_size() * board.size
+	var rect := Rect2(_origin() + Vector2(cell.y, cell.x) * cs, Vector2(cs, cs))
+	var shift := Vector2.ZERO
+	for axis in 2:
+		if rect.position[axis] < base[axis]:
+			shift[axis] = base[axis] - rect.position[axis]
+		elif rect.end[axis] > base[axis] + side:
+			shift[axis] = base[axis] + side - rect.end[axis]
+	_offset = _clamp_offset(_offset + shift)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if board == null or not interactive:
+		return
+	if _pinching and event is InputEventMouse:
+		accept_event()
 		return
 	if event is InputEventKey:
 		_key_input(event)
@@ -276,6 +393,7 @@ func _gui_input(event: InputEvent) -> void:
 
 func _paint_input(pressed: bool, cell: Vector2i, pos: Vector2) -> void:
 	if pressed and cell.x >= 0:
+		_painted = []
 		_painting = true
 		_drag_from = pos
 		_paint_cell(cell)
@@ -287,6 +405,7 @@ func _paint_input(pressed: bool, cell: Vector2i, pos: Vector2) -> void:
 
 func _paint_cell(cell: Vector2i) -> void:
 	if cell.x >= 0 and board.region_at(cell) != paint:
+		_painted.append([board.index(cell), board.region_at(cell)])
 		board.regions[board.index(cell)] = paint
 		queue_redraw()
 
@@ -336,6 +455,7 @@ func _key_input(key: InputEventKey) -> void:
 		return
 	if move != Vector2i.ZERO:
 		cursor = _step(cursor, move, not key.is_echo())
+		_keep_in_view(cursor)
 		queue_redraw()
 		if key.shift_pressed and board.get_mark(cursor) == Board.Mark.EMPTY:
 			mark = Board.Mark.CROSS
@@ -442,6 +562,7 @@ func _hold(direction: Vector2i) -> void:
 ## Only a fresh press, not a held one repeating, wraps around the sides.
 func _pad_move(direction: Vector2i, wrap := true) -> void:
 	cursor = _step(cursor, direction, wrap)
+	_keep_in_view(cursor)
 	queue_redraw()
 	if _pad_stroke < 0:
 		return
@@ -505,12 +626,27 @@ func _finish_stroke() -> void:
 
 
 func _cell_size() -> float:
-	return floorf(minf(size.x, size.y) / board.size)
+	return _base_cell_size() * _zoom
 
 
 func _origin() -> Vector2:
-	var side := _cell_size() * board.size
+	return _base_origin() + _clamp_offset(_offset)
+
+
+## A cell's size and the board's corner with no zoom.
+func _base_cell_size() -> float:
+	return floorf(minf(size.x, size.y) / board.size)
+
+
+func _base_origin() -> Vector2:
+	var side := _base_cell_size() * board.size
 	return ((size - Vector2(side, side)) / 2.0).floor()
+
+
+## `offset` limited so the zoomed board still covers the unzoomed one.
+func _clamp_offset(offset: Vector2) -> Vector2:
+	var spare := _base_cell_size() * board.size * (1.0 - _zoom)
+	return offset.clamp(Vector2(spare, spare), Vector2.ZERO)
 
 
 ## Vector2i(row, col) under `pos`, or Vector2i(-1, -1) outside the grid.

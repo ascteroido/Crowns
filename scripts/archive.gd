@@ -85,7 +85,7 @@ func _ready() -> void:
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
-	back_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(back_button, 20)
 	back_button.pressed.connect(back.emit)
 	box.add_child(back_button)
 	_parts.assign(box.get_children())
@@ -156,7 +156,7 @@ func _refresh() -> void:
 		var date := "%04d-%02d-%02d" % [_year, _month, day]
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(60, 60)
-		button.add_theme_font_size_override("font_size", 16)
+		TextSize.set_font(button, 16)
 		button.text = str(day)
 		if date < first_date or date > last_date:
 			button.disabled = true
@@ -244,7 +244,7 @@ func _button(text: String, on_pressed: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = Vector2(60, 48)
-	button.add_theme_font_size_override("font_size", 24)
+	TextSize.set_font(button, 24)
 	button.pressed.connect(on_pressed)
 	return button
 
@@ -259,5 +259,5 @@ class _DayCrown extends Control:
 func _label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
+	TextSize.set_font(label, font_size)
 	return label

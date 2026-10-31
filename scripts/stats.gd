@@ -66,7 +66,7 @@ func _ready() -> void:
 	achievements_button = Button.new()
 	achievements_button.text = tr("Achievements")
 	achievements_button.custom_minimum_size = Vector2(0, 52)
-	achievements_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(achievements_button, 20)
 	achievements_button.pressed.connect(achievements_chosen.emit)
 	achievements_button.visible = false
 	achievements_button.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -75,7 +75,7 @@ func _ready() -> void:
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
-	back_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(back_button, 20)
 	back_button.pressed.connect(back.emit)
 	back_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	_footer.add_child(back_button)
@@ -229,5 +229,5 @@ func _table_cell(text: String, font_size: int, index: int) -> Label:
 func _label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
+	TextSize.set_font(label, font_size)
 	return label

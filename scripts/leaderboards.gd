@@ -58,7 +58,7 @@ func _ready() -> void:
 		tab.button_group = group
 		tab.size_flags_horizontal = SIZE_EXPAND_FILL
 		tab.custom_minimum_size.y = 44
-		tab.add_theme_font_size_override("font_size", 16)
+		TextSize.set_font(tab, 16)
 		tab.add_theme_color_override("font_pressed_color", GOLD)
 		tab.add_theme_color_override("font_hover_pressed_color", GOLD)
 		tab.pressed.connect(show_board.bind(kind))
@@ -98,7 +98,7 @@ func _ready() -> void:
 	name_entry.max_length = SilentWolf.NAME_LENGTH
 	name_entry.size_flags_horizontal = SIZE_EXPAND_FILL
 	name_entry.custom_minimum_size.y = 40
-	name_entry.add_theme_font_size_override("font_size", 18)
+	TextSize.set_font(name_entry, 18)
 	name_entry.text_submitted.connect(func(_text: String) -> void: _commit_name())
 	name_entry.focus_exited.connect(_commit_name)
 	name_row.add_child(name_entry)
@@ -109,7 +109,7 @@ func _ready() -> void:
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
-	back_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(back_button, 20)
 	back_button.pressed.connect(func() -> void:
 		_commit_name()
 		back.emit())
@@ -171,5 +171,5 @@ func _commit_name() -> void:
 func _label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
+	TextSize.set_font(label, font_size)
 	return label

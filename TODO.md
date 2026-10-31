@@ -41,9 +41,8 @@
 ## Feel and polish
 - [x] Redo (Ctrl+Shift+Z, and a button beside Undo)
 - [x] Keyboard play: arrow keys to move, keys to place × and crown
-- [ ] Pencil marks: a third mark (a dot) for "maybe a crown here"
 - [x] Mistake check: say whether the board has an error so far, without a full hint (counts as a hint)
-- [ ] Pinch to zoom on large boards on small phones
+- [x] Pinch to zoom on large boards on small phones (a setting, off by default, shown on touch screens)
 - [x] Win animation
 - [x] Optional sound effects
 - [x] Colour-blind support: region patterns setting
@@ -54,7 +53,7 @@
 
 ## Look and accessibility
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
-- [ ] Text size setting
+- [x] Text size setting: Small, Normal, Large and Larger
 - [ ] Screen reader labels for menus and buttons
 - [x] Reduce motion setting: turn off the reveal, pop-ins and win wave
 - [x] Android app icon variants to match the theme

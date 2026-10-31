@@ -162,6 +162,11 @@ func _notification(what: int) -> void:
 		_fit()
 
 
+## Lays the menu out again, e.g. after the text size changes.
+func refit() -> void:
+	_fit()
+
+
 ## Lays the menu out in one column on tall screens, or its sections side by
 ## side on wide ones, then grows it to fill big phone screens; the 860 px desktop
 ## window keeps the base sizes. Never past what fits, so every button stays on screen.
@@ -203,7 +208,7 @@ func _apply(factor: float) -> void:
 			"separation":
 				control.add_theme_constant_override("separation", value)
 			"font":
-				control.add_theme_font_size_override("font_size", value)
+				TextSize.set_font(control, value)
 
 
 func _scale(control: Control, property: String, base: int) -> void:

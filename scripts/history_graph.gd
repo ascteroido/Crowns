@@ -39,7 +39,9 @@ func _draw() -> void:
 	var times: Array = entries.map(func(entry: Array) -> float: return entry[1])
 	var slowest: float = times.max()
 	var top := maxf(slowest * 1.1, 1.0)
-	var plot := Rect2(AXIS_WIDTH, FONT_SIZE * 0.5, size.x - AXIS_WIDTH - 10.0, size.y - FONT_SIZE)
+	var font_size := TextSize.scaled(FONT_SIZE)
+	var axis_width := AXIS_WIDTH * TextSize.factor
+	var plot := Rect2(axis_width, font_size * 0.5, size.x - axis_width - 10.0, size.y - font_size)
 	var y_at := func(seconds: float) -> float: return plot.end.y - plot.size.y * seconds / top
 
 	# Gridlines at nothing, half and the slowest time, labelled on the left.
@@ -47,9 +49,9 @@ func _draw() -> void:
 		var y: float = y_at.call(seconds)
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), Color(text, 0.12), 1.0)
 		var label: String = format.call(seconds)
-		var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
-		draw_string(font, Vector2(plot.position.x - 8.0 - width, y + FONT_SIZE * 0.35), label,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, Color(text, 0.6))
+		var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		draw_string(font, Vector2(plot.position.x - 8.0 - width, y + font_size * 0.35), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(text, 0.6))
 
 	var average: float = times.reduce(func(sum: float, seconds: float) -> float: return sum + seconds, 0.0) / times.size()
 	var average_y: float = y_at.call(average)

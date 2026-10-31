@@ -2,6 +2,8 @@ extends Control
 ## Settings screen.
 
 signal theme_chosen(theme_name: String)
+## One of TextSize.NAMES.
+signal text_size_chosen(text_size: String)
 ## A custom theme colour changed; `done` once the picker closes.
 signal custom_colors_changed(background: Color, button: Color, done: bool)
 ## "theme" to match the theme, or one of the game's app icons.
@@ -9,6 +11,7 @@ signal app_icon_chosen(icon: String)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
 signal reduce_motion_toggled(enabled: bool)
+signal pinch_zoom_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
 ## Whether wide layouts put the board on the right, beside the controls.
 signal board_side_toggled(right: bool)
@@ -37,11 +40,14 @@ var button_color_picker: ColorPickerButton
 ## The custom theme's colours, shown only while it's chosen.
 var _custom_row: HBoxContainer
 var app_icon_picker: OptionButton
+var text_size_picker: OptionButton
 ## Shown only where the icon can change (Android).
 var _app_icon_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
 var reduce_motion_toggle: CheckButton
+## Shown only on touch screens.
+var pinch_zoom_toggle: CheckButton
 var timer_toggle: CheckButton
 var board_side_toggle: CheckButton
 var sound_toggle: CheckButton
@@ -93,7 +99,7 @@ func _ready() -> void:
 	var title := Label.new()
 	title.text = tr("Settings")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
+	TextSize.set_font(title, 40)
 	outer.add_child(title)
 	_columns = HBoxContainer.new()
 	_columns.add_theme_constant_override("separation", 56)
@@ -115,7 +121,7 @@ func _ready() -> void:
 	# TRANSLATORS: The colour theme setting.
 	theme_row.add_child(_row_label(tr("Theme")))
 	theme_picker = OptionButton.new()
-	theme_picker.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(theme_picker, 20)
 	# TRANSLATORS: Colour theme names.
 	var names := {"light": tr("Light"), "dark": tr("Dark"), "midnight": tr("Midnight"), "forest": tr("Forest"),
 			"contrast": tr("High contrast"), "custom": tr("Custom")}
@@ -146,7 +152,7 @@ func _ready() -> void:
 	box.add_child(_app_icon_row)
 	_app_icon_row.add_child(_row_label(tr("App icon")))
 	app_icon_picker = OptionButton.new()
-	app_icon_picker.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(app_icon_picker, 20)
 	# TRANSLATORS: App icon choices: following the colour theme, or the original purple icon.
 	var icon_names := {"theme": tr("Match theme"), "classic": tr("Classic")}
 	icon_names.merge(names)
@@ -155,41 +161,62 @@ func _ready() -> void:
 	app_icon_picker.item_selected.connect(func(index: int) -> void: app_icon_chosen.emit(APP_ICONS[index]))
 	_app_icon_row.add_child(app_icon_picker)
 
+	var text_size_row := HBoxContainer.new()
+	text_size_row.add_theme_constant_override("separation", 12)
+	box.add_child(text_size_row)
+	text_size_row.add_child(_row_label(tr("Text size")))
+	text_size_picker = OptionButton.new()
+	TextSize.set_font(text_size_picker, 20)
+	# TRANSLATORS: Text size choices, smallest to biggest.
+	var size_names := {"small": tr("Small"), "normal": tr("Normal"), "large": tr("Large"), "larger": tr("Larger")}
+	for size_name: String in TextSize.NAMES:
+		text_size_picker.add_item(size_names[size_name])
+	text_size_picker.item_selected.connect(func(index: int) -> void: text_size_chosen.emit(TextSize.NAMES[index]))
+	text_size_row.add_child(text_size_picker)
+
 	auto_cross_toggle = CheckButton.new()
 	auto_cross_toggle.text = tr("Auto-place × around crowns")
-	auto_cross_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(auto_cross_toggle, 20)
 	auto_cross_toggle.toggled.connect(auto_cross_toggled.emit)
 	box.add_child(auto_cross_toggle)
 
 	patterns_toggle = CheckButton.new()
 	patterns_toggle.text = tr("Region patterns")
-	patterns_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(patterns_toggle, 20)
 	patterns_toggle.toggled.connect(patterns_toggled.emit)
 	box.add_child(patterns_toggle)
 
 	reduce_motion_toggle = CheckButton.new()
 	# TRANSLATORS: Turns off the board's animations, for players sensitive to motion.
 	reduce_motion_toggle.text = tr("Disable animations")
-	reduce_motion_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(reduce_motion_toggle, 20)
 	reduce_motion_toggle.toggled.connect(reduce_motion_toggled.emit)
 	box.add_child(reduce_motion_toggle)
 
+	pinch_zoom_toggle = CheckButton.new()
+	# TRANSLATORS: A setting: two fingers make the board bigger or smaller.
+	pinch_zoom_toggle.text = tr("Pinch to zoom")
+	TextSize.set_font(pinch_zoom_toggle, 20)
+	pinch_zoom_toggle.visible = DisplayServer.is_touchscreen_available()
+	pinch_zoom_toggle.toggled.connect(pinch_zoom_toggled.emit)
+	box.add_child(pinch_zoom_toggle)
+
 	timer_toggle = CheckButton.new()
 	timer_toggle.text = tr("Show timer")
-	timer_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(timer_toggle, 20)
 	timer_toggle.toggled.connect(timer_toggled.emit)
 	box.add_child(timer_toggle)
 
 	board_side_toggle = CheckButton.new()
 	# TRANSLATORS: In the side-by-side layout of wide screens, put the board right of the buttons instead of left.
 	board_side_toggle.text = tr("Board on the right (wide screens)")
-	board_side_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(board_side_toggle, 20)
 	board_side_toggle.toggled.connect(board_side_toggled.emit)
 	box.add_child(board_side_toggle)
 
 	sound_toggle = CheckButton.new()
 	sound_toggle.text = tr("Sound effects")
-	sound_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(sound_toggle, 20)
 	sound_toggle.toggled.connect(sound_toggled.emit)
 	box.add_child(sound_toggle)
 
@@ -217,7 +244,7 @@ func _ready() -> void:
 
 	vibration_toggle = CheckButton.new()
 	vibration_toggle.text = tr("Vibration")
-	vibration_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(vibration_toggle, 20)
 	vibration_toggle.toggled.connect(vibration_toggled.emit)
 	vibration_toggle.visible = false
 	box.add_child(vibration_toggle)
@@ -225,7 +252,7 @@ func _ready() -> void:
 	# Shown only where the game can notify (Android); see set_reminder.
 	reminder_toggle = CheckButton.new()
 	reminder_toggle.text = tr("Daily reminder")
-	reminder_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(reminder_toggle, 20)
 	reminder_toggle.toggled.connect(reminder_toggled.emit)
 	reminder_toggle.visible = false
 	box.add_child(reminder_toggle)
@@ -236,17 +263,17 @@ func _ready() -> void:
 	var reminder_label := Label.new()
 	reminder_label.text = tr("Remind me at")
 	reminder_label.size_flags_horizontal = SIZE_EXPAND_FILL
-	reminder_label.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(reminder_label, 20)
 	_reminder_row.add_child(reminder_label)
 	reminder_hour_picker = OptionButton.new()
-	reminder_hour_picker.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(reminder_hour_picker, 20)
 	reminder_hour_picker.item_selected.connect(func(index: int) -> void: reminder_hour_chosen.emit(_hours[index]))
 	_reminder_row.add_child(reminder_hour_picker)
 
 	silent_wolf_toggle = CheckButton.new()
 	# TRANSLATORS: SilentWolf is the name of the leaderboard service; keep it as is.
 	silent_wolf_toggle.text = tr("Online leaderboards (SilentWolf)")
-	silent_wolf_toggle.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(silent_wolf_toggle, 20)
 	silent_wolf_toggle.toggled.connect(silent_wolf_toggled.emit)
 	silent_wolf_toggle.visible = false
 	box.add_child(silent_wolf_toggle)
@@ -254,7 +281,7 @@ func _ready() -> void:
 	# Debug builds only, so not translated.
 	_test_reminder_button = Button.new()
 	_test_reminder_button.text = "Send test reminder"
-	_test_reminder_button.add_theme_font_size_override("font_size", 18)
+	TextSize.set_font(_test_reminder_button, 18)
 	_test_reminder_button.pressed.connect(test_reminder.emit)
 	_test_reminder_button.visible = false
 	box.add_child(_test_reminder_button)
@@ -265,10 +292,10 @@ func _ready() -> void:
 	var language_label := Label.new()
 	language_label.text = tr("Language")
 	language_label.size_flags_horizontal = SIZE_EXPAND_FILL
-	language_label.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(language_label, 20)
 	language_row.add_child(language_label)
 	language_picker = OptionButton.new()
-	language_picker.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(language_picker, 20)
 	language_picker.item_selected.connect(func(index: int) -> void: language_chosen.emit(_locales[index]))
 	language_row.add_child(language_picker)
 
@@ -281,7 +308,7 @@ func _ready() -> void:
 	var tutorial_button := Button.new()
 	tutorial_button.text = tr("How to play")
 	tutorial_button.custom_minimum_size = Vector2(0, 52)
-	tutorial_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(tutorial_button, 20)
 	tutorial_button.pressed.connect(how_to_play.emit)
 	tutorial_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	_footer.add_child(tutorial_button)
@@ -289,7 +316,7 @@ func _ready() -> void:
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
-	back_button.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(back_button, 20)
 	back_button.pressed.connect(back.emit)
 	back_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	_footer.add_child(back_button)
@@ -325,6 +352,10 @@ func show_theme(theme_name: String, background: Color, button: Color) -> void:
 	_custom_row.visible = theme_name == "custom"
 
 
+func show_text_size(text_size: String) -> void:
+	text_size_picker.select(maxi(0, TextSize.NAMES.find(text_size)))
+
+
 ## Shows the app icon choice where the icon can change, with `icon` selected.
 func show_app_icon(available: bool, icon: String) -> void:
 	_app_icon_row.visible = available
@@ -342,7 +373,7 @@ func _row_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.size_flags_horizontal = SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("font_size", 20)
+	TextSize.set_font(label, 20)
 	return label
 
 

@@ -320,7 +320,7 @@ func _share() -> void:
 func _label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", font_size)
+	TextSize.set_font(label, font_size)
 	return label
 
 
