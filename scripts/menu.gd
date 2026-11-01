@@ -1,6 +1,6 @@
 extends Control
 ## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one,
-## this week's weekly challenge, The Climb or a speed run, or make a puzzle.
+## this week's weekly challenge, The Climb or a speedrun, or make a puzzle.
 
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 
@@ -108,7 +108,7 @@ func _ready() -> void:
 
 	box = _sections[2]
 
-	# The Climb and speed runs share a row, each with its detail beneath.
+	# The Climb and speedruns share a row, each with its detail beneath.
 	var runs_row := HBoxContainer.new()
 	_scale(runs_row, "separation", 10)
 	box.add_child(runs_row)
@@ -116,7 +116,7 @@ func _ready() -> void:
 	_scale(details_row, "separation", 10)
 	box.add_child(details_row)
 	challenge_button = _button(tr("The Climb"), challenge_chosen.emit)
-	speed_button = _button(tr("Speed run"), speed_chosen.emit)
+	speed_button = _button(tr("Speedrun"), speed_chosen.emit)
 	_challenge_detail = _label("", 14)
 	_speed_detail = _label("", 14)
 	for button: Button in [challenge_button, speed_button]:

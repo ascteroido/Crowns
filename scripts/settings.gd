@@ -10,6 +10,7 @@ signal custom_colors_changed(background: Color, button: Color, done: bool)
 signal app_icon_chosen(icon: String)
 signal auto_cross_toggled(enabled: bool)
 signal patterns_toggled(enabled: bool)
+signal dim_finished_toggled(enabled: bool)
 signal reduce_motion_toggled(enabled: bool)
 signal pinch_zoom_toggled(enabled: bool)
 signal timer_toggled(shown: bool)
@@ -55,6 +56,7 @@ var text_size_picker: OptionButton
 var _app_icon_row: HBoxContainer
 var auto_cross_toggle: CheckButton
 var patterns_toggle: CheckButton
+var dim_finished_toggle: CheckButton
 var reduce_motion_toggle: CheckButton
 ## Shown only on touch screens.
 var pinch_zoom_toggle: CheckButton
@@ -204,6 +206,13 @@ func _ready() -> void:
 	TextSize.set_font(patterns_toggle, 20)
 	patterns_toggle.toggled.connect(patterns_toggled.emit)
 	box.add_child(patterns_toggle)
+
+	dim_finished_toggle = CheckButton.new()
+	# TRANSLATORS: Fades the rows, columns and regions that already have their crown.
+	dim_finished_toggle.text = tr("Dim finished lines")
+	TextSize.set_font(dim_finished_toggle, 20)
+	dim_finished_toggle.toggled.connect(dim_finished_toggled.emit)
+	box.add_child(dim_finished_toggle)
 
 	reduce_motion_toggle = CheckButton.new()
 	# TRANSLATORS: Turns off the board's animations, for players sensitive to motion.

@@ -548,6 +548,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_credits()
 	await _frames(2)
+	await _check_dim_finished()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -872,14 +874,14 @@ func _check_speed() -> void:
 	await _frames(3)
 	var progress: ConfigFile = game._progress
 	var boards: int = game.SPEED_STAGES.size()
-	_expect(game._menu._speed_detail.text == "%d boards, one clock" % boards, "menu introduces speed runs")
+	_expect(game._menu._speed_detail.text == "%d boards, one clock" % boards, "menu introduces speedruns")
 	game._menu.speed_button.pressed.emit()
 	await _settle()
 	var view: Control = game._view
 	_expect(game._mode == game.Mode.SPEED and not game._hint_button.visible and not game._size_picker.visible,
-			"speed runs hide hints and puzzle pickers")
-	_expect(game._puzzle_label.text == "Speed run · 1 of %d" % boards, "the label counts the boards")
-	_expect(not game._win_leaderboard_button.visible, "speed runs have no leaderboard")
+			"speedruns hide hints and puzzle pickers")
+	_expect(game._puzzle_label.text == "Speedrun · 1 of %d" % boards, "the label counts the boards")
+	_expect(not game._win_leaderboard_button.visible, "speedruns have no leaderboard")
 
 	# Each board flows into the next on the same clock, which stops in between.
 	for level in boards:
@@ -1733,7 +1735,7 @@ func _check_cloud_save() -> void:
 			and not local.has_section_key("in_progress", "9x9_hard_1"), "boards in progress merge, skipping solved ones")
 	_expect(local.get_value("challenge", "best") == 8 and local.get_value("challenge", "run").level == 4,
 			"The Climb's best and a run from the other device carry over")
-	_expect(local.get_value("speed", "best") == 70.0, "the faster speed run wins")
+	_expect(local.get_value("speed", "best") == 70.0, "the faster speedrun wins")
 	_expect(local.get_value("history", "size_7") == [[100, 50.0, 1], [200, 70.0, 2], [300, 40.0, 1]],
 			"solve histories merge in order without repeating shared solves")
 	var merged_8: Array = local.get_value("history", "size_8")
@@ -2221,7 +2223,7 @@ func _check_solution() -> void:
 		game._leave_game()
 		game._start(mode)
 		await _settle()
-		_expect(not game._solution_button.visible, "no solution in The Climb or speed runs")
+		_expect(not game._solution_button.visible, "no solution in The Climb or speedruns")
 	game._leave_game()
 	game._progress.erase_section("revealed")
 	game._progress.save(TEST_SAVE)
@@ -2342,6 +2344,45 @@ func _check_patterns() -> void:
 	view.board = board
 	await _frames(3)
 	_screenshot("patterns.png")
+	view.queue_free()
+
+
+func _check_dim_finished() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(not game._view.dim_finished, "dimming finished lines is off by default")
+	game._settings.dim_finished_toggle.button_pressed = true
+	_expect(game._view.dim_finished, "dimming finished lines turns on from settings")
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("settings", "dim_finished", false) == true, "the dimming setting is saved")
+	game._settings.dim_finished_toggle.button_pressed = false
+	game.queue_free()
+	await _frames(2)
+
+	# Regions are the rows of a 5x5 board; crowns are the solution's.
+	var regions := PackedInt32Array()
+	for row in 5:
+		for col in 5:
+			regions.append(row)
+	var solution := PackedInt32Array([0, 2, 4, 1, 3])
+	var board := Board.new(5, regions, solution)
+	var view := BoardViewScript.new()
+	view.board = board
+	view.dim_finished = true
+	_expect(view._finished_cells().count(1) == 0, "nothing is dimmed on an empty board")
+	board.set_mark(Vector2i(0, 0), Board.Mark.CROWN)
+	var finished := view._finished_cells()
+	_expect(finished[board.index(Vector2i(0, 4))] == 1, "a crown's row is finished")
+	_expect(finished[board.index(Vector2i(4, 0))] == 1, "a crown's column is finished")
+	_expect(finished[board.index(Vector2i(1, 1))] == 0, "cells outside its lines stay open")
+	_expect(finished.count(1) == 9, "a crown finishes its row and column, here also its region")
+	view.size = Vector2(root.size)
+	root.add_child(view)
+	await _frames(3)
+	_screenshot("dim_finished.png")
 	view.queue_free()
 
 

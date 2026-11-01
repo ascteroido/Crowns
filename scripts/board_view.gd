@@ -49,6 +49,8 @@ const HINT_COLOR := Color("2f6fde")
 const CURSOR_LIGHT := Color("2a2340")
 const CURSOR_DARK := Color("f4f1ea")
 const HINT_DIM := Color(0, 0, 0, 0.3)
+## How much of the tray shows through a finished cell's colour.
+const FINISHED_FADE := 0.55
 const PATTERN_INK := Color(0, 0, 0, 0.2)
 ## Outline of a cell with no region yet, in the editor: an empty slot in the
 ## tray, so it can't be mistaken for the grey region.
@@ -133,6 +135,13 @@ var dark := false:
 var dim := false:
 	set(value):
 		dim = value
+		queue_redraw()
+
+## Fades the cells no crown can go in any more, those whose row, column or
+## region has its crown, so the open ones stand out.
+var dim_finished := false:
+	set(value):
+		dim_finished = value
 		queue_redraw()
 
 ## The keyboard's cell; it shows once a key is used and hides on a click.
@@ -710,6 +719,7 @@ func _draw() -> void:
 		return
 	var origin := _origin()
 	var flags := board.conflicts()
+	var finished := _finished_cells() if dim_finished and not board.is_solved() else PackedByteArray()
 	var now := Time.get_ticks_msec()
 	_update_pops(now)
 	var wave := float(now - _celebrate_at) if _celebrate_at >= 0 else -1.0
@@ -754,10 +764,13 @@ func _draw() -> void:
 			if patterns:
 				_draw_pattern(tile, board.region_at(cell), outline)
 			var conflicted := flags[board.index(cell)] == 1 or cell == mistake
-			if conflicted:
-				_draw_stripes(tile, outline)
 			var i := board.index(cell)
 			var mark := board.get_mark(cell)
+			# Crowns stay bright; the tray shows through the rest.
+			if not finished.is_empty() and finished[i] == 1 and mark != Board.Mark.CROWN and not conflicted:
+				draw_style_box(_rounded(Color(TRAY_DARK if dark else TRAY_LIGHT, FINISHED_FADE), radius), tile)
+			if conflicted:
+				_draw_stripes(tile, outline)
 			var mark_rect := rect
 			if _pops.has(i):
 				var t: float = (now - _pops[i]) / POP_MS.get(mark, 150.0)
@@ -793,6 +806,27 @@ func _draw() -> void:
 		frame.border_color = CURSOR_DARK if dark else CURSOR_LIGHT
 		frame.set_border_width_all(roundi(maxf(2.0, cs * 0.06)))
 		draw_style_box(frame, cursor_tile)
+
+
+## 1 for each cell whose row, column or region already has a crown.
+func _finished_cells() -> PackedByteArray:
+	var n := board.size
+	var rows := PackedByteArray()
+	var cols := PackedByteArray()
+	rows.resize(n)
+	cols.resize(n)
+	var regions := {}
+	for crown in board.crowns():
+		rows[crown.x] = 1
+		cols[crown.y] = 1
+		regions[board.region_at(crown)] = true
+	var finished := PackedByteArray()
+	finished.resize(n * n)
+	for i in n * n:
+		var cell := Vector2i(i / n, i % n)
+		if rows[cell.x] == 1 or cols[cell.y] == 1 or regions.has(board.region_at(cell)):
+			finished[i] = 1
+	return finished
 
 
 ## A rounded box in `color`, for tiles and the tray behind them.

@@ -76,13 +76,13 @@ const CHALLENGE_STAGES := [
 	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
 ]
 const CHALLENGE_KEY := "challenge"
-## [size, difficulty] for each board of a speed run, played on one clock.
+## [size, difficulty] for each board of a speedrun, played on one clock.
 const SPEED_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
 	[6, Generator.Difficulty.MEDIUM], [7, Generator.Difficulty.MEDIUM],
 ]
 const SPEED_KEY := "speed"
-## Seconds between a speed run's boards, with the clock stopped: long enough
+## Seconds between a speedrun's boards, with the clock stopped: long enough
 ## for the victory wave on the largest board.
 const SPEED_PAUSE := 0.9
 ## The tutorial's lessons: puzzles as a letter per region, row by row, and the
@@ -153,7 +153,7 @@ var _sunday_weeks := OS.has_feature("play_store")
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
-## Current speed run, like `_run` but never saved: leaving abandons it. Its
+## Current speedrun, like `_run` but never saved: leaving abandons it. Its
 ## "level" goes past SPEED_STAGES once the run is finished.
 var _speed_run := {}
 ## The player-made puzzle being played: {"code", "size", "regions", "solution",
@@ -311,6 +311,8 @@ func _ready() -> void:
 	_settings.auto_cross_toggle.set_pressed_no_signal(_view.auto_cross)
 	_view.patterns = _progress.get_value("settings", "patterns", false)
 	_settings.patterns_toggle.set_pressed_no_signal(_view.patterns)
+	_view.dim_finished = _progress.get_value("settings", "dim_finished", false)
+	_settings.dim_finished_toggle.set_pressed_no_signal(_view.dim_finished)
 	_set_reduce_motion(_progress.get_value("settings", "reduce_motion", false))
 	_settings.reduce_motion_toggle.set_pressed_no_signal(_view.reduce_motion)
 	_set_pinch_zoom(_progress.get_value("settings", "pinch_zoom", false))
@@ -484,6 +486,7 @@ func _build_ui() -> void:
 	_settings.app_icon_chosen.connect(_on_app_icon_chosen)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
 	_settings.patterns_toggled.connect(_on_patterns_toggled)
+	_settings.dim_finished_toggled.connect(_on_dim_finished_toggled)
 	_settings.reduce_motion_toggled.connect(_on_reduce_motion_toggled)
 	_settings.pinch_zoom_toggled.connect(_on_pinch_zoom_toggled)
 	_settings.sound_toggled.connect(_on_sound_toggled)
@@ -1684,6 +1687,12 @@ func _on_patterns_toggled(enabled: bool) -> void:
 	_progress.save(save_path)
 
 
+func _on_dim_finished_toggled(enabled: bool) -> void:
+	_view.dim_finished = enabled
+	_progress.set_value("settings", "dim_finished", enabled)
+	_progress.save(save_path)
+
+
 func _on_reduce_motion_toggled(enabled: bool) -> void:
 	_set_reduce_motion(enabled)
 	_progress.set_value("settings", "reduce_motion", enabled)
@@ -1918,7 +1927,7 @@ func _generate(spec: Array) -> Dictionary:
 
 
 ## Starts generating the next regular puzzle, or the next level of The Climb or
-## a speed run, while this one is played, so Next doesn't have to wait for it.
+## a speedrun, while this one is played, so Next doesn't have to wait for it.
 func _prefetch_next() -> void:
 	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE, Mode.SPEED] \
 			or (_mode == Mode.CHALLENGE and _run.is_empty()) \
@@ -2055,8 +2064,8 @@ func _load_puzzle() -> void:
 			_puzzle_label.text = tr("Custom puzzle") if difficulty == CustomPuzzle.BEYOND_HINTS \
 					else tr("Custom puzzle · %s") % _difficulty_name(difficulty)
 		Mode.SPEED:
-			# TRANSLATORS: The board being played in a speed run, e.g. "Speed run · 2 of 5".
-			_puzzle_label.text = tr("Speed run · {board} of {boards}").format(
+			# TRANSLATORS: The board being played in a speedrun, e.g. "Speedrun · 2 of 5".
+			_puzzle_label.text = tr("Speedrun · {board} of {boards}").format(
 					{"board": _speed_run.level, "boards": SPEED_STAGES.size()})
 		Mode.TUTORIAL:
 			_puzzle_label.text = tr("How to play") if _lesson == 0 \
@@ -2588,7 +2597,7 @@ func _custom_solved() -> void:
 	_show_win_overlay()
 
 
-## A speed run's board is solved: on to the next after a short pause, or the
+## A speedrun's board is solved: on to the next after a short pause, or the
 ## run's result after the last.
 func _speed_solved() -> void:
 	_speed_run.elapsed = _elapsed
@@ -2796,7 +2805,7 @@ func _has_mode_leaderboard() -> bool:
 		Mode.WEEKLY:
 			return _play_games.has_weekly() or _silent_wolf_on()
 		Mode.SPEED, Mode.CUSTOM:
-			# Speed runs only keep a personal best, and anyone can make an easy custom puzzle.
+			# Speedruns only keep a personal best, and anyone can make an easy custom puzzle.
 			return false
 	return _has_leaderboards()
 
@@ -2943,7 +2952,7 @@ func _puzzle_key() -> String:
 		Mode.CHALLENGE:
 			return CHALLENGE_KEY
 		Mode.TUTORIAL, Mode.SPEED:
-			# Nothing from the tutorial or a speed run is saved.
+			# Nothing from the tutorial or a speedrun is saved.
 			return ""
 		Mode.CUSTOM:
 			return "custom_" + _custom.code

@@ -11,6 +11,7 @@
 - [x] Boards up to 14×14 (11×11 to 14×14 come from the pre-made puzzle packs)
 - [x] Hard+ difficulty: puzzles that need the hardest deductions the hint system knows
 - [x] Puzzle editor: draw regions, check for a single solution and grade it, share it as a code
+- [ ] Technique drills: short sets of puzzles that each need one deduction from the tutorial, to practise it
 
 ## Daily and progress
 - [x] The Climb (challenge mode): one life, no hints, puzzles ramp from 5×5 Easy to 10×10 Hard
@@ -25,6 +26,8 @@
 - [x] Solve history: a graph of recent solve times per size in Stats
 - [x] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
 - [x] Save backup for builds without cloud save: copy progress as a backup code and restore it (in Settings)
+- [ ] Weekly archive: play past weekly challenges, like the daily archive
+- [ ] Stats export: save the solve history as a CSV file
 
 ## Google Play Games
 - [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints
@@ -38,6 +41,8 @@
 - [ ] F-Droid release of the no-Google Android build (built from source, so SilentWolf needs handling)
 - [x] Tablet and landscape layout: board on one side, controls on the other, for wide screens
 - [x] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
+- [ ] Android home screen widget: today's daily and the streak, tapping straight into the puzzle
+- [ ] Android app shortcuts: long-press the icon for Daily puzzle, Continue or Weekly challenge
 
 ## Feel and polish
 - [x] Redo (Ctrl+Shift+Z, and a button beside Undo)
@@ -52,6 +57,7 @@
 - [x] Haptics: short vibration on Android when placing a crown and on a win
 - [x] Give up / show solution: reveal the answer to a stuck puzzle, without it counting as solved
 - [x] Hints and mistake checks zoom out when pinched in, so the cells they point to are on screen
+- [x] Dim finished lines: fade rows, columns and regions once they have their crown (a setting, off by default)
 
 ## Look and accessibility
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
