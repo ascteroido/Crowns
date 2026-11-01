@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds bin/DailyReminder.aar from android/: the reminder and the app icon
-# switcher compiled against the Android SDK's android.jar, plus the manifest and
-# resources (the notification icon, and the app icon variants that
-# tools/make_icons.gd makes). No Gradle needed; the game's Gradle export dexes
-# and merges the library into the APK.
+# Builds bin/DailyReminder.aar from android/: the reminder, the app icon
+# switcher, shortcuts and widget, compiled against the Android SDK's android.jar,
+# plus the manifest and resources (icons, the widget's layouts, and the app icon
+# variants that tools/make_icons.gd makes), then bin/Updater.aar from updater/.
+# No Gradle needed; the game's Gradle export dexes and merges them into the APK.
 #   addons/DailyReminder/build.sh
 set -euo pipefail
 
@@ -33,3 +33,17 @@ mkdir -p "$here/bin"
 rm -f "$here/bin/DailyReminder.aar"
 (cd "$work/aar" && zip -qrX "$here/bin/DailyReminder.aar" .)
 echo "Built $here/bin/DailyReminder.aar"
+
+# bin/Updater.aar from updater/: the in-app updater, which export_plugin.gd adds
+# only to the APK published outside Google Play.
+updater="$(mktemp -d)"
+trap 'rm -rf "$work" "$updater"' EXIT
+mkdir -p "$updater/classes" "$updater/aar"
+javac --release 11 -classpath "$android_jar" -d "$updater/classes" \
+	$(find "$here/updater/src" -name '*.java')
+(cd "$updater/classes" && jar cf "$updater/aar/classes.jar" .)
+cp "$here/updater/AndroidManifest.xml" "$updater/aar/"
+touch "$updater/aar/R.txt"
+rm -f "$here/bin/Updater.aar"
+(cd "$updater/aar" && zip -qrX "$here/bin/Updater.aar" .)
+echo "Built $here/bin/Updater.aar"

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The in-app updater, for the APK published outside Google Play (the no_google
+     preset) only: export_plugin.gd leaves this library out of the Play build. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	package="com.ascathelstan.crowns.updater">
+
+	<uses-sdk android:minSdkVersion="24" />
+
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+	<application>
+		<receiver
+			android:name="com.ascathelstan.crowns.updater.InstallStatus"
+			android:exported="false" />
+	</application>
+</manifest>

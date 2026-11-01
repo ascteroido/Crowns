@@ -22,6 +22,7 @@ const Reminder := preload("res://scripts/reminder.gd")
 const AppIcon := preload("res://scripts/app_icon.gd")
 const HomeScreen := preload("res://scripts/home_screen.gd")
 const BoardImage := preload("res://scripts/board_image.gd")
+const Updater := preload("res://scripts/updater.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
@@ -226,6 +227,7 @@ var _play_games: PlayGames
 var _reminder: Reminder
 var _app_icon: AppIcon
 var _home_screen: HomeScreen
+var _updater: Updater
 ## Drawing the widget's boards in the background.
 var _drawing_widget_boards := false
 ## Desktop and web leaderboards; Android uses Play Games instead.
@@ -362,6 +364,8 @@ func _ready() -> void:
 			_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR))
 	# Again on every start: this refreshes the text's language and the alarm after an update.
 	_update_reminder()
+	if _progress.get_value("settings", "check_updates", true):
+		_updater.check()
 	_show_menu()
 	if open_settings:
 		_show_settings()
@@ -606,6 +610,17 @@ func _build_ui() -> void:
 	_settings.silent_wolf_toggle.visible = _silent_wolf.available()
 	_settings.silent_wolf_toggle.set_pressed_no_signal(_progress.get_value("settings", "silent_wolf", true))
 	_settings.silent_wolf_toggled.connect(_on_silent_wolf_toggled)
+	_updater = Updater.new()
+	add_child(_updater)
+	_updater.update_found.connect(_on_update_found)
+	_updater.download_progress.connect(func(fraction: float) -> void:
+		# TRANSLATORS: Shown while an update downloads, e.g. "Downloading… 45%".
+		_menu.show_update(tr("Downloading… %d%%") % floori(fraction * 100.0), tr("Update"), false))
+	_updater.download_finished.connect(_on_update_downloaded)
+	_menu.update_chosen.connect(_on_update_chosen)
+	_settings.check_updates_toggle.visible = _updater.available()
+	_settings.check_updates_toggle.set_pressed_no_signal(_progress.get_value("settings", "check_updates", true))
+	_settings.check_updates_toggled.connect(_on_check_updates_toggled)
 	_settings.timer_toggle.set_pressed_no_signal(_progress.get_value("settings", "show_timer", true))
 	_settings.timer_toggled.connect(_on_timer_toggled)
 	_settings.board_side_toggle.set_pressed_no_signal(_progress.get_value("settings", "board_right", false))
@@ -1874,6 +1889,42 @@ func _update_reminder() -> void:
 		not_before = _next_daily_time()
 	_reminder.schedule(_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR), 0, not_before,
 			tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
+
+
+func _on_update_found(version: String) -> void:
+	# TRANSLATORS: On the menu when a newer version of the game is out, e.g. "Version 1.1 is out".
+	_menu.show_update(tr("Version %s is out") % version, tr("Update") if _updater.installs() else tr("Download"))
+
+
+## The menu's update button: downloads and installs the update where the game
+## can, otherwise opens its release page.
+func _on_update_chosen() -> void:
+	if not _updater.installs():
+		OS.shell_open(_updater.release.page)
+		return
+	if not _updater.can_install():
+		_updater.open_install_settings()
+		_menu.show_update(tr("Allow Crowns to install apps, then tap Update again"), tr("Update"))
+		return
+	_menu.show_update(tr("Downloading… %d%%") % 0, tr("Update"), false)
+	_updater.download()
+
+
+func _on_update_downloaded(path: String) -> void:
+	if path.is_empty() or not _updater.install(path).is_empty():
+		_menu.show_update(tr("Couldn't download the update"), tr("Try again"))
+		return
+	# Android asks the player to confirm; if they don't, the button tries again.
+	_on_update_found(_updater.release.version)
+
+
+func _on_check_updates_toggled(enabled: bool) -> void:
+	_progress.set_value("settings", "check_updates", enabled)
+	_progress.save(save_path)
+	if enabled:
+		_updater.check()
+	else:
+		_menu.update_bar.visible = false
 
 
 ## The app icon's shortcuts, in the game's language, and the widget, with today's

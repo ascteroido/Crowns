@@ -14,6 +14,7 @@ const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Archive := preload("res://scripts/archive.gd")
 const BoardImage := preload("res://scripts/board_image.gd")
+const Updater := preload("res://scripts/updater.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -552,6 +553,8 @@ func _run() -> void:
 	await _check_credits()
 	await _frames(2)
 	await _check_dim_finished()
+	await _frames(2)
+	await _check_updater()
 	await _frames(2)
 	await _check_home_screen()
 	await _frames(2)
@@ -2637,6 +2640,50 @@ func _check_home_screen() -> void:
 		progress.set_value("best", game._daily_key(today), saved_streak[3])
 	game._show_menu()
 	progress.save(TEST_SAVE)
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_updater() -> void:
+	_expect(Updater.is_newer("1.1", "1.0") and Updater.is_newer("1.10", "1.9") and Updater.is_newer("2.0", "1.9.9")
+			and not Updater.is_newer("1.0", "1.0") and not Updater.is_newer("0.3", "1.0") and Updater.is_newer("1.0.1", "1.0"),
+			"versions compare part by part")
+	var apk := func(version: String) -> Array:
+		return [{"name": "Crowns-%s-android.apk" % version, "browser_download_url": "https://example.test/%s.apk" % version},
+				{"name": "Crowns-%s-linux-x86_64.tar.gz" % version, "browser_download_url": "https://example.test/linux"}]
+	var releases := [
+		{"tag_name": "v1.3", "draft": true, "prerelease": false, "html_url": "draft", "assets": apk.call("1.3")},
+		{"tag_name": "v1.2", "draft": false, "prerelease": true, "html_url": "https://example.test/v1.2", "assets": apk.call("1.2")},
+		{"tag_name": "v1.10", "draft": false, "prerelease": false, "html_url": "https://example.test/v1.10", "assets": []},
+		{"tag_name": "v1.0", "draft": false, "prerelease": false, "html_url": "https://example.test/v1.0", "assets": apk.call("1.0")},
+	]
+	_expect(Updater.newest(releases, "1.0", true) == {"version": "1.2", "page": "https://example.test/v1.2",
+			"apk": "https://example.test/1.2.apk"}, "Android takes the newest release with an APK, prereleases too, not drafts")
+	_expect(Updater.newest(releases, "1.0", false).version == "1.10", "desktop takes the newest release")
+	_expect(Updater.newest(releases, "1.10", false).is_empty() and Updater.newest(null, "1.0", false).is_empty()
+			and Updater.newest({"message": "rate limited"}, "1.0", true).is_empty(), "nothing newer, nothing found")
+
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(not game._updater.available() and not game._settings.check_updates_toggle.visible,
+			"the editor and tests never check for updates")
+	_expect(not game._menu.update_bar.visible, "no update, no bar")
+	game._updater.release = Updater.newest(releases, "1.0", false)
+	game._on_update_found("1.10")
+	await _frames(2)
+	_expect(game._menu.update_bar.visible and game._menu._update_label.text == "Version 1.10 is out"
+			and game._menu.update_button.text == "Download", "a newer version shows on the menu")
+	var menu_box: Rect2 = game._menu._box.get_global_rect()
+	_expect(menu_box.position.y >= 0.0 and menu_box.end.y <= game._menu.size.y, "the menu still fits with the update bar")
+	game._on_update_downloaded("")
+	_expect(game._menu._update_label.text == "Couldn't download the update" and game._menu.update_button.text == "Try again"
+			and not game._menu.update_button.disabled, "a failed download can be tried again")
+	game._settings.check_updates_toggle.button_pressed = false
+	_expect(not game._menu.update_bar.visible and game._progress.get_value("settings", "check_updates") == false,
+			"turning checks off hides the bar")
+	game._settings.check_updates_toggle.button_pressed = true
 	game.queue_free()
 	await _frames(2)
 

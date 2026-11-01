@@ -25,6 +25,7 @@ signal reminder_hour_chosen(hour: int)
 ## Debug builds only: show the reminder notification now.
 signal test_reminder
 signal silent_wolf_toggled(enabled: bool)
+signal check_updates_toggled(enabled: bool)
 ## An empty locale means the device's language.
 signal language_chosen(locale: String)
 ## Copy the progress to the clipboard as a backup code.
@@ -74,6 +75,8 @@ var reminder_hour_picker: OptionButton
 var _test_reminder_button: Button
 ## Shown only in builds with SilentWolf's key.
 var silent_wolf_toggle: CheckButton
+## Shown only in builds that update outside an app store.
+var check_updates_toggle: CheckButton
 var _reminder_row: HBoxContainer
 ## Hour of each reminder_hour_picker item.
 var _hours: Array[int] = []
@@ -305,6 +308,14 @@ func _ready() -> void:
 	silent_wolf_toggle.toggled.connect(silent_wolf_toggled.emit)
 	silent_wolf_toggle.visible = false
 	box.add_child(silent_wolf_toggle)
+
+	check_updates_toggle = CheckButton.new()
+	# TRANSLATORS: Asks GitHub for a newer version of the game when it starts.
+	check_updates_toggle.text = tr("Check for updates")
+	TextSize.set_font(check_updates_toggle, 20)
+	check_updates_toggle.toggled.connect(check_updates_toggled.emit)
+	check_updates_toggle.visible = false
+	box.add_child(check_updates_toggle)
 
 	# Debug builds only, so not translated.
 	_test_reminder_button = Button.new()

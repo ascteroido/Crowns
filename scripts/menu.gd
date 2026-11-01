@@ -18,6 +18,7 @@ signal leaderboards_chosen
 signal settings_chosen
 signal exit_chosen
 signal credits_chosen
+signal update_chosen
 
 var continue_button: Button
 var daily_button: Button
@@ -33,6 +34,10 @@ var leaderboards_button: Button
 var settings_button: Button
 var exit_button: Button
 var credits_button: Button
+## Shown when there's a newer version: what's new and a button to get it.
+var update_bar: HBoxContainer
+var update_button: Button
+var _update_label: Label
 var _continue_detail: Label
 var _daily_detail: Label
 var _weekly_detail: Label
@@ -69,6 +74,20 @@ func _ready() -> void:
 		_sections.append(section)
 		_box.add_child(section)
 	var box: VBoxContainer = _sections[0]
+
+	update_bar = HBoxContainer.new()
+	update_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	_scale(update_bar, "separation", 10)
+	update_bar.visible = false
+	box.add_child(update_bar)
+	_update_label = _label("", 16)
+	_update_label.modulate = Color(1, 1, 1, 0.8)
+	update_bar.add_child(_update_label)
+	update_button = _button("", update_chosen.emit)
+	# Smaller than the other buttons: these sizes come after _button's, so they win.
+	_scale(update_button, "height", 40)
+	_scale(update_button, "font", 17)
+	update_bar.add_child(update_button)
 
 	var crown := CrownIcon.new()
 	_scale(crown, "height", 64)
@@ -182,6 +201,7 @@ func _ready() -> void:
 	# Buttons that come and go change the menu's height, so it's refitted.
 	leaderboards_button.visibility_changed.connect(_fit)
 	exit_button.visibility_changed.connect(_fit)
+	update_bar.visibility_changed.connect(_fit)
 	_fit()
 
 
@@ -254,6 +274,15 @@ func set_details(continue_title: String, continue_detail: String, daily_detail: 
 	_weekly_detail.text = weekly_detail
 	_challenge_detail.text = challenge_detail
 	_speed_detail.text = speed_detail
+
+
+## Shows the update bar with `text` and a button saying `action`, which is
+## greyed out unless `enabled` (e.g. while downloading).
+func show_update(text: String, action: String, enabled := true) -> void:
+	_update_label.text = text
+	update_button.text = action
+	update_button.disabled = not enabled
+	update_bar.visible = true
 
 
 func _label(text: String, font_size: int) -> Label:

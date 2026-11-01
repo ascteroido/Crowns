@@ -392,6 +392,17 @@ msgstr ""
 msgid "No scores yet. Be the first!"
 msgstr ""
 
+#. Shown while an update downloads, e.g. "Downloading… 45%".
+#: scripts/main.gd
+msgid "Downloading… %d%%"
+msgstr ""
+
+#. Shown while an update downloads, e.g. "Downloading… 45%".
+#. On the menu when a newer version of the game is out, e.g. "Version 1.1 is out".
+#: scripts/main.gd
+msgid "Update"
+msgstr ""
+
 #: scripts/main.gd
 msgid "Menu"
 msgstr ""
@@ -646,6 +657,24 @@ msgstr ""
 
 #: scripts/main.gd
 msgid "Today's daily puzzle is ready."
+msgstr ""
+
+#. On the menu when a newer version of the game is out, e.g. "Version 1.1 is out".
+#: scripts/main.gd
+msgid "Version %s is out"
+msgstr ""
+
+#. On the menu when a newer version of the game is out, e.g. "Version 1.1 is out".
+#: scripts/main.gd
+msgid "Download"
+msgstr ""
+
+#: scripts/main.gd
+msgid "Allow Crowns to install apps, then tap Update again"
+msgstr ""
+
+#: scripts/main.gd
+msgid "Couldn't download the update"
 msgstr ""
 
 #: scripts/main.gd scripts/menu.gd
@@ -1171,6 +1200,11 @@ msgstr ""
 #. SilentWolf is the name of the leaderboard service; keep it as is.
 #: scripts/settings.gd
 msgid "Online leaderboards (SilentWolf)"
+msgstr ""
+
+#. Asks GitHub for a newer version of the game when it starts.
+#: scripts/settings.gd
+msgid "Check for updates"
 msgstr ""
 
 #: scripts/settings.gd
