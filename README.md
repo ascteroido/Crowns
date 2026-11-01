@@ -89,7 +89,4 @@ artwork (the icon, achievement icons and store images) is
 by others, under their own licences: see [CREDITS.md](CREDITS.md), also shown in the
 game under **Credits**.
 
-If you publish a modified version, please give it a different name and icon so
-players can tell them apart.
-
 [Privacy policy](https://ascteroido.github.io/Crowns/privacy.html)
