@@ -544,6 +544,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_calendar()
 	await _frames(2)
+	await _check_backup()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -2041,6 +2043,67 @@ func _check_pinch_zoom() -> void:
 	saved.load(TEST_SAVE)
 	_expect(saved.get_value("settings", "pinch_zoom", true) == false, "turning pinch to zoom off is saved")
 	game._on_clear()
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_backup() -> void:
+	# A sizeable save: a year of calendar and plenty of solves.
+	var other := ConfigFile.new()
+	for i in 365:
+		other.set_value("calendar", Time.get_date_string_from_unix_time(1767225600 + i * 86400), i % 9)
+	for i in 400:
+		other.set_value("solved", "7x7_medium_%d" % i, true)
+		other.set_value("best", "7x7_medium_%d" % i, 60.0 + i)
+	other.set_value("stats", "solved_7", 400)
+	other.set_value("settings", "theme", "forest")
+	var code := CloudSave.backup_code(other)
+	var back := CloudSave.from_backup_code(code)
+	_expect(code.begins_with("CROWNS1:") and back != null and back.get_value("stats", "solved_7") == 400
+			and back.get_value("best", "7x7_medium_399") == 459.0 and not back.has_section("settings"),
+			"a backup code carries progress but not settings")
+	_expect(code.length() < 20000, "a big save's backup code stays short enough to paste (%d characters)" % code.length())
+	var mangled := code.substr(0, 40) + "\n " + code.substr(40, 100) + "\r\n" + code.substr(140) + "  "
+	_expect(CloudSave.from_backup_code(mangled) != null, "spaces and line breaks in a pasted code are ignored")
+	for bad in ["", "hello", "CROWNS1:12:abc", code.substr(0, code.length() - 30), "CROWNS1:x:" + code.split(":")[2]]:
+		_expect(CloudSave.from_backup_code(bad) == null, "a broken code is refused: " + bad.left(20))
+
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.settings_button.pressed.emit()
+	await _frames(2)
+	var settings: Control = game._settings
+	game._progress.set_value("best", "7x7_medium_0", 30.0)
+	var solved_before: int = game._progress.get_value("stats", "solved_7", 0)
+	settings.backup_restore_button.pressed.emit()
+	_expect(settings._restore_box.visible, "Restore opens a box to paste the code into")
+	settings.backup_entry.text = "not a code"
+	settings._restore_box.find_children("*", "Button", true, false)[-1].pressed.emit()
+	_expect(settings._backup_status.visible and settings._restore_box.visible
+			and settings._backup_status.text.begins_with("That isn't"), "a wrong code says so")
+	settings.backup_entry.text = code
+	settings._restore_box.find_children("*", "Button", true, false)[-1].pressed.emit()
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(not settings._restore_box.visible and settings._backup_status.text == "Progress restored."
+			and saved.get_value("solved", "7x7_medium_399", false) and saved.get_value("stats", "solved_7", 0) == maxi(400, solved_before)
+			and saved.get_value("best", "7x7_medium_0") == 30.0 and saved.get_value("settings", "theme", "") != "forest",
+			"restoring adds the backup's progress, keeps the better records, and leaves settings alone")
+	settings.backup_copy_button.pressed.emit()
+	_expect(settings.backup_copy_button.text == "Copied!" and settings._backup_status.visible, "Copy code confirms it")
+	game._show_menu()
+	game._show_settings()
+	_expect(settings.backup_copy_button.text == "Copy code" and not settings._backup_status.visible,
+			"Settings opens fresh")
+	for i in 400:
+		game._progress.erase_section_key("solved", "7x7_medium_%d" % i)
+		game._progress.erase_section_key("best", "7x7_medium_%d" % i)
+	game._progress.set_value("stats", "solved_7", solved_before)
+	game._progress.erase_section("calendar")
+	game._progress.save(TEST_SAVE)
+	game._show_menu()
 	game.queue_free()
 	await _frames(2)
 

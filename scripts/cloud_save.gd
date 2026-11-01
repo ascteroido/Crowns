@@ -1,12 +1,15 @@
 extends RefCounted
 ## Progress kept in Google Play Games' saved games, so it follows the player
-## between devices. Devices merge rather than overwrite each other: solves and
-## records from either side are kept. Settings stay with each device.
+## between devices, or copied out as a backup code on devices without them.
+## Devices merge rather than overwrite each other: solves and records from
+## either side are kept. Settings stay with each device.
 
 ## Sections that belong to the device, not the player.
 const LOCAL_ONLY := ["settings"]
 ## Recent solves kept per size for the solve history graph.
 const HISTORY_LENGTH := 30
+## Starts every backup code, with a version in case the format ever changes.
+const BACKUP_PREFIX := "CROWNS1:"
 
 
 ## The progress to upload: everything but the device's settings.
@@ -27,6 +30,40 @@ static func unpack(data: PackedByteArray) -> ConfigFile:
 		return null
 	var progress := ConfigFile.new()
 	if progress.parse(Marshalls.base64_to_utf8(data.get_string_from_ascii())) != OK:
+		return null
+	return progress
+
+
+## Progress as a code to copy somewhere safe, for devices without cloud save:
+## everything pack() would upload, compressed, as letters and digits.
+static func backup_code(progress: ConfigFile) -> String:
+	var copy := ConfigFile.new()
+	for section in progress.get_sections():
+		if section in LOCAL_ONLY:
+			continue
+		for key in progress.get_section_keys(section):
+			copy.set_value(section, key, progress.get_value(section, key))
+	var text := copy.encode_to_text().to_utf8_buffer()
+	return BACKUP_PREFIX + str(text.size()) + ":" + Marshalls.raw_to_base64(text.compress(FileAccess.COMPRESSION_GZIP))
+
+
+## The progress in a backup code, or null if it isn't one. Spaces and line
+## breaks a messaging app might add are ignored.
+static func from_backup_code(code: String) -> ConfigFile:
+	var compact := "".join(code.split(" ", false)).replace("\n", "").replace("\r", "").replace("\t", "")
+	if not compact.begins_with(BACKUP_PREFIX):
+		return null
+	var parts := compact.trim_prefix(BACKUP_PREFIX).split(":", true, 1)
+	if parts.size() != 2 or not parts[0].is_valid_int():
+		return null
+	var packed := Marshalls.base64_to_raw(parts[1])
+	if packed.is_empty():
+		return null
+	var text := packed.decompress(parts[0].to_int(), FileAccess.COMPRESSION_GZIP)
+	if text.size() != parts[0].to_int():
+		return null
+	var progress := ConfigFile.new()
+	if progress.parse(text.get_string_from_utf8()) != OK:
 		return null
 	return progress
 

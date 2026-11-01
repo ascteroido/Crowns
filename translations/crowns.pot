@@ -253,7 +253,7 @@ msgstr ""
 msgid "Try this Crowns puzzle: %s"
 msgstr ""
 
-#: scripts/editor.gd scripts/main.gd
+#: scripts/editor.gd scripts/main.gd scripts/settings.gd
 msgid "Copied!"
 msgstr ""
 
@@ -386,7 +386,8 @@ msgstr ""
 msgid "Share it so friends can play this same board."
 msgstr ""
 
-#: scripts/main.gd
+#. Copies a backup code of the player's progress, to paste somewhere safe.
+#: scripts/main.gd scripts/settings.gd
 msgid "Copy code"
 msgstr ""
 
@@ -1036,6 +1037,39 @@ msgstr ""
 
 #: scripts/settings.gd
 msgid "Language"
+msgstr ""
+
+#. Settings row for saving progress as a code and bringing it back, e.g. on a new device.
+#: scripts/settings.gd
+msgid "Backup"
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Restore"
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Paste a backup code. Progress in it is added to this device's; nothing here is lost."
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Cancel"
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Restore progress"
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Backup code copied. Paste it somewhere safe, like a note or an email to yourself."
+msgstr ""
+
+#: scripts/settings.gd
+msgid "Progress restored."
+msgstr ""
+
+#: scripts/settings.gd
+msgid "That isn't a backup code. Check it was copied whole."
 msgstr ""
 
 #: scripts/settings.gd

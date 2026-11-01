@@ -26,8 +26,14 @@ signal test_reminder
 signal silent_wolf_toggled(enabled: bool)
 ## An empty locale means the device's language.
 signal language_chosen(locale: String)
+## Copy the progress to the clipboard as a backup code.
+signal backup_copied
+## Restore progress from a backup code the player pasted.
+signal backup_restored(code: String)
 signal how_to_play
 signal back
+
+const CloudSave := preload("res://scripts/cloud_save.gd")
 
 ## Theme names in picker order, matching the game's THEMES plus "custom", and
 ## first "system", following the device's light or dark mode, where it has one.
@@ -70,6 +76,12 @@ var _reminder_row: HBoxContainer
 ## Hour of each reminder_hour_picker item.
 var _hours: Array[int] = []
 var language_picker: OptionButton
+var backup_copy_button: Button
+var backup_restore_button: Button
+## Where a backup code is pasted, shown once Restore is pressed.
+var _restore_box: VBoxContainer
+var backup_entry: TextEdit
+var _backup_status: Label
 ## Locale of each language_picker item, "" for the device's language.
 var _locales := PackedStringArray()
 ## The settings rows, split into two columns on wide screens.
@@ -306,6 +318,49 @@ func _ready() -> void:
 	language_picker.item_selected.connect(func(index: int) -> void: language_chosen.emit(_locales[index]))
 	language_row.add_child(language_picker)
 
+	var backup_row := HBoxContainer.new()
+	backup_row.add_theme_constant_override("separation", 8)
+	box.add_child(backup_row)
+	# TRANSLATORS: Settings row for saving progress as a code and bringing it back, e.g. on a new device.
+	backup_row.add_child(_row_label(tr("Backup")))
+	# TRANSLATORS: Copies a backup code of the player's progress, to paste somewhere safe.
+	backup_copy_button = _small_button(tr("Copy code"), backup_copied.emit)
+	backup_row.add_child(backup_copy_button)
+	backup_restore_button = _small_button(tr("Restore"), _show_restore)
+	backup_row.add_child(backup_restore_button)
+
+	_restore_box = VBoxContainer.new()
+	_restore_box.add_theme_constant_override("separation", 8)
+	_restore_box.visible = false
+	box.add_child(_restore_box)
+	var restore_note := _row_label(tr("Paste a backup code. Progress in it is added to this device's; nothing here is lost."))
+	TextSize.set_font(restore_note, 16)
+	restore_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	restore_note.modulate = Color(1, 1, 1, 0.7)
+	_restore_box.add_child(restore_note)
+	backup_entry = TextEdit.new()
+	backup_entry.custom_minimum_size.y = 90
+	backup_entry.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	TextSize.set_font(backup_entry, 14)
+	backup_entry.text_changed.connect(func() -> void: _backup_status.visible = false)
+	_restore_box.add_child(backup_entry)
+	var restore_buttons := HBoxContainer.new()
+	restore_buttons.add_theme_constant_override("separation", 8)
+	restore_buttons.alignment = BoxContainer.ALIGNMENT_END
+	_restore_box.add_child(restore_buttons)
+	restore_buttons.add_child(_small_button(tr("Cancel"), func() -> void: _restore_box.visible = false))
+	restore_buttons.add_child(_small_button(tr("Restore progress"), func() -> void: backup_restored.emit(backup_entry.text)))
+	_backup_status = _row_label("")
+	TextSize.set_font(_backup_status, 16)
+	_backup_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_backup_status.visible = false
+	box.add_child(_backup_status)
+
+	# Fresh each time Settings opens.
+	visibility_changed.connect(func() -> void:
+		backup_copy_button.text = tr("Copy code")
+		_restore_box.visible = false
+		_backup_status.visible = false)
 	_rows.assign(box.get_children())
 	_footer = BoxContainer.new()
 	_footer.vertical = true
@@ -374,6 +429,53 @@ func show_volume(volume: float, enabled: bool) -> void:
 	volume_slider.set_value_no_signal(volume * 100.0)
 	volume_slider.editable = enabled
 	volume_slider.modulate.a = 1.0 if enabled else 0.45
+
+
+## Opens the box to paste a backup code into, with the clipboard already in it
+## if it holds one.
+func _show_restore() -> void:
+	_restore_box.visible = true
+	_backup_status.visible = false
+	backup_entry.text = ""
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		var clipboard := DisplayServer.clipboard_get().strip_edges()
+		if clipboard.begins_with(CloudSave.BACKUP_PREFIX):
+			backup_entry.text = clipboard
+	backup_entry.grab_focus()
+
+
+## The backup code is on the clipboard.
+func show_backup_copied() -> void:
+	backup_copy_button.text = tr("Copied!")
+	_restore_box.visible = false
+	_show_backup_status(tr("Backup code copied. Paste it somewhere safe, like a note or an email to yourself."), false)
+
+
+## Says how restoring went; on success the paste box closes.
+func show_backup_restored(ok: bool) -> void:
+	if ok:
+		_restore_box.visible = false
+		_show_backup_status(tr("Progress restored."), false)
+	else:
+		_show_backup_status(tr("That isn't a backup code. Check it was copied whole."), true)
+
+
+func _show_backup_status(text: String, error: bool) -> void:
+	_backup_status.text = text
+	_backup_status.visible = true
+	if error:
+		_backup_status.add_theme_color_override("font_color", Color("d6312b"))
+	else:
+		_backup_status.remove_theme_color_override("font_color")
+
+
+func _small_button(text: String, on_pressed: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(0, 40)
+	TextSize.set_font(button, 18)
+	button.pressed.connect(on_pressed)
+	return button
 
 
 func _row_label(text: String) -> Label:

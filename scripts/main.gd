@@ -475,6 +475,8 @@ func _build_ui() -> void:
 	_settings.visible = false
 	_settings.theme_chosen.connect(_on_theme_chosen)
 	_settings.text_size_chosen.connect(_on_text_size_chosen)
+	_settings.backup_copied.connect(_on_backup_copied)
+	_settings.backup_restored.connect(_on_backup_restored)
 	_settings.custom_colors_changed.connect(_on_custom_colors_changed)
 	_settings.app_icon_chosen.connect(_on_app_icon_chosen)
 	_settings.auto_cross_toggled.connect(_on_auto_cross_toggled)
@@ -2650,23 +2652,42 @@ func _on_signed_in() -> void:
 func _on_cloud_loaded(data: PackedByteArray) -> void:
 	var remote := CloudSave.unpack(data)
 	if remote:
-		var had_last := _progress.has_section("last")
-		CloudSave.merge(_progress, remote)
-		_progress.save(save_path)
-		# A first start on this device carries on where the other one was.
-		if not had_last and _progress.has_section("last"):
-			_size = _progress.get_value("last", "size", DEFAULT_SIZE)
-			_number = _progress.get_value("last", "number", 1)
-			_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
-		if _run.is_empty():
-			_run = _progress.get_value(CHALLENGE_KEY, "run", {})
-		if _menu.visible:
-			_show_menu()
-		elif _board != null:
-			_update_best()
-		_check_achievements()
+		_merge_progress(remote)
 	_cloud_ready = true
 	_upload_progress()
+
+
+## Adds progress from another device, from the cloud or a backup code, to this one's.
+func _merge_progress(remote: ConfigFile) -> void:
+	var had_last := _progress.has_section("last")
+	CloudSave.merge(_progress, remote)
+	_progress.save(save_path)
+	# A first start on this device carries on where the other one was.
+	if not had_last and _progress.has_section("last"):
+		_size = _progress.get_value("last", "size", DEFAULT_SIZE)
+		_number = _progress.get_value("last", "number", 1)
+		_difficulty = _progress.get_value("last", "difficulty", DEFAULT_DIFFICULTY)
+	if _run.is_empty():
+		_run = _progress.get_value(CHALLENGE_KEY, "run", {})
+	if _menu.visible:
+		_show_menu()
+	elif _board != null:
+		_update_best()
+	_check_achievements()
+
+
+func _on_backup_copied() -> void:
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		DisplayServer.clipboard_set(CloudSave.backup_code(_progress))
+	_settings.show_backup_copied()
+
+
+func _on_backup_restored(code: String) -> void:
+	var remote := CloudSave.from_backup_code(code)
+	if remote:
+		_merge_progress(remote)
+		_upload_progress()
+	_settings.show_backup_restored(remote != null)
 
 
 func _upload_progress() -> void:

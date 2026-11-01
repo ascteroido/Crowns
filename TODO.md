@@ -24,7 +24,7 @@
 - [x] Speed mode: a short run of small boards against the clock
 - [x] Solve history: a graph of recent solve times per size in Stats
 - [x] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
-- [ ] Save backup for builds without cloud save: export and import progress as a code or file
+- [x] Save backup for builds without cloud save: copy progress as a backup code and restore it (in Settings)
 
 ## Google Play Games
 - [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints
