@@ -20,6 +20,8 @@ const CrownIcon := preload("res://scripts/crown_icon.gd")
 const Language := preload("res://scripts/language.gd")
 const Reminder := preload("res://scripts/reminder.gd")
 const AppIcon := preload("res://scripts/app_icon.gd")
+const HomeScreen := preload("res://scripts/home_screen.gd")
+const BoardImage := preload("res://scripts/board_image.gd")
 const CloudSave := preload("res://scripts/cloud_save.gd")
 const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const PuzzlePack := preload("res://scripts/puzzle_pack.gd")
@@ -69,6 +71,10 @@ const DAILY_FIRST := "2026-10-01"
 ## The weekly challenge: one large, hard puzzle for everyone each week.
 const WEEKLY_SIZE := 10
 const WEEKLY_DIFFICULTY := Generator.Difficulty.HARD
+## Where the widget's boards go, and how many days ahead they're drawn, so the
+## widget can show the right board for a while with the game closed.
+const WIDGET_BOARDS := "user://widget"
+const WIDGET_DAYS := 7
 ## The weekly archive's first week, named by its Monday: the week the daily
 ## archive starts in. Every week's puzzle comes from its date, so weeks from
 ## before the weekly challenge existed can be played too.
@@ -219,6 +225,9 @@ var _editor: Editor
 var _play_games: PlayGames
 var _reminder: Reminder
 var _app_icon: AppIcon
+var _home_screen: HomeScreen
+## Drawing the widget's boards in the background.
+var _drawing_widget_boards := false
 ## Desktop and web leaderboards; Android uses Play Games instead.
 var _silent_wolf: SilentWolf
 var _leaderboards: Leaderboards
@@ -360,6 +369,8 @@ func _ready() -> void:
 			_settings.language_picker.grab_focus()
 	elif first_launch and first_run_tutorial:
 		_start_lesson(0)
+	else:
+		_open_requested()
 
 
 func _notification(what: int) -> void:
@@ -374,6 +385,9 @@ func _notification(what: int) -> void:
 		# In case the device's dark mode changed while away, where it can't tell us.
 		if _settings:
 			_on_system_theme_changed()
+	# Brought back by a shortcut, the widget or the reminder.
+	if what == NOTIFICATION_APPLICATION_RESUMED and _home_screen:
+		_open_requested.call_deferred()
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		_go_back()
 
@@ -571,6 +585,8 @@ func _build_ui() -> void:
 	add_child(_reminder)
 	_app_icon = AppIcon.new()
 	add_child(_app_icon)
+	_home_screen = HomeScreen.new()
+	add_child(_home_screen)
 	_reminder.permission_answered.connect(_on_reminder_permission)
 	_silent_wolf = SilentWolf.new()
 	add_child(_silent_wolf)
@@ -1733,6 +1749,8 @@ func _on_app_icon_chosen(icon: String) -> void:
 ## Shows the app icon for the chosen setting and theme.
 func _update_app_icon() -> void:
 	_app_icon.set_icon(_app_icon_for(_progress.get_value("settings", "app_icon", "theme"), _shown_theme()))
+	# Android drops shortcuts along with the icon they hang from, so they're set again on the new one.
+	_update_home_screen()
 
 
 ## The icon for an app icon `choice`: itself, or with "theme" the icon of the
@@ -1856,6 +1874,88 @@ func _update_reminder() -> void:
 		not_before = _next_daily_time()
 	_reminder.schedule(_progress.get_value("settings", "reminder_hour", DEFAULT_REMINDER_HOUR), 0, not_before,
 			tr("Daily reminder"), "Crowns", tr("Today's daily puzzle is ready."))
+
+
+## The app icon's shortcuts, in the game's language, and the widget, with today's
+## daily and the streak.
+func _update_home_screen() -> void:
+	if not _home_screen.available():
+		return
+	_home_screen.set_shortcuts(tr("Daily puzzle"), tr("Weekly challenge"), tr("Continue"))
+	var today := _today()
+	var key := _daily_key(today)
+	var best: float = _progress.get_value("best", key, INF)
+	var solved_text := tr("Solved in %s") % _format_time(best) if best != INF else tr("Solved (hints used)")
+	var streak: int = _progress.get_value(STATS, "streak", 0)
+	_home_screen.update_widget(tr("Daily puzzle"),
+			# TRANSLATORS: The home screen widget, while today's daily isn't solved yet.
+			tr("Ready to play"),
+			today if _progress.get_value("solved", key, false) else "", solved_text,
+			_progress.get_value(STATS, "last_daily", ""),
+			tr_n("%d day streak", "%d days streak", streak) % streak if streak > 0 else "", DAILY_UTC_OFFSET,
+			ProjectSettings.globalize_path(WIDGET_BOARDS))
+	_draw_widget_boards()
+
+
+## Draws the widget's boards for today and the coming days, those not drawn
+## yet, in the background, then shows them. Each day's size and difficulty are
+## written again every time, in case the language changed.
+func _draw_widget_boards() -> void:
+	if _drawing_widget_boards or not _threads:
+		return
+	DirAccess.make_dir_recursive_absolute(WIDGET_BOARDS)
+	var dates := []
+	var day := Time.get_unix_time_from_datetime_string(_today())
+	for i in WIDGET_DAYS:
+		dates.append(Time.get_date_string_from_unix_time(day + i * 86400))
+	for file in DirAccess.get_files_at(WIDGET_BOARDS):
+		if file.get_basename().trim_prefix("daily-") not in dates:
+			DirAccess.remove_absolute(WIDGET_BOARDS.path_join(file))
+	var missing := []
+	for date: String in dates:
+		var size := _daily_size(date)
+		var detail := FileAccess.open(WIDGET_BOARDS.path_join("daily-%s.txt" % date), FileAccess.WRITE)
+		if detail:
+			detail.store_string("%d×%d · %s" % [size, size, _difficulty_name(DAILY_DIFFICULTY)])
+		if not FileAccess.file_exists(WIDGET_BOARDS.path_join("daily-%s.png" % date)):
+			missing.append([size, DAILY_DIFFICULTY, hash(["daily", date]), WIDGET_BOARDS.path_join("daily-%s.png" % date)])
+	if missing.is_empty():
+		return
+	_drawing_widget_boards = true
+	var job := _make_widget_boards_job(missing)
+	_tasks[job.task] = true
+	await _finish(job)
+	_drawing_widget_boards = false
+	_update_home_screen()
+
+
+## Static so the worker holds nothing of this node, as with _make_job. Each of
+## `specs` is [size, difficulty, seed, path]: the daily, as _generate makes it.
+static func _make_widget_boards_job(specs: Array) -> Dictionary:
+	var task := WorkerThreadPool.add_task(func() -> void:
+		for spec: Array in specs:
+			var puzzle := Generator.generate(spec[0], spec[1], _seeded(spec[2]))
+			BoardImage.render(spec[0], puzzle.regions).save_png(spec[3]))
+	return {"task": task, "result": {}}
+
+
+## Opens what a shortcut, the widget or the reminder asked for, if anything.
+func _open_requested() -> void:
+	match _home_screen.take_open():
+		"daily":
+			_open_from_home_screen(Mode.DAILY)
+		"weekly":
+			_open_from_home_screen(Mode.WEEKLY)
+		"continue":
+			_open_from_home_screen(Mode.REGULAR)
+
+
+func _open_from_home_screen(mode: Mode) -> void:
+	if _generating:
+		return
+	# From wherever the game was, as if from the menu.
+	_show_menu()
+	_start(mode)
 
 
 ## Debug builds' test button: the reminder notification now, asking for permission first if needed.
@@ -2834,6 +2934,7 @@ func _check_win() -> void:
 	if _mode == Mode.DAILY:
 		# No reminder for today's daily once it's solved.
 		_update_reminder()
+		_update_home_screen()
 	_on_progress_made()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
 	_win_label.text = tr("Time: %s") % _format_time(_elapsed) + note
@@ -2973,6 +3074,7 @@ func _merge_progress(remote: ConfigFile) -> void:
 	var had_last := _progress.has_section("last")
 	CloudSave.merge(_progress, remote)
 	_progress.save(save_path)
+	_update_home_screen()
 	# A first start on this device carries on where the other one was.
 	if not had_last and _progress.has_section("last"):
 		_size = _progress.get_value("last", "size", DEFAULT_SIZE)

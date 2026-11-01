@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three cells wide and two tall to start, and resizable down to one cell or up to
+     any size: Widget.java picks a layout for the room. It redraws itself when the
+     daily changes, not on a timer. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+	android:initialLayout="@layout/crowns_widget"
+	android:previewLayout="@layout/crowns_widget"
+	android:minWidth="180dp"
+	android:minHeight="110dp"
+	android:minResizeWidth="40dp"
+	android:minResizeHeight="40dp"
+	android:targetCellWidth="3"
+	android:targetCellHeight="2"
+	android:resizeMode="horizontal|vertical"
+	android:updatePeriodMillis="0"
+	android:widgetCategory="home_screen" />

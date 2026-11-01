@@ -648,6 +648,19 @@ msgstr ""
 msgid "Today's daily puzzle is ready."
 msgstr ""
 
+#: scripts/main.gd scripts/menu.gd
+msgid "Daily puzzle"
+msgstr ""
+
+#: scripts/main.gd scripts/menu.gd
+msgid "Weekly challenge"
+msgstr ""
+
+#. The home screen widget, while today's daily isn't solved yet.
+#: scripts/main.gd
+msgid "Ready to play"
+msgstr ""
+
 #: scripts/main.gd
 msgid "Skip"
 msgstr ""
@@ -1004,14 +1017,6 @@ msgstr[1] ""
 
 #: scripts/menu.gd
 msgid "One crown per row, column and region."
-msgstr ""
-
-#: scripts/menu.gd
-msgid "Daily puzzle"
-msgstr ""
-
-#: scripts/menu.gd
-msgid "Weekly challenge"
 msgstr ""
 
 #: scripts/menu.gd scripts/stats.gd

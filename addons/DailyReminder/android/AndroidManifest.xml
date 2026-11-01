@@ -16,6 +16,19 @@
 			</intent-filter>
 		</receiver>
 
+		<!-- The home screen widget: today's daily and the streak (see Widget.java). -->
+		<receiver
+			android:name="com.ascathelstan.crowns.widget.Widget"
+			android:label="Daily puzzle"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+			</intent-filter>
+			<meta-data
+				android:name="android.appwidget.provider"
+				android:resource="@xml/crowns_widget_info" />
+		</receiver>
+
 		<!-- App icons. Each opens the game through Launch (see Launch.java), so
 		     AppIcon.java can switch between them without closing the game. Godot's
 		     own launcher entry is off, as the classic entry here replaces it. -->

@@ -103,9 +103,9 @@ public class Reminder extends BroadcastReceiver {
 				.setContentTitle(prefs.getString("title", ""))
 				.setContentText(prefs.getString("text", ""))
 				.setAutoCancel(true);
-		// Straight to the launcher step, which works whichever app icon is on.
+		// Straight to today's daily through the launcher step, which works whichever app icon is on.
 		Intent launch = new Intent().setClassName(context, "com.ascathelstan.crowns.icon.Launch")
-				.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				.putExtra("open", "daily").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 		builder.setContentIntent(PendingIntent.getActivity(context, 0, launch,
 				PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
 		// Without the notification permission (Android 13+) this does nothing.

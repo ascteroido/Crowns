@@ -41,8 +41,8 @@
 - [ ] F-Droid release of the no-Google Android build (built from source, so SilentWolf needs handling)
 - [x] Tablet and landscape layout: board on one side, controls on the other, for wide screens
 - [x] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
-- [ ] Android home screen widget: today's daily and the streak, tapping straight into the puzzle
-- [ ] Android app shortcuts: long-press the icon for Daily puzzle, Continue or Weekly challenge
+- [x] Android home screen widget: today's daily board, its status and the streak, tapping straight into the puzzle
+- [x] Android app shortcuts: long-press the icon for Daily puzzle, Continue or Weekly challenge
 
 ## Feel and polish
 - [x] Redo (Ctrl+Shift+Z, and a button beside Undo)

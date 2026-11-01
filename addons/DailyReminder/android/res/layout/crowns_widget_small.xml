@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget when it's small (see Widget.java): just today's board, ticked once solved. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/crowns_widget_root"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:background="@drawable/crowns_widget_background"
+	android:padding="8dp">
+
+	<ImageView
+		android:id="@+id/crowns_widget_board"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:scaleType="fitCenter"
+		android:visibility="gone" />
+
+	<ImageView
+		android:id="@+id/crowns_widget_crown"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:padding="8dp"
+		android:scaleType="fitCenter"
+		android:src="@drawable/crowns_widget_crown" />
+
+	<ImageView
+		android:id="@+id/crowns_widget_check"
+		android:layout_width="24dp"
+		android:layout_height="24dp"
+		android:layout_gravity="top|end"
+		android:src="@drawable/crowns_widget_check"
+		android:visibility="gone" />
+</FrameLayout>

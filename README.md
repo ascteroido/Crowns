@@ -25,6 +25,7 @@ Windows and Android) · [GitHub releases](https://github.com/ascteroido/Crowns/r
 - Themes and custom colours, text sizes, region patterns for colour blindness,
   and an option to turn off animations
 - Touch, mouse, keyboard and gamepad controls, in portrait and landscape
+- On Android: a home screen widget for the daily puzzle, and shortcuts on the app icon
 - Translations, including right-to-left languages
 - No ads, no tracking
 

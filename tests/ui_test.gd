@@ -13,6 +13,7 @@ const PuzzleCode := preload("res://scripts/puzzle_code.gd")
 const CustomPuzzle := preload("res://scripts/custom_puzzle.gd")
 const SilentWolf := preload("res://scripts/silent_wolf.gd")
 const Archive := preload("res://scripts/archive.gd")
+const BoardImage := preload("res://scripts/board_image.gd")
 const UpdatePot := preload("res://tools/update_pot.gd")
 const TEST_SAVE := "user://test_progress.cfg"
 
@@ -551,6 +552,8 @@ func _run() -> void:
 	await _check_credits()
 	await _frames(2)
 	await _check_dim_finished()
+	await _frames(2)
+	await _check_home_screen()
 	await _frames(2)
 	await _check_stats_export()
 	await _frames(2)
@@ -2524,6 +2527,115 @@ func _check_stats_export() -> void:
 			progress.erase_section(section)
 		for key in saved.get_section_keys(section) if saved.has_section(section) else PackedStringArray():
 			progress.set_value(section, key, saved.get_value(section, key))
+	progress.save(TEST_SAVE)
+	game.queue_free()
+	await _frames(2)
+
+
+## Stands in for the Android plugin: hands out `next_open` and keeps what it was given.
+class FakeHomeScreen extends "res://scripts/home_screen.gd":
+	var next_open := ""
+	var shortcuts: Array = []
+	var widget: Array = []
+	var folder := ""
+
+	func available() -> bool:
+		return true
+
+	func set_shortcuts(daily: String, weekly: String, resume: String) -> void:
+		shortcuts = [daily, weekly, resume]
+
+	func take_open() -> String:
+		var open := next_open
+		next_open = ""
+		return open
+
+	func update_widget(title: String, ready_text: String, solved_date: String, solved_text: String,
+			streak_date: String, streak_text: String, offset: int, board_folder: String) -> void:
+		widget = [title, ready_text, solved_date, solved_text, streak_date, streak_text, offset]
+		folder = board_folder
+
+
+func _check_home_screen() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var fake := FakeHomeScreen.new()
+	game._home_screen = fake
+	game._update_home_screen()
+	_expect(fake.shortcuts == ["Daily puzzle", "Weekly challenge", "Continue"], "the shortcuts are labelled")
+	var today: String = game._today()
+	var progress: ConfigFile = game._progress
+	var saved_streak: Array = [progress.get_value("stats", "streak", 0), progress.get_value("stats", "last_daily", ""),
+			progress.get_value("solved", game._daily_key(today), false), progress.get_value("best", game._daily_key(today), INF)]
+	progress.set_value("stats", "streak", 3)
+	progress.set_value("stats", "last_daily", game._day_before(today))
+	progress.set_value("solved", game._daily_key(today), false)
+	game._update_home_screen()
+	_expect(fake.widget == ["Daily puzzle", "Ready to play", "", "Solved (hints used)", game._day_before(today),
+			"3 days streak", game.DAILY_UTC_OFFSET], "the widget offers today's daily and the streak")
+	progress.set_value("solved", game._daily_key(today), true)
+	progress.set_value("best", game._daily_key(today), 245.0)
+	game._update_home_screen()
+	_expect(fake.widget[2] == today and fake.widget[3] == "Solved in 4:05", "and shows it solved")
+	while game._drawing_widget_boards:
+		await process_frame
+	var board_file: String = fake.folder.path_join("daily-%s.png" % today)
+	var image := Image.load_from_file(board_file)
+	_expect(image != null and image.get_width() == BoardImage.SIDE, "the widget gets today's board drawn")
+	var later := Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(today) + 6 * 86400)
+	var later_size: int = game._daily_size(later)
+	_expect(FileAccess.file_exists(fake.folder.path_join("daily-%s.png" % later))
+			and FileAccess.get_file_as_string(fake.folder.path_join("daily-%s.txt" % later)) == "%d×%d · Medium" % [later_size, later_size],
+			"and the coming week's, with each day's size and difficulty")
+	# The board drawn is the daily's: the same regions colour the same tiles.
+	var daily: Dictionary = Generator.generate(game._daily_size(today), game.DAILY_DIFFICULTY, game._seeded(hash(["daily", today])))
+	var n: int = game._daily_size(today)
+	var cell := float(BoardImage.SIDE) / n
+	var same := true
+	for i in n * n:
+		for j in n * n:
+			var a := image.get_pixel(int((i % n + 0.5) * cell), int((i / n + 0.5) * cell))
+			var b := image.get_pixel(int((j % n + 0.5) * cell), int((j / n + 0.5) * cell))
+			if (daily.regions[i] == daily.regions[j]) != a.is_equal_approx(b):
+				same = false
+	_expect(same, "the drawn board is today's daily")
+	var stale: String = fake.folder.path_join("daily-2000-01-01.png")
+	FileAccess.open(stale, FileAccess.WRITE).store_string("x")
+	game._update_home_screen()
+	_expect(not FileAccess.file_exists(stale), "past days' boards are cleared away")
+	for file in DirAccess.get_files_at(fake.folder):
+		DirAccess.remove_absolute(fake.folder.path_join(file))
+
+	game._menu.stats_button.pressed.emit()
+	await _frames(2)
+	fake.next_open = "weekly"
+	game._open_requested()
+	await _settle()
+	_expect(game._mode == game.Mode.WEEKLY and game._game.visible and not game._stats.visible,
+			"a shortcut opens the weekly from any screen")
+	fake.next_open = "daily"
+	game._open_requested()
+	await _settle()
+	_expect(game._mode == game.Mode.DAILY and game._daily_date == today and not game._from_archive,
+			"the widget and the reminder open today's daily")
+	fake.next_open = "continue"
+	game._open_requested()
+	await _settle()
+	_expect(game._mode == game.Mode.REGULAR and game._game.visible, "Continue opens the numbered puzzles")
+	game._open_requested()
+	await _frames(2)
+	_expect(game._mode == game.Mode.REGULAR, "nothing asked, nothing changes")
+
+	progress.set_value("stats", "streak", saved_streak[0])
+	progress.set_value("stats", "last_daily", saved_streak[1])
+	progress.set_value("solved", game._daily_key(today), saved_streak[2])
+	if saved_streak[3] == INF:
+		progress.erase_section_key("best", game._daily_key(today))
+	else:
+		progress.set_value("best", game._daily_key(today), saved_streak[3])
+	game._show_menu()
 	progress.save(TEST_SAVE)
 	game.queue_free()
 	await _frames(2)
