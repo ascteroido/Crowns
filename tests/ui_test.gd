@@ -1440,12 +1440,23 @@ func _check_weekly() -> void:
 	var week: String = game._week_start()
 	var start := Time.get_unix_time_from_datetime_string(week)
 	var today := Time.get_unix_time_from_datetime_string(game._today())
-	_expect(Time.get_datetime_dict_from_unix_time(start).weekday == Time.WEEKDAY_SUNDAY
-			and today - start == game._weekday() * 86400, "the weekly challenge starts on the latest Sunday")
-	var days_left: int = 7 - game._weekday()
+	_expect(Time.get_datetime_dict_from_unix_time(start).weekday == Time.WEEKDAY_MONDAY
+			and today - start == game._days_into_week() * 86400 and today - start < 7 * 86400,
+			"the weekly challenge starts on the latest Monday")
+	var days_left: int = 7 - game._days_into_week()
 	_expect(game._menu._weekly_detail.text.begins_with("Week of " + game._pretty_date(week))
 			and game._menu._weekly_detail.text.ends_with("%d day%s left" % [days_left, "" if days_left == 1 else "s"]),
 			"menu shows the week and the days left")
+	game._sunday_weeks = true
+	var play_week: String = game._week_start()
+	var play_start := Time.get_unix_time_from_datetime_string(game._week_first_day(play_week))
+	_expect(Time.get_datetime_dict_from_unix_time(play_start).weekday == Time.WEEKDAY_SUNDAY
+			and today - play_start == game._weekday() * 86400 and today - play_start < 7 * 86400,
+			"the Play build's week starts on the latest Sunday, with Play Games' leaderboards")
+	var next_monday := Time.get_date_string_from_unix_time(start + 7 * 86400)
+	_expect(play_week == (next_monday if game._weekday() == Time.WEEKDAY_SUNDAY else week),
+			"and plays the same puzzle, named by its Monday, from a day earlier")
+	game._sunday_weeks = false
 
 	game._menu.weekly_button.pressed.emit()
 	await _settle()

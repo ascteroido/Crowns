@@ -3,7 +3,7 @@ extends Node
 ## the Android build outside Google Play. Talks to its REST API directly.
 ##
 ## Boards are made on first use: "daily-YYYY-MM-DD" and "weekly-YYYY-MM-DD" (the
-## week's Sunday) hold times, "climb" holds best runs and "solved" puzzles solved.
+## week's Monday) hold times, "climb" holds best runs and "solved" puzzles solved.
 ## SilentWolf ranks higher scores first, so times are sent as negative milliseconds.
 ## Every save is kept, so reads collapse each player to their best entry, and
 ## players are told apart by a random id in the metadata rather than by name.

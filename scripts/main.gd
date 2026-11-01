@@ -140,8 +140,13 @@ var _from_archive := false
 ## Counts towards streaks and the daily leaderboard: today's daily, or one
 ## started before the date rolled over.
 var _daily_live := true
-## First day ("YYYY-MM-DD", a Sunday) of the weekly challenge being played.
+## The weekly challenge being played, named by its Monday ("YYYY-MM-DD").
 var _week := ""
+## The Google Play build's weeks run Sunday to Saturday, turning over with Play
+## Games' weekly leaderboards; the others' run Monday to Sunday. Either way a
+## week is named by its Monday, so all play the same puzzle, the Play build
+## from a day earlier.
+var _sunday_weeks := OS.has_feature("play_store")
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
@@ -1066,10 +1071,10 @@ func _show_menu() -> void:
 	if streak > 0:
 		daily_detail += " · " + tr_n("%d day streak", "%d days streak", streak) % streak
 	var week := _week_start()
-	var days_left := 7 - _weekday()
+	var days_left := 7 - _days_into_week()
 	var weekly_best: float = _progress.get_value("best", _weekly_key(week), INF)
-	# TRANSLATORS: %s is a short date, the Sunday the weekly challenge starts, e.g. "Oct 25".
-	var weekly_detail := "%s · %d×%d · %s" % [tr("Week of %s") % _pretty_date(week), WEEKLY_SIZE, WEEKLY_SIZE,
+	# TRANSLATORS: %s is a short date, the day the weekly challenge starts, e.g. "Oct 26".
+	var weekly_detail := "%s · %d×%d · %s" % [tr("Week of %s") % _pretty_date(_week_first_day(week)), WEEKLY_SIZE, WEEKLY_SIZE,
 			_difficulty_name(WEEKLY_DIFFICULTY)]
 	if weekly_best != INF:
 		weekly_detail = tr("Solved in %s") % _format_time(weekly_best)
@@ -1821,7 +1826,7 @@ func _load_puzzle() -> void:
 		Mode.DAILY:
 			_puzzle_label.text = tr("Daily · %s") % _pretty_date(_daily_date)
 		Mode.WEEKLY:
-			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week)
+			_puzzle_label.text = tr("Weekly · %s") % _pretty_date(_week_first_day(_week))
 		Mode.CHALLENGE:
 			_puzzle_label.text = tr("The Climb #%d · %s") % [_run.level, _difficulty_name(_challenge_stage()[1])]
 		Mode.CUSTOM:
@@ -2608,7 +2613,7 @@ func _open_leaderboards(kind: String) -> void:
 	_leaderboards.boards = {
 		"daily": {"board": SilentWolf.daily_board(_today()), "title": _pretty_date(_today()), "format": times},
 		"weekly": {"board": SilentWolf.weekly_board(_week_start()),
-				"title": tr("Week of %s") % _pretty_date(_week_start()), "format": times},
+				"title": tr("Week of %s") % _pretty_date(_week_first_day(_week_start())), "format": times},
 		"climb": {"board": "climb", "title": tr("Best runs"), "format": _puzzles},
 		"solved": {"board": "solved", "title": tr("Puzzles solved without hints"), "format": func(score: int) -> String:
 			return "%d" % score},
@@ -2723,11 +2728,20 @@ func _today() -> String:
 	return Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET)
 
 
-## The weekly challenge's first day: the latest Sunday on the daily calendar, so
-## weeks turn over with Play Games' weekly leaderboards, Saturday midnight UTC−7.
+## This week's Monday on the daily calendar, which names the weekly challenge.
+## Weeks turn over at midnight UTC−7 with the daily puzzle: on Sunday night, or
+## on Saturday night in the Play build (see _sunday_weeks).
 func _week_start() -> String:
 	var now := int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET
-	return Time.get_date_string_from_unix_time(now - _weekday() * 86400)
+	var first_day := now - _days_into_week() * 86400
+	return Time.get_date_string_from_unix_time(first_day + (86400 if _sunday_weeks else 0))
+
+
+## The day the week named `week` starts, as shown to the player.
+func _week_first_day(week: String) -> String:
+	if not _sunday_weeks:
+		return week
+	return Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(week) - 86400)
 
 
 ## Unix time when the next daily puzzle comes out: midnight UTC−7.
@@ -2739,6 +2753,11 @@ func _next_daily_time() -> int:
 ## Today's day of the week on the daily calendar, from 0 for Sunday to 6 for Saturday.
 func _weekday() -> int:
 	return Time.get_datetime_dict_from_unix_time(int(Time.get_unix_time_from_system()) + DAILY_UTC_OFFSET).weekday
+
+
+## Days since the week's first day: 0 to 6, from Monday or, in the Play build, Sunday.
+func _days_into_week() -> int:
+	return _weekday() if _sunday_weeks else posmod(_weekday() - Time.WEEKDAY_MONDAY, 7)
 
 
 ## "2026-10-23" -> "Oct 23".
