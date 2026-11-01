@@ -36,6 +36,28 @@ The game also follows the device's language when the player hasn't chosen one.
   puzzle board itself isn't mirrored, so "column 1" in hints is always the
   leftmost column, and a puzzle code shows the same board in every language.
 
+## Translating with only the template
+
+You don't need the whole game to translate it, just the template:
+[crowns.pot](https://raw.githubusercontent.com/ascteroido/Crowns/main/translations/crowns.pot)
+(this link always gives the latest one).
+
+1. Make your `.po` file from it as in *Adding a language* above, and translate.
+2. Send the `.po` file back, by pull request, issue or email
+   ([ascteroido@protonmail.com](mailto:ascteroido@protonmail.com)), and it goes into the game.
+
+When the game gets new text, download the template again and update your file from it,
+rather than starting over:
+
+- **Poedit:** open your `.po`, then *Translation → Update from POT file…* and pick the new `crowns.pot`.
+- **Command line:** `msgmerge -U de.po crowns.pot`
+
+Your translations stay. New text shows up untranslated, and text that changed a little
+keeps your old translation marked *fuzzy* (Poedit: "needs work") for you to check; the
+game skips fuzzy entries until they're confirmed. Text the game no longer uses moves to
+the end of the file as obsolete. The template also changes when only the code around the
+text moves, so if the update finds nothing new or fuzzy, there's nothing to do.
+
 ## When the game's text changes
 
 Rebuild the template, then update each language from it (Poedit: *Translation → Update from POT file*):
