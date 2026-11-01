@@ -10,6 +10,7 @@ const Menu := preload("res://scripts/menu.gd")
 const Settings := preload("res://scripts/settings.gd")
 const Stats := preload("res://scripts/stats.gd")
 const Archive := preload("res://scripts/archive.gd")
+const Credits := preload("res://scripts/credits.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
 const Haptics := preload("res://scripts/haptics.gd")
@@ -195,6 +196,7 @@ var _menu: Menu
 var _settings: Settings
 var _stats: Stats
 var _archive: Archive
+var _credits: Credits
 var _editor: Editor
 var _play_games: PlayGames
 var _reminder: Reminder
@@ -408,7 +410,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _pad_focus(event):
 		get_viewport().set_input_as_handled()
 		return
-	if (_settings.visible or _stats.visible or _archive.visible) and event.is_action_pressed("ui_cancel"):
+	if (_settings.visible or _stats.visible or _archive.visible or _credits.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
 	if _leaderboards.visible and event.is_action_pressed("ui_cancel"):
@@ -468,6 +470,7 @@ func _build_ui() -> void:
 	_menu.leaderboards_chosen.connect(_show_leaderboards.bind("daily"))
 	_menu.settings_chosen.connect(_show_settings)
 	_menu.exit_chosen.connect(_exit)
+	_menu.credits_chosen.connect(_show_credits)
 	add_child(_menu)
 
 	_settings = Settings.new()
@@ -517,6 +520,12 @@ func _build_ui() -> void:
 	_archive.day_chosen.connect(func(date: String) -> void: _start(Mode.DAILY, date))
 	_archive.back.connect(_show_menu)
 	add_child(_archive)
+
+	_credits = Credits.new()
+	_credits.set_anchors_preset(PRESET_FULL_RECT)
+	_credits.visible = false
+	_credits.back.connect(_show_menu)
+	add_child(_credits)
 
 	_play_games = PlayGames.new()
 	add_child(_play_games)
@@ -751,7 +760,7 @@ func _pad_focus(event: InputEvent) -> bool:
 	elif _menu.visible:
 		target = _menu.continue_button
 	else:
-		for screen: Control in [_settings, _stats, _archive, _leaderboards]:
+		for screen: Control in [_settings, _stats, _archive, _credits, _leaderboards]:
 			if screen.visible:
 				target = screen.find_next_valid_focus()
 				break
@@ -1203,6 +1212,7 @@ func _show_menu() -> void:
 	_settings.visible = false
 	_stats.visible = false
 	_archive.visible = false
+	_credits.visible = false
 	_editor.visible = false
 	_leaderboards.visible = false
 	_fade_in(_menu)
@@ -1374,6 +1384,11 @@ func _show_stats() -> void:
 	_stats.set_stats(daily, sizes, climb, speed)
 	_menu.visible = false
 	_fade_in(_stats)
+
+
+func _show_credits() -> void:
+	_menu.visible = false
+	_fade_in(_credits)
 
 
 ## Adds a solve to today's square on the Stats calendar.
@@ -2825,7 +2840,7 @@ func _show_leaderboards(kind: String) -> void:
 	if _generating:
 		return
 	_leaderboards_from_game = false
-	for screen: Control in [_menu, _settings, _stats, _archive]:
+	for screen: Control in [_menu, _settings, _stats, _archive, _credits]:
 		screen.visible = false
 	_open_leaderboards(kind)
 

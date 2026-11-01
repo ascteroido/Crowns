@@ -8,7 +8,7 @@
 ## Puzzle quality
 - [x] Difficulty grading: rate puzzles by the deduction steps a logic solver needs; offer Easy/Medium/Hard
 - [x] Teaching hints: point out the next deduction instead of revealing a crown
-- [ ] Boards up to 14×14 (on hold: generation takes seconds for Medium 12×12+ and minutes for Hard 13×13; see pre-made puzzles under Later)
+- [x] Boards up to 14×14 (11×11 to 14×14 come from the pre-made puzzle packs)
 - [x] Hard+ difficulty: puzzles that need the hardest deductions the hint system knows
 - [x] Puzzle editor: draw regions, check for a single solution and grade it, share it as a code
 
@@ -29,14 +29,12 @@
 ## Google Play Games
 - [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints
 - [x] Cloud save: stats, streaks and boards in progress follow the player to a new phone
-- [ ] More achievements: perfect month, speed run under a minute, Hard+ solves, 100 dailies
+- [x] More achievements: perfect month, speed run under a minute, Hard+ solves, 100 dailies
 
 ## Reach
 - [x] Web build for itch, playable in the browser
 - [x] Puzzle codes: share or enter a seed so friends can play the same board
 - [x] Right-to-left layout for Arabic and Hebrew translations
-- [ ] More translations from native speakers (the game is ready for them)
-- [ ] Steam or Flathub release for the desktop builds
 - [ ] F-Droid release of the no-Google Android build (built from source, so SilentWolf needs handling)
 - [x] Tablet and landscape layout: board on one side, controls on the other, for wide screens
 - [x] Gamepad support: the keyboard cursor and marks on a controller (Steam Deck)
@@ -52,17 +50,15 @@
 - [x] Untimed mode: a setting that hides the timer
 - [x] Interactive tutorial: walk first-time players through the rules on a small board
 - [x] Haptics: short vibration on Android when placing a crown and on a win
-- [ ] Solve replay: watch a solve back move by move after winning
 - [x] Give up / show solution: reveal the answer to a stuck puzzle, without it counting as solved
 - [x] Hints and mistake checks zoom out when pinched in, so the cells they point to are on screen
 
 ## Look and accessibility
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours
 - [x] Text size setting: Small, Normal, Large and Larger
-- [ ] Screen reader labels for menus and buttons
 - [x] System theme: follow the device's light or dark mode (the default where the device has one)
 - [x] Reduce motion setting: turn off the reveal, pop-ins and win wave
 - [x] Android app icon variants to match the theme
 
 ## Later
-- [ ] Pre-made puzzles: generate 11×11–14×14 boards offline and bundle them, so large sizes don't depend on generation speed
+- [x] Pre-made puzzles: generate 11×11–14×14 boards offline and bundle them, so large sizes don't depend on generation speed

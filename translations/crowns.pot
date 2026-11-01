@@ -15,7 +15,7 @@ msgstr ""
 msgid "Archive"
 msgstr ""
 
-#: scripts/archive.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd
+#: scripts/archive.gd scripts/credits.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd
 msgid "Back"
 msgstr ""
 
@@ -179,6 +179,54 @@ msgstr ""
 
 #: scripts/board_view.gd
 msgid "periwinkle"
+msgstr ""
+
+#: scripts/credits.gd scripts/menu.gd
+msgid "Credits"
+msgstr ""
+
+#: scripts/credits.gd
+msgid "Crowns is free software: you can share and change it under the GNU General Public License, version 3 or later. It comes with no warranty."
+msgstr ""
+
+#: scripts/credits.gd
+msgid "Source code"
+msgstr ""
+
+#: scripts/credits.gd
+msgid "The app icon and other artwork are licensed under %s."
+msgstr ""
+
+#. Credits heading over the sound effects' authors.
+#: scripts/credits.gd
+msgid "Sounds"
+msgstr ""
+
+#. Credits heading over the fonts' authors.
+#: scripts/credits.gd
+msgid "Fonts"
+msgstr ""
+
+#: scripts/credits.gd
+msgid "DejaVu fonts licence"
+msgstr ""
+
+#. Credits heading over the game engine and libraries.
+#: scripts/credits.gd
+msgid "Software"
+msgstr ""
+
+#: scripts/credits.gd
+msgid "Made with Godot Engine."
+msgstr ""
+
+#: scripts/credits.gd
+msgid "Godot's third-party components"
+msgstr ""
+
+#. A sound's credit, e.g. "Item Pickup by Strechy".
+#: scripts/credits.gd
+msgid "{title} by {author}"
 msgstr ""
 
 #. The puzzle editor's title.

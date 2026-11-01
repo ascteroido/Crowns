@@ -45,6 +45,8 @@ You don't need the whole game to translate it, just the template:
 1. Make your `.po` file from it as in *Adding a language* above, and translate.
 2. Send the `.po` file back, by pull request, issue or email
    ([ascteroido@protonmail.com](mailto:ascteroido@protonmail.com)), and it goes into the game.
+   By sending a translation you agree to it being shared under the game's licence, the
+   [GPL-3.0](../LICENSE).
 
 When the game gets new text, download the template again and update your file from it,
 rather than starting over:

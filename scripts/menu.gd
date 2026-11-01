@@ -15,6 +15,7 @@ signal create_chosen
 signal leaderboards_chosen
 signal settings_chosen
 signal exit_chosen
+signal credits_chosen
 
 var continue_button: Button
 var daily_button: Button
@@ -27,6 +28,7 @@ var create_button: Button
 var leaderboards_button: Button
 var settings_button: Button
 var exit_button: Button
+var credits_button: Button
 var _continue_detail: Label
 var _daily_detail: Label
 var _weekly_detail: Label
@@ -151,6 +153,14 @@ func _ready() -> void:
 	exit_button = _button(tr("Exit"), exit_chosen.emit)
 	exit_button.visible = OS.has_feature("pc")
 	box.add_child(exit_button)
+	credits_button = _button(tr("Credits"), credits_chosen.emit)
+	credits_button.flat = true
+	credits_button.modulate = Color(1, 1, 1, 0.7)
+	credits_button.size_flags_horizontal = SIZE_SHRINK_CENTER
+	# Smaller than the other buttons: these sizes come after _button's, so they win.
+	_scale(credits_button, "height", 36)
+	_scale(credits_button, "font", 15)
+	box.add_child(credits_button)
 	# Buttons that come and go change the menu's height, so it's refitted.
 	leaderboards_button.visibility_changed.connect(_fit)
 	exit_button.visibility_changed.connect(_fit)

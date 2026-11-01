@@ -546,6 +546,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_backup()
 	await _frames(2)
+	await _check_credits()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -2223,6 +2225,48 @@ func _check_solution() -> void:
 	game._leave_game()
 	game._progress.erase_section("revealed")
 	game._progress.save(TEST_SAVE)
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_credits() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(game._menu.credits_button.is_visible_in_tree(), "the menu has a Credits button")
+	game._menu.credits_button.pressed.emit()
+	await _frames(3)
+	var credits: Control = game._credits
+	_expect(credits.visible and not game._menu.visible, "Credits opens its screen")
+	var texts := PackedStringArray()
+	var licences: Array[Button] = []
+	for node in credits.find_children("*", "", true, false):
+		if node is Label:
+			texts.append((node as Label).text)
+		elif node is LinkButton:
+			texts.append((node as LinkButton).tooltip_text)
+		elif node is Button and (node as Button).text.begins_with("▸"):
+			licences.append(node)
+	_expect(licences.size() >= 5, "each licence's text can be shown")
+	for licence in licences:
+		var body: Label = licence.get_parent().get_child(licence.get_index() + 1)
+		_expect(not body.visible and body.text.is_empty(), "licence texts start hidden and unbuilt")
+		licence.pressed.emit()
+		_expect(body.visible and licence.text.begins_with("▾"), "a licence's button shows its text")
+		texts.append(body.text)
+	var all := "\n".join(texts)
+	for needle in ["Strechy", "creativecommons.org/licenses/by/4.0/", "GNU GENERAL PUBLIC LICENSE",
+			"SIL OPEN FONT LICENSE", "Bitstream", "Juan Linietsky", "FreeType"]:
+		_expect(needle in all, "Credits include " + needle)
+	licences[0].pressed.emit()
+	_expect(not licences[0].get_parent().get_child(licences[0].get_index() + 1).visible, "and hides it again")
+	await _frames(2)
+	_expect(credits.size.x >= credits.get_child(0).get_combined_minimum_size().x,
+			"Credits fit the screen's width")
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not credits.visible, "back from Credits goes to the menu")
 	game.queue_free()
 	await _frames(2)
 
