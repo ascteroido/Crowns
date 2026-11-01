@@ -29,12 +29,16 @@ signal language_chosen(locale: String)
 signal how_to_play
 signal back
 
-## Theme names in picker order, matching the game's THEMES plus "custom".
-const THEMES := ["light", "dark", "midnight", "forest", "contrast", "custom"]
+## Theme names in picker order, matching the game's THEMES plus "custom", and
+## first "system", following the device's light or dark mode, where it has one.
+const THEMES := ["system", "light", "dark", "midnight", "forest", "contrast", "custom"]
 ## App icon choices in picker order: matching the theme, then each icon.
 const APP_ICONS := ["theme", "classic", "dark", "midnight", "forest", "contrast"]
 
 var theme_picker: OptionButton
+## THEMES as offered here.
+var themes: Array = THEMES.filter(func(theme_name: String) -> bool:
+		return theme_name != "system" or DisplayServer.is_dark_mode_supported())
 var background_picker: ColorPickerButton
 var button_color_picker: ColorPickerButton
 ## The custom theme's colours, shown only while it's chosen.
@@ -125,9 +129,11 @@ func _ready() -> void:
 	# TRANSLATORS: Colour theme names.
 	var names := {"light": tr("Light"), "dark": tr("Dark"), "midnight": tr("Midnight"), "forest": tr("Forest"),
 			"contrast": tr("High contrast"), "custom": tr("Custom")}
-	for theme_name: String in THEMES:
+	# TRANSLATORS: A colour theme that follows the phone's or computer's light or dark mode.
+	names["system"] = tr("System")
+	for theme_name: String in themes:
 		theme_picker.add_item(names[theme_name])
-	theme_picker.item_selected.connect(func(index: int) -> void: theme_chosen.emit(THEMES[index]))
+	theme_picker.item_selected.connect(func(index: int) -> void: theme_chosen.emit(themes[index]))
 	theme_row.add_child(theme_picker)
 
 	_custom_row = HBoxContainer.new()
@@ -156,6 +162,7 @@ func _ready() -> void:
 	# TRANSLATORS: App icon choices: following the colour theme, or the original purple icon.
 	var icon_names := {"theme": tr("Match theme"), "classic": tr("Classic")}
 	icon_names.merge(names)
+	icon_names.erase("system")
 	for icon: String in APP_ICONS:
 		app_icon_picker.add_item(icon_names[icon])
 	app_icon_picker.item_selected.connect(func(index: int) -> void: app_icon_chosen.emit(APP_ICONS[index]))
@@ -346,7 +353,7 @@ func _fit() -> void:
 
 ## Selects `theme_name` and shows the custom colours, which only it uses.
 func show_theme(theme_name: String, background: Color, button: Color) -> void:
-	theme_picker.select(maxi(0, THEMES.find(theme_name)))
+	theme_picker.select(maxi(0, themes.find(theme_name)))
 	background_picker.color = background
 	button_color_picker.color = button
 	_custom_row.visible = theme_name == "custom"

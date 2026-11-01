@@ -76,14 +76,14 @@ func _run() -> void:
 	main._show_settings()
 
 	# High contrast: yellow buttons need dark text.
-	var contrast: int = main._settings.THEMES.find("contrast")
+	var contrast: int = main._settings.themes.find("contrast")
 	picker.select(contrast)
 	picker.item_selected.emit(contrast)
 	_expect(main._background.color == Color.BLACK and main._theme.get_color("font_color", "Button") == main.THEMES.light.text,
 			"high contrast has dark text on its light buttons")
 
 	# Custom starts from the theme on screen, then follows the picked colours.
-	var custom: int = main._settings.THEMES.find("custom")
+	var custom: int = main._settings.themes.find("custom")
 	picker.select(custom)
 	picker.item_selected.emit(custom)
 	_expect(main._settings._custom_row.visible and main._settings.background_picker.color == Color.BLACK,
@@ -126,6 +126,28 @@ func _run() -> void:
 			and main._app_icon_for("theme", "custom") == "classic" and main._app_icon_for("forest", "dark") == "forest",
 			"the app icon matches the theme, or the chosen one")
 	_expect(main._settings.APP_ICONS.slice(1) == main.AppIcon.ICONS, "Settings offers every app icon")
+
+	# System follows the device's light or dark mode, where it has one.
+	_expect(not main._settings.themes.has("system") or DisplayServer.is_dark_mode_supported(),
+			"System is only offered where the device has a dark mode")
+	var had_system: bool = main._system_theme
+	main._system_theme = true
+	var device_dark := [true]
+	main._system_dark = func() -> bool: return device_dark[0]
+	main._on_theme_chosen("system")
+	_expect(main._background.color == main.THEMES.dark.background and main._view.dark, "System follows a dark device")
+	device_dark[0] = false
+	main._on_system_theme_changed()
+	_expect(main._background.color == main.THEMES.light.background and not main._view.dark,
+			"and turns light when the device does")
+	main._progress.erase_section_key("settings", "theme")
+	_expect(main._theme_name() == "system", "new players follow the device")
+	main._system_theme = false
+	main._progress.set_value("settings", "theme", "system")
+	_expect(main._theme_name() == "light", "without a device dark mode, System falls back to light")
+	main._system_theme = had_system
+	main._system_dark = func() -> bool: return DisplayServer.is_dark_mode()
+	main._progress.set_value("settings", "theme", "light")
 
 	# Saves from before themes keep their dark mode.
 	main._progress.erase_section_key("settings", "theme")

@@ -224,6 +224,12 @@ var _side: VBoxContainer
 ## The game screen's parts in their order down the column.
 var _game_parts: Array[Control] = []
 var _wide := false
+## Whether the device has a light or dark mode for the "system" theme to follow,
+## and whether it's dark.
+var _system_theme := DisplayServer.is_dark_mode_supported()
+var _system_dark := func() -> bool: return DisplayServer.is_dark_mode()
+## The theme last applied, as _shown_theme() gave it.
+var _applied_theme := ""
 ## Whether the player last used the keyboard or a gamepad rather than the mouse
 ## or touch; the selection ring only shows while they do.
 var _navigating := false
@@ -282,6 +288,8 @@ func _ready() -> void:
 	_place_board()
 	_settings.show_theme(_theme_name(), _custom_color("background"), _custom_color("button"))
 	_apply_theme()
+	if _system_theme:
+		DisplayServer.set_system_theme_change_callback(_on_system_theme_changed)
 	_settings.show_text_size(_text_size())
 	_apply_text_size()
 	_settings.show_app_icon(_app_icon.available(), _progress.get_value("settings", "app_icon", "theme"))
@@ -331,6 +339,9 @@ func _notification(what: int) -> void:
 		_focused = false
 	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
 		_focused = true
+		# In case the device's dark mode changed while away, where it can't tell us.
+		if _settings:
+			_on_system_theme_changed()
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		_go_back()
 
@@ -1304,6 +1315,13 @@ func _show_settings() -> void:
 	_fade_in(_settings)
 
 
+## The device's dark mode changed: follow it if the theme is "system".
+func _on_system_theme_changed() -> void:
+	if _theme_name() == "system" and _shown_theme() != _applied_theme:
+		_apply_theme()
+		_update_app_icon()
+
+
 func _on_theme_chosen(theme_name: String) -> void:
 	# Custom starts from the colours on screen, unless the player has picked some before.
 	if theme_name == "custom" and not _progress.has_section_key("settings", "custom_background"):
@@ -1340,7 +1358,7 @@ func _on_app_icon_chosen(icon: String) -> void:
 
 ## Shows the app icon for the chosen setting and theme.
 func _update_app_icon() -> void:
-	_app_icon.set_icon(_app_icon_for(_progress.get_value("settings", "app_icon", "theme"), _theme_name()))
+	_app_icon.set_icon(_app_icon_for(_progress.get_value("settings", "app_icon", "theme"), _shown_theme()))
 
 
 ## The icon for an app icon `choice`: itself, or with "theme" the icon of the
@@ -1361,9 +1379,23 @@ func _on_custom_colors_changed(background: Color, button: Color, done: bool) -> 
 
 ## The chosen theme's name; saves from before themes chose by the dark mode switch.
 func _theme_name() -> String:
-	var fallback := "dark" if _progress.get_value("settings", "dark_mode", false) else "light"
+	var fallback := "light"
+	if _progress.has_section_key("settings", "dark_mode"):
+		fallback = "dark" if _progress.get_value("settings", "dark_mode") else "light"
+	elif _system_theme:
+		fallback = "system"
 	var theme_name: String = _progress.get_value("settings", "theme", fallback)
-	return theme_name if theme_name == "custom" or THEMES.has(theme_name) else "light"
+	if theme_name == "system" and not _system_theme:
+		return "light"
+	return theme_name if theme_name in ["custom", "system"] or THEMES.has(theme_name) else "light"
+
+
+## The theme on screen: the chosen one, or for "system", light or dark to match the device.
+func _shown_theme() -> String:
+	var theme_name := _theme_name()
+	if theme_name == "system":
+		return "dark" if _system_dark.call() else "light"
+	return theme_name
 
 
 ## A custom theme colour ("background" or "button"), or the light theme's until picked.
@@ -1373,7 +1405,7 @@ func _custom_color(key: String) -> Color:
 
 ## The chosen theme's colours, as in THEMES.
 func _theme_colors() -> Dictionary:
-	var theme_name := _theme_name()
+	var theme_name := _shown_theme()
 	if theme_name != "custom":
 		return THEMES[theme_name]
 	return _custom_theme(_custom_color("background"), _custom_color("button"))
@@ -1510,6 +1542,7 @@ func _on_language_chosen(locale: String) -> void:
 
 
 func _apply_theme() -> void:
+	_applied_theme = _shown_theme()
 	var colors := _theme_colors()
 	var on_button := _text_on(colors.button)
 	_background.color = colors.background
