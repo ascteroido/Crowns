@@ -540,6 +540,10 @@ func _run() -> void:
 	await _frames(2)
 	await _check_go_back()
 	await _frames(2)
+	await _check_solution()
+	await _frames(2)
+	await _check_calendar()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -2004,6 +2008,23 @@ func _check_pinch_zoom() -> void:
 		await _key(KEY_RIGHT)
 	var corner: Vector2 = view._origin() + Vector2(view.cursor.y + 1, view.cursor.x + 1) * view._cell_size()
 	_expect(corner.x <= base.x + side + 0.5 and corner.y <= base.y + side + 0.5, "the keyboard cursor stays in view")
+	# A hint on screen leaves the zoom alone; one off screen zooms out to show it.
+	view._zoom = 3.0
+	view._offset = Vector2.ZERO
+	view.clip_contents = true
+	view.hint_targets = PackedInt32Array([0])
+	_expect(view._zoom == 3.0, "a hint on screen keeps the zoom")
+	view.hint_targets = PackedInt32Array([size * size - 1])
+	await _wait_ms(view.ZOOM_OUT_MS + 150)
+	_expect(view._zoom == 1.0 and not view.clip_contents, "a hint off screen zooms out")
+	view.reduce_motion = true
+	view._zoom = 3.0
+	view.clip_contents = true
+	view.mistake = Vector2i(size - 1, size - 1)
+	_expect(view._zoom == 1.0, "so does a mistake, at once without animations")
+	view.reduce_motion = false
+	view.mistake = Vector2i(-1, -1)
+	game._clear_hint()
 	game._on_clear()
 	view.board = view.board
 	_expect(view._zoom == 1.0 and not view.clip_contents, "a new board starts unzoomed")
@@ -2020,6 +2041,125 @@ func _check_pinch_zoom() -> void:
 	saved.load(TEST_SAVE)
 	_expect(saved.get_value("settings", "pinch_zoom", true) == false, "turning pinch to zoom off is saved")
 	game._on_clear()
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_calendar() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var today := Time.get_date_string_from_system()
+	game._progress.erase_section(game.CALENDAR)
+	# Earlier checks' solves are set aside, to count only these.
+	var histories := {}
+	for key in game._progress.get_section_keys(game.HISTORY):
+		histories[key] = game._progress.get_value(game.HISTORY, key)
+	game._progress.erase_section(game.HISTORY)
+	# An older save: solves in the history and a daily, but no calendar yet.
+	var noon: int = Time.get_unix_time_from_datetime_string(today + "T12:00:00") \
+			- Time.get_time_zone_from_system().bias * 60
+	game._progress.set_value(game.HISTORY, "size_99", [[noon, 60.0, 0], [noon, 70.0, 0]])
+	game._progress.set_value("solved", "daily_2026-01-05", true)
+	game._fill_calendar()
+	_expect(game._progress.get_value(game.CALENDAR, today, 0) == 2
+			and game._progress.get_value(game.CALENDAR, "2026-01-05", 0) == 1,
+			"the calendar fills in from older saves' solve history and dailies")
+	game._progress.erase_section(game.HISTORY)
+	for key: String in histories:
+		game._progress.set_value(game.HISTORY, key, histories[key])
+	game._progress.erase_section_key("solved", "daily_2026-01-05")
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var board: Board = game._board
+	for row in board.size:
+		board.set_mark(Vector2i(row, board.solution[row]), Board.Mark.CROWN)
+	game._check_win()
+	_expect(game._progress.get_value(game.CALENDAR, today, 0) == 3, "a solve adds to today's square")
+	game._hide_overlay()
+	game._leave_game()
+	game._menu.stats_button.pressed.emit()
+	await _frames(3)
+	var heatmap: Control = game._stats.heatmap
+	_expect(heatmap != null and heatmap.today == today and heatmap.days.get(today, 0) == 3
+			and heatmap.size.x > 0 and heatmap.custom_minimum_size.y > 0, "Stats shows the year of days played")
+	var texts: Array = game._stats.find_children("*", "Label", true, false).map(func(label: Label) -> String: return label.text)
+	var since := Time.get_unix_time_from_datetime_string(today) - 364 * 86400
+	var played: int = heatmap.days.keys().filter(func(date: String) -> bool:
+			return Time.get_unix_time_from_datetime_string(date) >= since).size()
+	_expect(texts.has("Days played") and texts.has("%d days in the last year" % played) and played >= 2,
+			"and how many days had a solve")
+	_expect(heatmap.level(0) == 0 and heatmap.level(1) == 1 and heatmap.level(3) == 2 and heatmap.level(50) == 4,
+			"more solves shade a day darker")
+	var cell: float = heatmap.size.x / heatmap.WEEKS
+	var weekday: int = Time.get_datetime_dict_from_unix_time(Time.get_unix_time_from_datetime_string(today)).weekday
+	var spot := Vector2((heatmap.WEEKS - 0.5) * cell, heatmap._label_height() + (weekday + 0.5) * cell)
+	_expect(heatmap._get_tooltip(spot) == game._pretty_date(today) + " · 3 puzzles", "today's square says what was solved")
+	_screenshot("stats_calendar.png")
+
+	var local := ConfigFile.new()
+	local.set_value("calendar", today, 2)
+	var remote := ConfigFile.new()
+	remote.set_value("calendar", today, 5)
+	remote.set_value("calendar", "2026-01-05", 1)
+	CloudSave.merge(local, remote)
+	CloudSave.merge(local, remote)
+	_expect(local.get_value("calendar", today) == 5 and local.get_value("calendar", "2026-01-05") == 1,
+			"the calendar merges across devices without counting twice")
+	game._progress.erase_section(game.CALENDAR)
+	game._progress.save(TEST_SAVE)
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_solution() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	var view: Control = game._view
+	var board: Board = game._board
+	var key: String = game._board_key
+	var was_solved: bool = game._progress.get_value("solved", key, false)
+	game._on_clear()
+	game._hinted = false
+	_expect(game._solution_button.visible and game._solution_button.text == "Solution", "regular puzzles offer the solution")
+	await _click(view, Vector2i(0, 0))
+	game._solution_button.pressed.emit()
+	_expect(game._solution_overlay.visible and not game._running, "Solution asks first, pausing the clock")
+	game._keep_trying_button.pressed.emit()
+	_expect(not game._solution_overlay.visible and game._running and not game._revealed
+			and board.get_mark(Vector2i(0, 0)) != Board.Mark.EMPTY, "Keep trying goes back to the board as it was")
+	game._solution_button.pressed.emit()
+	game._reveal_solution()
+	var shown := true
+	for row in board.size:
+		for col in board.size:
+			var crown := board.get_mark(Vector2i(row, col)) == Board.Mark.CROWN
+			shown = shown and crown == (board.solution[row] == col)
+	_expect(shown and game._revealed and not view.interactive and not game._running and game._hinted,
+			"Show solution fills in the crowns and stops the puzzle")
+	_expect(game._progress.get_value("revealed", key, false) and game._progress.get_value("solved", key, false) == was_solved
+			and not game._win_overlay.visible, "a given-up puzzle isn't solved, and is remembered")
+	_expect(game._solution_button.text == "Try again", "the button offers to try again")
+	game._solution_button.pressed.emit()
+	_expect(view.interactive and game._running and board.marks.count(Board.Mark.EMPTY) == board.size * board.size
+			and game._hinted, "Try again starts over on an empty board, still hinted")
+	game._leave_game()
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	_expect(game._hinted and game._solution_button.text == "Solution", "reopening a given-up puzzle keeps it hinted")
+	for mode in [game.Mode.CHALLENGE, game.Mode.SPEED]:
+		game._leave_game()
+		game._start(mode)
+		await _settle()
+		_expect(not game._solution_button.visible, "no solution in The Climb or speed runs")
+	game._leave_game()
+	game._progress.erase_section("revealed")
+	game._progress.save(TEST_SAVE)
 	game.queue_free()
 	await _frames(2)
 

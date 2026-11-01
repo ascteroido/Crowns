@@ -23,7 +23,7 @@
 - [x] Personal records: point out on the win panel when a solve beats the best for its size or difficulty
 - [x] Speed mode: a short run of small boards against the clock
 - [x] Solve history: a graph of recent solve times per size in Stats
-- [ ] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
+- [x] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
 - [ ] Save backup for builds without cloud save: export and import progress as a code or file
 
 ## Google Play Games
@@ -53,8 +53,8 @@
 - [x] Interactive tutorial: walk first-time players through the rules on a small board
 - [x] Haptics: short vibration on Android when placing a crown and on a win
 - [ ] Solve replay: watch a solve back move by move after winning
-- [ ] Give up / show solution: reveal the answer to a stuck puzzle, without it counting as solved
-- [ ] Hints and mistake checks zoom out when pinched in, so the cells they point to are on screen
+- [x] Give up / show solution: reveal the answer to a stuck puzzle, without it counting as solved
+- [x] Hints and mistake checks zoom out when pinched in, so the cells they point to are on screen
 
 ## Look and accessibility
 - [x] Themes: a few colour palettes beyond light and dark, including high contrast, and custom colours

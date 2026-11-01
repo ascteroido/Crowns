@@ -3,6 +3,7 @@ extends Control
 ## recent solve times as a graph, The Climb and speed runs.
 
 const HistoryGraph := preload("res://scripts/history_graph.gd")
+const Heatmap := preload("res://scripts/heatmap.gd")
 
 signal back
 signal achievements_chosen
@@ -23,6 +24,12 @@ var _history_summary: Label
 var _histories := {}
 var _format: Callable
 var _difficulty_names: Array = []
+## The year of days played.
+var heatmap: Heatmap
+var _calendar := {}
+var _today := ""
+var _month_names: Array = []
+var _describe_day: Callable
 
 
 func _ready() -> void:
@@ -103,6 +110,8 @@ func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
 			child.queue_free()
 	_column = _content.get_child(0)
 	_section(tr("Daily and weekly"), _pairs(daily))
+	# TRANSLATORS: Stats heading over a year's calendar, each day shaded by puzzles solved.
+	_section(tr("Days played"), _calendar_section())
 	var table := GridContainer.new()
 	table.columns = 4
 	table.add_theme_constant_override("h_separation", 24)
@@ -119,6 +128,53 @@ func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
 	_section(tr("Solve history"), _history_section())
 	_section(tr("The Climb"), _pairs(climb))
 	_section(tr("Speed run"), _pairs(speed))
+
+
+## Puzzles solved per day ("YYYY-MM-DD" -> count) for the year's calendar,
+## ending `today`; `describe` turns a day and its count into its tooltip.
+## Call before set_stats, which builds the section from them.
+func set_calendar(calendar: Dictionary, today: String, month_names: Array, describe: Callable) -> void:
+	_calendar = calendar
+	_today = today
+	_month_names = month_names
+	_describe_day = describe
+
+
+## The calendar, how many days it has a solve on, and what its shades mean.
+func _calendar_section() -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	heatmap = Heatmap.new()
+	heatmap.month_names = _month_names
+	heatmap.describe = _describe_day
+	heatmap.days = _calendar
+	heatmap.today = _today
+	column.add_child(heatmap)
+	var since := Time.get_unix_time_from_datetime_string(_today) - 364 * 86400
+	var played := _calendar.keys().filter(func(date: String) -> bool:
+			return _calendar[date] > 0 and Time.get_unix_time_from_datetime_string(date) >= since).size()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	column.add_child(row)
+	var summary := _label(tr_n("%d day in the last year", "%d days in the last year", played) % played, 15)
+	summary.modulate = Color(1, 1, 1, 0.7)
+	summary.size_flags_horizontal = SIZE_EXPAND_FILL
+	row.add_child(summary)
+	# TRANSLATORS: Either side of the calendar's shades, from no puzzles solved to many.
+	var less := _label(tr("Less"), 13)
+	less.modulate = Color(1, 1, 1, 0.6)
+	row.add_child(less)
+	for shade in Heatmap.LEVELS.size() + 1:
+		# Drawn rather than coloured once, so it follows the theme like the calendar.
+		var swatch := Control.new()
+		swatch.custom_minimum_size = Vector2(10, 10)
+		swatch.size_flags_vertical = SIZE_SHRINK_CENTER
+		swatch.draw.connect(func() -> void: swatch.draw_rect(Rect2(Vector2.ZERO, swatch.size), heatmap.shade_color(shade)))
+		row.add_child(swatch)
+	var more := _label(tr("More"), 13)
+	more.modulate = Color(1, 1, 1, 0.6)
+	row.add_child(more)
+	return column
 
 
 ## The recent solves to graph, by size, and how to show times and difficulties.

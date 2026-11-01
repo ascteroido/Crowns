@@ -255,10 +255,11 @@ msgid "Solved (hints used)"
 msgstr "Solvita (aludoj uzitaj)"
 
 #: scripts/main.gd:457
+#, fuzzy
 msgid "%d day streak"
 msgid_plural "%d days streak"
 msgstr[0] "%d-taga serio"
-msgstr[1] "%d-tagaj serioj"
+msgstr[1] "%d-taga serio"
 
 #: scripts/main.gd:459
 msgid "One life, no hints"

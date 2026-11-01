@@ -113,6 +113,8 @@ const BASE_HEIGHT := 860
 const GAME_MARGIN := 24
 ## Recent timed solves per size, for the graph in Stats.
 const HISTORY := "history"
+## Puzzles solved per day on the player's own calendar, "YYYY-MM-DD" -> count.
+const CALENDAR := "calendar"
 ## The player's SilentWolf identity ("player_id", "player_name") and scores not yet sent.
 const ONLINE := "online"
 
@@ -243,6 +245,14 @@ var _redo_button: Button
 var _clear_button: Button
 var _hint_button: Button
 var _check_button: Button
+## Shows the solution, after asking; once it's shown, starts the puzzle over.
+var _solution_button: Button
+## Asks before the solution is shown.
+var _solution_overlay: Control
+var _keep_trying_button: Button
+var _solution_paused := false
+## Whether the board on screen shows the solution, given up on.
+var _revealed := false
 var _hint_label: Label
 var _win_overlay: Control
 var _win_panel: PanelContainer
@@ -407,22 +417,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _game.visible:
 		return
-	if (event.is_action_pressed("ui_redo", true) or event.is_action_pressed(Gamepad.REDO)) and not _code_overlay.visible:
+	if (event.is_action_pressed("ui_redo", true) or event.is_action_pressed(Gamepad.REDO)) and not _panel_open():
 		_on_redo()
 		get_viewport().set_input_as_handled()
-	elif (event.is_action_pressed("ui_undo", true) or event.is_action_pressed(Gamepad.UNDO)) and not _code_overlay.visible:
+	elif (event.is_action_pressed("ui_undo", true) or event.is_action_pressed(Gamepad.UNDO)) and not _panel_open():
 		_on_undo()
 		get_viewport().set_input_as_handled()
 	elif (event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_H
 			and not (event as InputEventKey).ctrl_pressed or event.is_action_pressed(Gamepad.HINT)) \
-			and _hint_button.visible and not _code_overlay.visible:
+			and _hint_button.visible and not _panel_open():
 		_on_hint()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed(Gamepad.CONTROLS) and not _code_overlay.visible and not _win_overlay.visible:
+	elif event.is_action_pressed(Gamepad.CONTROLS) and not _panel_open() and not _win_overlay.visible:
 		_toggle_pad_controls()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") and _pad_controls_focused():
 		_view.grab_focus()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_cancel") and _solution_overlay.visible:
+		_hide_solution_overlay()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") and _code_overlay.visible:
 		_hide_code()
@@ -615,7 +628,7 @@ func _build_ui() -> void:
 	# Wraps onto a second line when the side panel of the wide layout is too narrow.
 	var actions := HFlowContainer.new()
 	actions.alignment = FlowContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("h_separation", 12)
+	actions.add_theme_constant_override("h_separation", 8)
 	actions.add_theme_constant_override("v_separation", 12)
 	column.add_child(actions)
 	_undo_button = _button(tr("Undo"), _on_undo)
@@ -627,12 +640,18 @@ func _build_ui() -> void:
 	_clear_button = _button(tr("Clear"), _on_clear)
 	actions.add_child(_clear_button)
 	_hint_button = _button(tr("Hint"), _on_hint)
-	_hint_button.custom_minimum_size.x = 120
+	_hint_button.custom_minimum_size.x = 104
 	_hint_button.tooltip_text = "H"
 	actions.add_child(_hint_button)
 	# TRANSLATORS: Checks the board for mistakes without saying where they are.
 	_check_button = _button(tr("Check"), _on_check)
 	actions.add_child(_check_button)
+	# TRANSLATORS: Gives up on the puzzle and shows its answer, after asking.
+	_solution_button = _button(tr("Solution"), _on_solution)
+	actions.add_child(_solution_button)
+	# A little narrower than other buttons, so all six fit in a row on phones.
+	for button: Button in [_undo_button, _redo_button, _clear_button, _check_button, _solution_button]:
+		button.custom_minimum_size.x = 84
 	# The board keeps the keyboard; these buttons have shortcuts or need a click.
 	_set_pad_controls(false)
 
@@ -681,13 +700,14 @@ func _build_ui() -> void:
 
 	_build_win_overlay()
 	_build_code_overlay()
+	_build_solution_overlay()
 
 
 ## The game's buttons, which a gamepad reaches with Start; otherwise the board
 ## keeps the focus, so clicking them leaves the keys working the board.
 func _pad_controls() -> Array[Control]:
 	return [_back_button, _size_picker, _difficulty_picker, _prev_button, _next_button, _code_button,
-			_undo_button, _redo_button, _clear_button, _hint_button, _check_button]
+			_undo_button, _redo_button, _clear_button, _hint_button, _check_button, _solution_button]
 
 
 func _set_pad_controls(reachable: bool) -> void:
@@ -720,6 +740,8 @@ func _pad_focus(event: InputEvent) -> bool:
 		target = _next_puzzle_button if _next_puzzle_button.visible else _win_back_button
 	elif _code_overlay.visible:
 		return false
+	elif _solution_overlay.visible:
+		target = _keep_trying_button
 	elif _game.visible:
 		target = _view
 	elif _editor.visible:
@@ -906,6 +928,119 @@ func _build_code_overlay() -> void:
 	var close := _button(tr("Close"), _hide_code)
 	close.size_flags_horizontal = SIZE_SHRINK_CENTER
 	box.add_child(close)
+
+
+func _build_solution_overlay() -> void:
+	_solution_overlay = ColorRect.new()
+	(_solution_overlay as ColorRect).color = Color(0, 0, 0, 0.45)
+	_solution_overlay.set_anchors_preset(PRESET_FULL_RECT)
+	_solution_overlay.visible = false
+	_game.add_child(_solution_overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(PRESET_FULL_RECT)
+	_solution_overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _panel_style)
+	center.add_child(panel)
+	var inner := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		inner.add_theme_constant_override("margin_" + side, 28)
+	panel.add_child(inner)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	box.custom_minimum_size.x = 340
+	inner.add_child(box)
+
+	var heading := _label(tr("Show the solution?"), 28)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(heading)
+	var note := _label(tr("This puzzle won't count as solved, and solving it later counts as using hints."), 16)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.modulate = Color(1, 1, 1, 0.7)
+	box.add_child(note)
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 12)
+	box.add_child(buttons)
+	_keep_trying_button = _button(tr("Keep trying"), _hide_solution_overlay)
+	buttons.add_child(_keep_trying_button)
+	buttons.add_child(_button(tr("Show solution"), _reveal_solution))
+
+
+## Asks before showing the solution, or once it's shown, starts the puzzle over.
+func _on_solution() -> void:
+	if _generating or not _solution_button.visible:
+		return
+	if _revealed:
+		_try_again()
+		return
+	if not _view.interactive:
+		return
+	_solution_paused = _running
+	_running = false
+	_solution_overlay.visible = true
+	# Keep trying is the safe choice for Enter.
+	_keep_trying_button.grab_focus()
+
+
+## Whether a panel over the board (puzzle code, or showing the solution) is open,
+## so the board's shortcuts wait.
+func _panel_open() -> bool:
+	return _code_overlay.visible or _solution_overlay.visible
+
+
+func _hide_solution_overlay() -> void:
+	if not _solution_overlay.visible:
+		return
+	_solution_overlay.visible = false
+	_view.grab_focus()
+	if _solution_paused:
+		_running = true
+		_solution_paused = false
+
+
+## Gives up: fills in the solution's crowns. The puzzle isn't solved, and is
+## remembered as given up, so solving it later counts as using hints.
+func _reveal_solution() -> void:
+	_solution_paused = false
+	_hide_solution_overlay()
+	_clear_hint()
+	_revealed = true
+	_hinted = true
+	_running = false
+	var n := _board.size
+	for i in _board.marks.size():
+		_board.marks[i] = Board.Mark.CROWN if _board.solution[i / n] == i % n else Board.Mark.EMPTY
+	_view.mistake = Vector2i(-1, -1)
+	_view.interactive = false
+	_view.queue_redraw()
+	_undo.clear()
+	_undo_button.disabled = true
+	_redo.clear()
+	_redo_button.disabled = true
+	if not _board_key.is_empty():
+		_progress.set_value("revealed", _board_key, true)
+		if _progress.has_section_key("in_progress", _board_key):
+			_progress.erase_section_key("in_progress", _board_key)
+		_progress.save(save_path)
+	_hint_label.text = tr("Here's the solution. This puzzle doesn't count as solved.")
+	_solution_button.text = tr("Try again")
+	_sounds.play("erase")
+
+
+## Starts a given-up puzzle over on an empty board, still counted as hinted.
+func _try_again() -> void:
+	_revealed = false
+	_solution_button.text = tr("Solution")
+	_board.marks.fill(Board.Mark.EMPTY)
+	_clear_hint()
+	_view.interactive = true
+	_view.queue_redraw()
+	_view.grab_focus()
+	_running = true
+	_save_board()
 
 
 func _show_code() -> void:
@@ -1226,9 +1361,39 @@ func _show_stats() -> void:
 	for size: int in _sizes:
 		histories[size] = _progress.get_value(HISTORY, "size_%d" % size, [])
 	_stats.set_history(histories, _format_time, range(Generator.DIFFICULTY_NAMES.size()).map(_difficulty_name))
+	_fill_calendar()
+	var calendar := {}
+	for date in _progress.get_section_keys(CALENDAR) if _progress.has_section(CALENDAR) else PackedStringArray():
+		calendar[date] = _progress.get_value(CALENDAR, date)
+	_stats.set_calendar(calendar, Time.get_date_string_from_system(), _short_month_names(),
+			func(date: String, count: int) -> String:
+				# TRANSLATORS: A calendar day's tooltip in Stats, e.g. "Oct 23 · 3 puzzles".
+				return _pretty_date(date) + " · " + tr_n("%d puzzle", "%d puzzles", count) % count)
 	_stats.set_stats(daily, sizes, climb, speed)
 	_menu.visible = false
 	_fade_in(_stats)
+
+
+## Adds a solve to today's square on the Stats calendar.
+func _count_day() -> void:
+	var today := Time.get_date_string_from_system()
+	_progress.set_value(CALENDAR, today, _progress.get_value(CALENDAR, today, 0) + 1)
+
+
+## Fills the Stats calendar from saves made before it existed: the solve
+## history's times, and the dailies solved.
+func _fill_calendar() -> void:
+	if _progress.has_section(CALENDAR):
+		return
+	var bias: int = Time.get_time_zone_from_system().bias * 60
+	for key in _progress.get_section_keys(HISTORY) if _progress.has_section(HISTORY) else PackedStringArray():
+		for entry: Array in _progress.get_value(HISTORY, key):
+			var date := Time.get_date_string_from_unix_time(int(entry[0]) + bias)
+			_progress.set_value(CALENDAR, date, _progress.get_value(CALENDAR, date, 0) + 1)
+	for key in _progress.get_section_keys("solved") if _progress.has_section("solved") else PackedStringArray():
+		var date := key.trim_prefix("daily_")
+		if key.begins_with("daily_") and not _progress.has_section_key(CALENDAR, date):
+			_progress.set_value(CALENDAR, date, 1)
 
 
 ## Counts a puzzle's first solve; only solves without hints count towards times.
@@ -1687,6 +1852,7 @@ func _start(mode: Mode, date := "") -> void:
 	_code_overlay.visible = false
 	_hint_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED]
 	_check_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED, Mode.TUTORIAL]
+	_solution_button.visible = _check_button.visible
 	# The tutorial is untimed, and its Hint button turns the intro cards.
 	_clear_button.visible = not tutorial
 	_win_play_button.visible = false
@@ -1828,14 +1994,18 @@ func _load_puzzle() -> void:
 		puzzle = await _generate(spec)
 	_board = Board.new(size, puzzle.regions, puzzle.solution)
 	_board_key = _puzzle_key()
-	_hinted = false
+	# Once given up on, a puzzle counts as hinted for good.
+	_hinted = not _board_key.is_empty() and _progress.get_value("revealed", _board_key, false)
+	_revealed = false
+	_solution_button.text = tr("Solution")
+	_solution_overlay.visible = false
 	_elapsed = _run.elapsed if _mode == Mode.CHALLENGE else _speed_run.elapsed if _mode == Mode.SPEED else 0.0
 	var saved: Dictionary = {} if _board_key.is_empty() else _progress.get_value("in_progress", _board_key, {})
 	# Only restore onto the same layout, in case puzzle generation has changed since.
 	if saved.get("regions", PackedInt32Array()) == _board.regions:
 		_board.marks = saved.marks
 		_elapsed = saved.elapsed
-		_hinted = saved.hinted
+		_hinted = _hinted or saved.hinted
 	if _mode == Mode.TUTORIAL:
 		_board.marks = _lesson_marks()
 	_view.board = _board
@@ -2310,6 +2480,7 @@ func _check_win() -> void:
 		_win_leaderboard_button.visible = false
 		_show_win_overlay()
 		return
+	_count_day()
 	if _mode == Mode.CHALLENGE:
 		var solved: int = _run.level
 		var best_run: int = _progress.get_value(CHALLENGE_KEY, "best", 0)
@@ -2796,12 +2967,16 @@ func _days_into_week() -> int:
 ## "2026-10-23" -> "Oct 23".
 func _pretty_date(date: String) -> String:
 	var parts := date.split("-")
-	var months: Array[String] = [tr("Jan", "short month"), tr("Feb", "short month"), tr("Mar", "short month"),
+	# TRANSLATORS: A short date, e.g. "Oct 23".
+	return tr("{month} {day}", "short date").format({"month": _short_month_names()[parts[1].to_int() - 1],
+			"day": parts[2].to_int()})
+
+
+func _short_month_names() -> Array[String]:
+	return [tr("Jan", "short month"), tr("Feb", "short month"), tr("Mar", "short month"),
 			tr("Apr", "short month"), tr("May", "short month"), tr("Jun", "short month"), tr("Jul", "short month"),
 			tr("Aug", "short month"), tr("Sep", "short month"), tr("Oct", "short month"), tr("Nov", "short month"),
 			tr("Dec", "short month")]
-	# TRANSLATORS: A short date, e.g. "Oct 23".
-	return tr("{month} {day}", "short date").format({"month": months[parts[1].to_int() - 1], "day": parts[2].to_int()})
 
 
 ## Difficulty names as shown; Generator.DIFFICULTY_NAMES stay English for save keys.

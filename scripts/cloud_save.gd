@@ -48,6 +48,9 @@ static func merge(local: ConfigFile, remote: ConfigFile) -> void:
 		_keep_lower(local, remote, "best", key)
 	_merge_stats(local, remote)
 	_merge_history(local, remote)
+	# Days played: the more solves of the two, so merging twice doesn't count twice.
+	for key in _keys(remote, "calendar"):
+		_keep_higher(local, remote, "calendar", key)
 
 	_keep_higher(local, remote, "challenge", "best")
 	if remote.has_section_key("speed", "best"):

@@ -59,6 +59,8 @@ const MARK_COLOR := Color("1e1e1e")
 const CONFLICT_COLOR := Color("d6312b")
 const CONFLICT_BAND := Color("a8221d")
 const DOUBLE_TAP_MS := 400
+## How long a zoomed board takes to zoom out for a hint.
+const ZOOM_OUT_MS := 250.0
 ## How long a new crown or cross takes to pop in.
 const POP_MS := {Board.Mark.CROWN: 220.0, Board.Mark.CROSS: 130.0, Board.Mark.AUTO_CROSS: 160.0}
 ## The win wave: each row's crowns hop this long after the row above.
@@ -91,16 +93,20 @@ var board: Board:
 var hint_focus := PackedInt32Array():
 	set(value):
 		hint_focus = value
+		_bring_into_view(value)
 		queue_redraw()
 ## Cell indices a hint would change, ringed in blue.
 var hint_targets := PackedInt32Array():
 	set(value):
 		hint_targets = value
+		_bring_into_view(value)
 		queue_redraw()
 ## A wrongly placed crown to show in red, or (-1, -1).
 var mistake := Vector2i(-1, -1):
 	set(value):
 		mistake = value
+		if board and value.x >= 0:
+			_bring_into_view(PackedInt32Array([board.index(value)]))
 		queue_redraw()
 ## Paint mode, for the editor: presses, drags and the keyboard's mark keys give
 ## cells this region instead of marks. -1 for normal play.
@@ -167,6 +173,7 @@ var zoomable := false:
 		if not value:
 			reset_zoom()
 var _zoom := 1.0
+var _zoom_tween: Tween
 ## Where the zoomed board's corner sits from the unzoomed board's, in pixels;
 ## never past zero, so the board always fills its unzoomed square.
 var _offset := Vector2.ZERO
@@ -238,6 +245,8 @@ func region_name(region: int) -> String:
 
 ## Back to the whole board.
 func reset_zoom() -> void:
+	if _zoom_tween and _zoom_tween.is_running():
+		_zoom_tween.kill()
 	_zoom = 1.0
 	_offset = Vector2.ZERO
 	clip_contents = false
@@ -269,6 +278,8 @@ func _input(event: InputEvent) -> void:
 ## A second finger is down: the first finger's press was the start of a pinch.
 func _start_pinch() -> void:
 	_pinching = true
+	if _zoom_tween:
+		_zoom_tween.kill()
 	for index in range(_stroke.size() - 1, -1, -1):
 		board.set_mark(_stroke[index][0], _stroke[index][1])
 	for index in range(_painted.size() - 1, -1, -1):
@@ -304,6 +315,36 @@ func _move_pinch() -> void:
 	_pinch_mid = mid
 	clip_contents = _zoom > 1.0
 	queue_redraw()
+
+
+## Zooms all the way out if any of `cells` (indices) are off screen, so a hint
+## or mistake can be seen whole.
+func _bring_into_view(cells: PackedInt32Array) -> void:
+	if _zoom <= 1.0 or board == null or cells.is_empty():
+		return
+	var shown := Rect2(_base_origin(), Vector2.ONE * _base_cell_size() * board.size).grow(0.5)
+	var cs := _cell_size()
+	for index in cells:
+		var cell := Rect2(_origin() + Vector2(index % board.size, index / board.size) * cs, Vector2(cs, cs))
+		if not shown.encloses(cell):
+			_zoom_out()
+			return
+
+
+func _zoom_out() -> void:
+	if _zoom_tween:
+		_zoom_tween.kill()
+	if reduce_motion:
+		reset_zoom()
+		return
+	var from_zoom := _zoom
+	var from_offset := _offset
+	_zoom_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_zoom_tween.tween_method(func(t: float) -> void:
+		_zoom = lerpf(from_zoom, 1.0, t)
+		_offset = from_offset.lerp(Vector2.ZERO, t)
+		queue_redraw(), 0.0, 1.0, ZOOM_OUT_MS / 1000.0)
+	_zoom_tween.tween_callback(reset_zoom)
 
 
 ## Moves a zoomed board so `cell` is on screen, for the keyboard and gamepad.
