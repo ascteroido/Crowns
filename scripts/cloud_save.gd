@@ -83,6 +83,10 @@ static func merge(local: ConfigFile, remote: ConfigFile) -> void:
 			local.set_value("solved", key, true)
 	for key in _keys(remote, "best"):
 		_keep_lower(local, remote, "best", key)
+	# The first solve's date is the earlier of the two.
+	for key in _keys(remote, "solved_on"):
+		if not local.has_section_key("solved_on", key) or remote.get_value("solved_on", key) < local.get_value("solved_on", key):
+			local.set_value("solved_on", key, remote.get_value("solved_on", key))
 	_merge_stats(local, remote)
 	_merge_history(local, remote)
 	# Days played: the more solves of the two, so merging twice doesn't count twice.

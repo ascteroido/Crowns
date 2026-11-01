@@ -552,6 +552,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_dim_finished()
 	await _frames(2)
+	await _check_stats_export()
+	await _frames(2)
 	await _check_drills()
 	await _frames(2)
 	await _check_languages()
@@ -2457,6 +2459,72 @@ func _check_drills() -> void:
 	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
 	await _frames(3)
 	_expect(game._menu.visible and not game._drills.visible, "back from Drills goes to the menu")
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_stats_export() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var progress: ConfigFile = game._progress
+	var saved := ConfigFile.new()
+	for section in progress.get_sections():
+		for key in progress.get_section_keys(section):
+			saved.set_value(section, key, progress.get_value(section, key))
+	for section in ["solved", "best", "solved_on"]:
+		if progress.has_section(section):
+			progress.erase_section(section)
+	progress.set_value("solved", "7x7_hard_12", true)
+	progress.set_value("best", "7x7_hard_12", 125.4)
+	progress.set_value("solved_on", "7x7_hard_12", "2026-10-30")
+	progress.set_value("solved", "daily_2026-10-23", true)
+	progress.set_value("solved", "weekly_2026-10-26", true)
+	progress.set_value("best", "weekly_2026-10-26", 600.0)
+	progress.set_value("solved_on", "weekly_2026-10-26", "2026-10-28")
+	progress.set_value("solved", "custom_6C-AbC_d", true)
+	var lines: PackedStringArray = game._stats_csv().strip_edges().split("\n")
+	_expect(lines[0] == "mode,puzzle,size,difficulty,solved_on,best_time,best_seconds,hints", "the CSV has a header")
+	_expect(lines.size() == 5, "a row per solved puzzle")
+	var daily_size: int = game._daily_size("2026-10-23")
+	_expect(lines[1] == "Custom,6C-AbC_d,6,,,,,yes" and lines[2] == "Daily,2026-10-23,%d,Medium,,,,yes" % daily_size,
+			"undated solves come first, with what's known about them")
+	_expect(lines[3] == "Weekly,%s,10,Hard,2026-10-28,10:00,600.0,no" % game._week_first_day("2026-10-26"),
+			"weeklies show their week and best time")
+	_expect(lines[4] == "Puzzle,#12,7,Hard,2026-10-30,2:05,125.4,no", "numbered puzzles show their number")
+	_expect(game._csv_field("a,b \"c\"") == "\"a,b \"\"c\"\"\"", "fields with commas or quotes are quoted")
+
+	game._mark_solved("8x8_easy_3")
+	_expect(progress.get_value("solved_on", "8x8_easy_3") == Time.get_date_string_from_system(), "solves note their day")
+	progress.set_value("solved_on", "8x8_easy_3", "2026-10-01")
+	game._mark_solved("8x8_easy_3")
+	_expect(progress.get_value("solved_on", "8x8_easy_3") == "2026-10-01", "replays keep the first solve's day")
+	var remote := ConfigFile.new()
+	remote.set_value("solved_on", "8x8_easy_3", "2026-09-30")
+	remote.set_value("solved_on", "7x7_hard_12", "2026-11-01")
+	CloudSave.merge(progress, remote)
+	_expect(progress.get_value("solved_on", "8x8_easy_3") == "2026-09-30"
+			and progress.get_value("solved_on", "7x7_hard_12") == "2026-10-30", "merging keeps the earlier day")
+
+	var path := ProjectSettings.globalize_path("user://test_export.csv")
+	_expect(game._write_text(path, "a,b\n") and FileAccess.get_file_as_string(path) == "a,b\n", "the export writes its file")
+	DirAccess.remove_absolute(path)
+	game._menu.stats_button.pressed.emit()
+	await _frames(2)
+	_expect(game._stats.export_button.is_visible_in_tree(), "Stats has an export button")
+	game._stats.show_export_result(true)
+	_expect(game._stats._export_status.visible and game._stats._export_status.text == "Stats saved.", "it says the file was saved")
+	game._show_menu()
+	game._menu.stats_button.pressed.emit()
+	_expect(not game._stats._export_status.visible, "the message is gone next time")
+
+	for section in ["solved", "best", "solved_on"]:
+		if progress.has_section(section):
+			progress.erase_section(section)
+		for key in saved.get_section_keys(section) if saved.has_section(section) else PackedStringArray():
+			progress.set_value(section, key, saved.get_value(section, key))
+	progress.save(TEST_SAVE)
 	game.queue_free()
 	await _frames(2)
 

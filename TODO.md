@@ -27,7 +27,7 @@
 - [x] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
 - [x] Save backup for builds without cloud save: copy progress as a backup code and restore it (in Settings)
 - [x] Weekly archive: play past weekly challenges, like the daily archive
-- [ ] Stats export: save the solve history as a CSV file
+- [x] Stats export: save every solved puzzle as a CSV file (Stats → Export CSV)
 
 ## Google Play Games
 - [x] Achievements: first Hard solve, 7-day streak, topping The Climb, a solve with no hints

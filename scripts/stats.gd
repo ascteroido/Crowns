@@ -7,6 +7,7 @@ const Heatmap := preload("res://scripts/heatmap.gd")
 
 signal back
 signal achievements_chosen
+signal export_chosen
 
 var _box: VBoxContainer
 var _content: BoxContainer
@@ -16,6 +17,9 @@ var _column: VBoxContainer
 var _footer: BoxContainer
 ## Shown only where Google Play Games is available.
 var achievements_button: Button
+var export_button: Button
+## Says where an export went, or that it failed.
+var _export_status: Label
 ## The solve history section's size picker and graph.
 var history_picker: OptionButton
 var history_graph: HistoryGraph
@@ -79,6 +83,15 @@ func _ready() -> void:
 	achievements_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	_footer.add_child(achievements_button)
 
+	# TRANSLATORS: Saves every solved puzzle as a spreadsheet (CSV) file.
+	export_button = Button.new()
+	export_button.text = tr("Export CSV")
+	export_button.custom_minimum_size = Vector2(0, 52)
+	TextSize.set_font(export_button, 20)
+	export_button.pressed.connect(export_chosen.emit)
+	export_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	_footer.add_child(export_button)
+
 	var back_button := Button.new()
 	back_button.text = tr("Back")
 	back_button.custom_minimum_size = Vector2(0, 52)
@@ -86,6 +99,13 @@ func _ready() -> void:
 	back_button.pressed.connect(back.emit)
 	back_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	_footer.add_child(back_button)
+	_export_status = _label("", 15)
+	_export_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_export_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_export_status.modulate = Color(1, 1, 1, 0.65)
+	_export_status.visible = false
+	_box.add_child(_export_status)
+	visibility_changed.connect(func() -> void: _export_status.visible = false)
 	_fit()
 
 
@@ -100,6 +120,12 @@ func _fit() -> void:
 	_content.vertical = not wide
 	_content.add_theme_constant_override("separation", 56 if wide else 8)
 	_footer.vertical = not wide
+
+
+## Says whether the export was saved.
+func show_export_result(saved: bool) -> void:
+	_export_status.text = tr("Stats saved.") if saved else tr("Couldn't save the file there.")
+	_export_status.visible = true
 
 
 ## `daily`, `climb` and `speed` are [label, value] pairs; `sizes` rows are

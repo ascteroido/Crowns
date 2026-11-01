@@ -636,6 +636,10 @@ msgid_plural "%d puzzles"
 msgstr[0] ""
 msgstr[1] ""
 
+#: scripts/main.gd
+msgid "Export stats"
+msgstr ""
+
 #: scripts/main.gd scripts/settings.gd
 msgid "Daily reminder"
 msgstr ""
@@ -1223,6 +1227,18 @@ msgstr ""
 
 #: scripts/stats.gd
 msgid "Achievements"
+msgstr ""
+
+#: scripts/stats.gd
+msgid "Export CSV"
+msgstr ""
+
+#: scripts/stats.gd
+msgid "Stats saved."
+msgstr ""
+
+#: scripts/stats.gd
+msgid "Couldn't save the file there."
 msgstr ""
 
 #: scripts/stats.gd

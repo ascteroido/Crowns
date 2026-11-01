@@ -124,6 +124,9 @@ const BASE_HEIGHT := 860
 const GAME_MARGIN := 24
 ## Recent timed solves per size, for the graph in Stats.
 const HISTORY := "history"
+## The date ("YYYY-MM-DD", local) each puzzle was first solved, by its save key.
+## Only kept from when stats export arrived; older solves have none.
+const SOLVED_ON := "solved_on"
 ## Puzzles solved per day on the player's own calendar, "YYYY-MM-DD" -> count.
 const CALENDAR := "calendar"
 ## The player's SilentWolf identity ("player_id", "player_name") and scores not yet sent.
@@ -522,6 +525,7 @@ func _build_ui() -> void:
 	_stats.visible = false
 	_stats.back.connect(_show_menu)
 	_stats.achievements_chosen.connect(func() -> void: _play_games.show_achievements())
+	_stats.export_chosen.connect(_export_stats)
 	add_child(_stats)
 
 	_editor = Editor.new()
@@ -1502,6 +1506,103 @@ func _fill_calendar() -> void:
 		var date := key.trim_prefix("daily_")
 		if key.begins_with("daily_") and not _progress.has_section_key(CALENDAR, date):
 			_progress.set_value(CALENDAR, date, 1)
+
+
+## Marks the puzzle saved as `key` solved, noting the day of its first solve.
+func _mark_solved(key: String) -> void:
+	_progress.set_value("solved", key, true)
+	if not _progress.has_section_key(SOLVED_ON, key):
+		_progress.set_value(SOLVED_ON, key, Time.get_date_string_from_system())
+
+
+## Every solved puzzle as CSV, one row each, oldest solve first (those solved
+## before solve dates were kept come first, undated): what it was, when it was
+## first solved and its best time. Spreadsheet-ready, so its words are English.
+func _stats_csv() -> String:
+	var rows := []
+	var regular := RegEx.create_from_string("^(\\d+)x\\d+_([a-z+]+)_(\\d+)$")
+	for key: String in _progress.get_section_keys("solved") if _progress.has_section("solved") else PackedStringArray():
+		var row := {}
+		var found := regular.search(key)
+		if found:
+			var difficulty := Generator.DIFFICULTY_NAMES.map(func(name: String) -> String: return name.to_lower()) \
+					.find(found.get_string(2))
+			row = {"mode": "Puzzle", "puzzle": "#" + found.get_string(3), "size": found.get_string(1).to_int(),
+					"difficulty": Generator.DIFFICULTY_NAMES[difficulty] if difficulty >= 0 else ""}
+		elif key.begins_with("daily_"):
+			var date := key.trim_prefix("daily_")
+			row = {"mode": "Daily", "puzzle": date, "size": _daily_size(date),
+					"difficulty": Generator.DIFFICULTY_NAMES[DAILY_DIFFICULTY]}
+		elif key.begins_with("weekly_"):
+			row = {"mode": "Weekly", "puzzle": _week_first_day(key.trim_prefix("weekly_")), "size": WEEKLY_SIZE,
+					"difficulty": Generator.DIFFICULTY_NAMES[WEEKLY_DIFFICULTY]}
+		elif key.begins_with("custom_"):
+			var code := key.trim_prefix("custom_")
+			row = {"mode": "Custom", "puzzle": code, "size": code.get_slice("C", 0).to_int(), "difficulty": ""}
+		else:
+			continue
+		var best: float = _progress.get_value("best", key, INF)
+		row.solved_on = _progress.get_value(SOLVED_ON, key, "")
+		row.best_time = _format_time(best) if best != INF else ""
+		row.best_seconds = "%.1f" % best if best != INF else ""
+		# Best times are only kept for solves without hints.
+		row.hints = "yes" if best == INF else "no"
+		rows.append(row)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return [a.solved_on, a.mode, a.puzzle] < [b.solved_on, b.mode, b.puzzle])
+	var columns := ["mode", "puzzle", "size", "difficulty", "solved_on", "best_time", "best_seconds", "hints"]
+	var lines := [",".join(columns)]
+	for row: Dictionary in rows:
+		lines.append(",".join(columns.map(func(column: String) -> String: return _csv_field(str(row[column])))))
+	return "\n".join(lines) + "\n"
+
+
+static func _csv_field(text: String) -> String:
+	if text.contains(",") or text.contains("\"") or text.contains("\n"):
+		return "\"" + text.replace("\"", "\"\"") + "\""
+	return text
+
+
+## Saves _stats_csv(): downloaded on the web, otherwise wherever the player
+## picks in the system's save dialog (or Godot's own, where there's none).
+func _export_stats() -> void:
+	var csv := _stats_csv()
+	var file_name := "crowns-stats-%s.csv" % Time.get_date_string_from_system()
+	if OS.has_feature("web"):
+		JavaScriptBridge.download_buffer(csv.to_utf8_buffer(), file_name, "text/csv")
+		return
+	var on_chosen := func(chosen: bool, paths: PackedStringArray, _filter: int) -> void:
+		if chosen and not paths.is_empty():
+			_stats.show_export_result(_write_text(paths[0], csv))
+	var folder := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+		DisplayServer.file_dialog_show(tr("Export stats"), folder, file_name, false,
+				DisplayServer.FILE_DIALOG_MODE_SAVE_FILE, PackedStringArray(["*.csv"]), on_chosen)
+		return
+	var dialog := FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.use_native_dialog = false
+	dialog.title = tr("Export stats")
+	dialog.filters = PackedStringArray(["*.csv"])
+	dialog.current_dir = folder
+	dialog.current_file = file_name
+	dialog.file_selected.connect(func(path: String) -> void: on_chosen.call(true, PackedStringArray([path]), 0))
+	dialog.visibility_changed.connect(func() -> void:
+		if not dialog.visible:
+			dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered_ratio(0.8)
+
+
+## Writes `text` to `path`; whether it worked.
+static func _write_text(path: String, text: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(text)
+	file.close()
+	return true
 
 
 ## Counts a puzzle's first solve; only solves without hints count towards times.
@@ -2728,7 +2829,7 @@ func _check_win() -> void:
 			# Once the week has turned over, the board only holds the new week's times.
 			_play_games.submit_weekly_time(_elapsed)
 			_submit_online(SilentWolf.weekly_board(_week), SilentWolf.time_score(_elapsed))
-	_progress.set_value("solved", key, true)
+	_mark_solved(key)
 	_progress.save(save_path)
 	if _mode == Mode.DAILY:
 		# No reminder for today's daily once it's solved.
@@ -2753,7 +2854,7 @@ func _custom_solved() -> void:
 	var record := not _hinted and _elapsed < best
 	if record:
 		_progress.set_value("best", key, _elapsed)
-	_progress.set_value("solved", key, true)
+	_mark_solved(key)
 	_progress.save(save_path)
 	_on_progress_made()
 	var note := "  " + tr("(hints used)") if _hinted else "  " + tr("(new best!)") if record and best != INF else ""
