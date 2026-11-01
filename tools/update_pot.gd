@@ -3,6 +3,8 @@ extends SceneTree
 ## out of the tr() and tr_n() calls in scripts/:
 ##   godot --headless --path . --script res://tools/update_pot.gd
 ## A "# TRANSLATORS:" comment just above a call becomes a note for translators.
+## Each string names the scripts it's in but not the lines, so the template only
+## changes when there's text to translate, not whenever code moves around.
 
 const SCRIPTS := "res://scripts/"
 const OUTPUT := "res://translations/crowns.pot"
@@ -33,7 +35,7 @@ static func build() -> String:
 		var lines := FileAccess.get_file_as_string(SCRIPTS + name).split("\n")
 		for i in lines.size():
 			var note := _note_above(lines, i)
-			var where := "scripts/%s:%d" % [name, i + 1]
+			var where := "scripts/" + name
 			for found in call.search_all(lines[i]):
 				_add(entries, found.get_string(1), "", found.get_string(2), note, where)
 			for found in plural_call.search_all(lines[i]):
@@ -75,7 +77,7 @@ static func _add(entries: Dictionary, id: String, plural: String, context: Strin
 	var entry: Dictionary = entries[key]
 	if not note.is_empty() and note not in entry.notes:
 		entry.notes.append(note)
-	if not where.is_empty():
+	if not where.is_empty() and where not in entry.where:
 		entry.where.append(where)
 
 

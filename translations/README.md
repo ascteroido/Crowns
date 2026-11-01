@@ -55,8 +55,18 @@ rather than starting over:
 Your translations stay. New text shows up untranslated, and text that changed a little
 keeps your old translation marked *fuzzy* (Poedit: "needs work") for you to check; the
 game skips fuzzy entries until they're confirmed. Text the game no longer uses moves to
-the end of the file as obsolete. The template also changes when only the code around the
-text moves, so if the update finds nothing new or fuzzy, there's nothing to do.
+the end of the file as obsolete.
+
+To see whether there's anything new before opening your file, compare it with the template:
+
+```
+msgcmp de.po crowns.pot
+```
+
+It lists the text in the template that your file has no translation for, and prints
+nothing when you're up to date. The template doesn't track line numbers, so it only
+changes when the game's text does (or text moves to another part of the game): the date of
+its last change on GitHub is a good sign of whether there's new work.
 
 ## When the game's text changes
 
