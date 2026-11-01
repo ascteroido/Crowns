@@ -11,6 +11,7 @@ const Settings := preload("res://scripts/settings.gd")
 const Stats := preload("res://scripts/stats.gd")
 const Archive := preload("res://scripts/archive.gd")
 const Credits := preload("res://scripts/credits.gd")
+const Drills := preload("res://scripts/drills.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
 const Haptics := preload("res://scripts/haptics.gd")
@@ -53,7 +54,7 @@ const GOLD := Color("f4c542")
 ## Screens fade in over this many seconds.
 const FADE := 0.15
 
-enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL, SPEED, CUSTOM }
+enum Mode { REGULAR, DAILY, CHALLENGE, WEEKLY, TUTORIAL, SPEED, CUSTOM, DRILL }
 
 ## Sizes generated on the spot; larger ones come from pre-made packs (PuzzlePack).
 const SIZES := [5, 6, 7, 8, 9, 10]
@@ -76,13 +77,13 @@ const CHALLENGE_STAGES := [
 	[9, Generator.Difficulty.HARD], [9, Generator.Difficulty.HARD], [10, Generator.Difficulty.HARD],
 ]
 const CHALLENGE_KEY := "challenge"
-## [size, difficulty] for each board of a speedrun, played on one clock.
+## [size, difficulty] for each board of a speed run, played on one clock.
 const SPEED_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
 	[6, Generator.Difficulty.MEDIUM], [7, Generator.Difficulty.MEDIUM],
 ]
 const SPEED_KEY := "speed"
-## Seconds between a speedrun's boards, with the clock stopped: long enough
+## Seconds between a speed run's boards, with the clock stopped: long enough
 ## for the victory wave on the largest board.
 const SPEED_PAUSE := 0.9
 ## The tutorial's lessons: puzzles as a letter per region, row by row, and the
@@ -96,6 +97,10 @@ const LESSONS := [
 	{"layout": ["DDDCCCC", "DDFCCCC", "DBFFFCC", "BBFFFCC", "EBBGFFF", "EBBGFFA", "EGGGFFF"], "technique": "group"},
 	{"layout": ["EBBBBB", "EEFFBB", "AABBBB", "AACCCB", "AACCCB", "AADCCC"], "technique": "blocker"},
 ]
+## The sizes of a drill's boards, in order.
+const DRILL_SIZES := [6, 6, 7, 7, 8]
+## Save section for how many drills of each technique were finished.
+const DRILLS := "drills"
 ## Hours the daily reminder can be set to, in local time.
 const REMINDER_HOURS := [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
 const DEFAULT_REMINDER_HOUR := 19
@@ -153,9 +158,12 @@ var _sunday_weeks := OS.has_feature("play_store")
 ## Current challenge run: {"seed": int, "level": puzzle number, "elapsed": run time
 ## before this puzzle}. Empty when no run is going.
 var _run := {}
-## Current speedrun, like `_run` but never saved: leaving abandons it. Its
+## Current speed run, like `_run` but never saved: leaving abandons it. Its
 ## "level" goes past SPEED_STAGES once the run is finished.
 var _speed_run := {}
+## Current drill: {"technique", "seed", "level"}, never saved. "level" goes
+## past DRILL_SIZES once the drill is finished.
+var _drill := {}
 ## The player-made puzzle being played: {"code", "size", "regions", "solution",
 ## "difficulty"} as CustomPuzzle.check() gives it.
 var _custom := {}
@@ -197,6 +205,7 @@ var _settings: Settings
 var _stats: Stats
 var _archive: Archive
 var _credits: Credits
+var _drills: Drills
 var _editor: Editor
 var _play_games: PlayGames
 var _reminder: Reminder
@@ -398,6 +407,9 @@ func _input(event: InputEvent) -> void:
 			or event is InputEventJoypadMotion and absf((event as InputEventJoypadMotion).axis_value) >= 0.5:
 		if not _navigating:
 			_show_focus_rings(true)
+	# Before the GUI sees it, which with nothing focused would pick a button by its own rules.
+	if (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _pad_focus(event):
+		get_viewport().set_input_as_handled()
 
 
 ## Shows the selection ring on buttons and switches, or hides it, as when the
@@ -409,10 +421,7 @@ func _show_focus_rings(shown: bool) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if (event is InputEventJoypadButton or event is InputEventJoypadMotion) and _pad_focus(event):
-		get_viewport().set_input_as_handled()
-		return
-	if (_settings.visible or _stats.visible or _archive.visible or _credits.visible) and event.is_action_pressed("ui_cancel"):
+	if (_settings.visible or _stats.visible or _archive.visible or _credits.visible or _drills.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
 	if _leaderboards.visible and event.is_action_pressed("ui_cancel"):
@@ -467,6 +476,7 @@ func _build_ui() -> void:
 	_menu.weekly_chosen.connect(_start.bind(Mode.WEEKLY))
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.speed_chosen.connect(_start.bind(Mode.SPEED))
+	_menu.drills_chosen.connect(_show_drills)
 	_menu.stats_chosen.connect(_show_stats)
 	_menu.create_chosen.connect(_show_editor)
 	_menu.leaderboards_chosen.connect(_show_leaderboards.bind("daily"))
@@ -529,6 +539,13 @@ func _build_ui() -> void:
 	_credits.visible = false
 	_credits.back.connect(_show_menu)
 	add_child(_credits)
+
+	_drills = Drills.new()
+	_drills.set_anchors_preset(PRESET_FULL_RECT)
+	_drills.visible = false
+	_drills.drill_chosen.connect(_start_drill)
+	_drills.back.connect(_show_menu)
+	add_child(_drills)
 
 	_play_games = PlayGames.new()
 	add_child(_play_games)
@@ -763,7 +780,7 @@ func _pad_focus(event: InputEvent) -> bool:
 	elif _menu.visible:
 		target = _menu.continue_button
 	else:
-		for screen: Control in [_settings, _stats, _archive, _credits, _leaderboards]:
+		for screen: Control in [_settings, _stats, _archive, _credits, _drills, _leaderboards]:
 			if screen.visible:
 				target = screen.find_next_valid_focus()
 				break
@@ -1216,6 +1233,7 @@ func _show_menu() -> void:
 	_stats.visible = false
 	_archive.visible = false
 	_credits.visible = false
+	_drills.visible = false
 	_editor.visible = false
 	_leaderboards.visible = false
 	_fade_in(_menu)
@@ -1265,6 +1283,8 @@ func _leave_game() -> void:
 		_show_archive()
 	elif _mode == Mode.CUSTOM and _from_editor:
 		_show_editor()
+	elif _mode == Mode.DRILL:
+		_show_drills()
 	else:
 		_show_menu()
 
@@ -1387,6 +1407,25 @@ func _show_stats() -> void:
 	_stats.set_stats(daily, sizes, climb, speed)
 	_menu.visible = false
 	_fade_in(_stats)
+
+
+func _show_drills() -> void:
+	if _generating:
+		return
+	_running = false
+	_menu.visible = false
+	_game.visible = false
+	_drills.set_completed(_progress.get_value(DRILLS, "completed", {}))
+	_fade_in(_drills)
+
+
+func _start_drill(technique: String) -> void:
+	_new_drill(technique)
+	_start(Mode.DRILL)
+
+
+func _new_drill(technique: String) -> void:
+	_drill = {"technique": technique, "seed": randi(), "level": 1}
 
 
 func _show_credits() -> void:
@@ -1850,7 +1889,7 @@ func _start(mode: Mode, date := "") -> void:
 	_mode = mode
 	_from_archive = not date.is_empty()
 	var tutorial := mode == Mode.TUTORIAL
-	var returns := _from_archive or (mode == Mode.CUSTOM and _from_editor)
+	var returns := _from_archive or (mode == Mode.CUSTOM and _from_editor) or mode == Mode.DRILL
 	_back_button.text = tr("Back") if returns else tr("Skip") if tutorial else tr("Menu")
 	_win_back_button.text = tr("Menu") if tutorial else _back_button.text
 	if mode == Mode.DAILY:
@@ -1868,6 +1907,7 @@ func _start(mode: Mode, date := "") -> void:
 	_archive.visible = false
 	_settings.visible = false
 	_leaderboards.visible = false
+	_drills.visible = false
 	_fade_in(_game)
 	var regular := mode == Mode.REGULAR
 	_size_picker.visible = regular
@@ -1878,12 +1918,14 @@ func _start(mode: Mode, date := "") -> void:
 	_code_overlay.visible = false
 	_hint_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED]
 	_check_button.visible = mode not in [Mode.CHALLENGE, Mode.SPEED, Mode.TUTORIAL]
-	_solution_button.visible = _check_button.visible
+	# A drill's board starts part-solved, so there's no puzzle of its own to give up on.
+	_solution_button.visible = _check_button.visible and mode != Mode.DRILL
 	# The tutorial is untimed, and its Hint button turns the intro cards.
-	_clear_button.visible = not tutorial
+	_clear_button.visible = not tutorial and mode != Mode.DRILL
 	_win_play_button.visible = false
-	# The basics teach crossing out by hand; the advanced lessons do it for the player.
-	_view.auto_cross = _progress.get_value("settings", "auto_cross", false) or (tutorial and _lesson > 0)
+	# The basics teach crossing out by hand; the advanced lessons and drills do it for the player.
+	_view.auto_cross = _progress.get_value("settings", "auto_cross", false) or (tutorial and _lesson > 0) \
+			or mode == Mode.DRILL
 	_undo_button.visible = true
 	_redo_button.visible = true
 	_update_clock()
@@ -1927,7 +1969,7 @@ func _generate(spec: Array) -> Dictionary:
 
 
 ## Starts generating the next regular puzzle, or the next level of The Climb or
-## a speedrun, while this one is played, so Next doesn't have to wait for it.
+## a speed run, while this one is played, so Next doesn't have to wait for it.
 func _prefetch_next() -> void:
 	if not _threads or _mode not in [Mode.REGULAR, Mode.CHALLENGE, Mode.SPEED] \
 			or (_mode == Mode.CHALLENGE and _run.is_empty()) \
@@ -2014,6 +2056,9 @@ func _load_puzzle() -> void:
 	elif _mode == Mode.CUSTOM:
 		puzzle = {"regions": _custom.regions.duplicate(), "solution": _custom.solution}
 		size = _custom.size
+	elif _mode == Mode.DRILL:
+		size = DRILL_SIZES[_drill.level - 1]
+		puzzle = await _drill_puzzle(size)
 	else:
 		var spec := _puzzle_spec()
 		size = spec[0]
@@ -2034,6 +2079,8 @@ func _load_puzzle() -> void:
 		_hinted = _hinted or saved.hinted
 	if _mode == Mode.TUTORIAL:
 		_board.marks = _lesson_marks()
+	elif _mode == Mode.DRILL:
+		_board.marks = puzzle.marks
 	_view.board = _board
 	_prefetch_next()
 	_view.reveal()
@@ -2064,9 +2111,15 @@ func _load_puzzle() -> void:
 			_puzzle_label.text = tr("Custom puzzle") if difficulty == CustomPuzzle.BEYOND_HINTS \
 					else tr("Custom puzzle · %s") % _difficulty_name(difficulty)
 		Mode.SPEED:
-			# TRANSLATORS: The board being played in a speedrun, e.g. "Speedrun · 2 of 5".
-			_puzzle_label.text = tr("Speedrun · {board} of {boards}").format(
+			# TRANSLATORS: The board being played in a speed run, e.g. "Speed run · 2 of 5".
+			_puzzle_label.text = tr("Speed run · {board} of {boards}").format(
 					{"board": _speed_run.level, "boards": SPEED_STAGES.size()})
+		Mode.DRILL:
+			# TRANSLATORS: The board being played in a drill, e.g. "Groups · 2 of 5".
+			_puzzle_label.text = tr("{drill} · {board} of {boards}").format({
+					"drill": _drills.technique_name(_drill.technique), "board": _drill.level,
+					"boards": DRILL_SIZES.size()})
+			_hint_label.text = _technique_tip(_drill.technique)
 		Mode.TUTORIAL:
 			_puzzle_label.text = tr("How to play") if _lesson == 0 \
 					else tr("Technique %d of %d") % [_lesson, LESSONS.size() - 1]
@@ -2106,6 +2159,8 @@ func _on_next_puzzle() -> void:
 		_new_run()
 	if _mode == Mode.SPEED and _speed_run.level > SPEED_STAGES.size():
 		_new_speed_run()
+	if _mode == Mode.DRILL and _drill.level > DRILL_SIZES.size():
+		_new_drill(_drill.technique)
 	_load_puzzle()
 
 
@@ -2308,34 +2363,88 @@ func _lesson_puzzle() -> Dictionary:
 	return {"regions": regions, "solution": Solver.find_solutions(layout.size(), regions, 1)[0]}
 
 
-## The lesson's starting marks: its puzzle solved step by step, each crown's
-## ruled-out cells crossed, up to the first step that needs the lesson's technique.
 func _lesson_marks() -> PackedInt32Array:
 	var technique: String = LESSONS[_lesson].technique
-	var scratch := Board.new(_board.size, _board.regions, _board.solution)
-	while not technique.is_empty():
+	if technique.is_empty():
+		return _board.marks
+	return _marks_before(_board.size, _board.regions, _board.solution, technique)
+
+
+## A puzzle's marks part-solved: solved step by step, each crown's ruled-out
+## cells crossed, up to the first step that needs `technique`. Empty if the
+## solve never needs it.
+static func _marks_before(size: int, regions: PackedInt32Array, solution: PackedInt32Array,
+		technique: String) -> PackedInt32Array:
+	var scratch := Board.new(size, regions, solution)
+	while true:
 		var step := Grader.next_step(scratch.size, scratch.regions, scratch.marks)
-		if step.is_empty() or _technique(step) == technique:
-			break
+		if step.is_empty():
+			return PackedInt32Array()
+		if _technique(step) == technique:
+			return scratch.marks
 		for cell: int in step.cross:
 			scratch.marks[cell] = Board.Mark.CROSS
 		if step.crown >= 0:
 			scratch.marks[step.crown] = Board.Mark.CROWN
 			for change in scratch.auto_cross_changes():
 				scratch.set_mark(change[0], Board.Mark.CROSS)
-	return scratch.marks
+	return PackedInt32Array()
+
+
+## A drill's board of `size`: a puzzle that needs the drill's technique, part-solved
+## up to where it's needed, as {"regions", "solution", "marks"}.
+func _drill_puzzle(size: int) -> Dictionary:
+	var spec := [_drill.technique, size, hash([_drill.seed, _drill.level])]
+	if not _threads:
+		return _make_drill(spec)
+	var job := _make_drill_job(spec)
+	_tasks[job.task] = true
+	return await _finish(job)
+
+
+## Static so the worker holds nothing of this node, as with _make_job.
+static func _make_drill_job(spec: Array) -> Dictionary:
+	var result := {}
+	var task := WorkerThreadPool.add_task(func() -> void: result.merge(_make_drill(spec)))
+	return {"spec": spec, "task": task, "result": result}
+
+
+## Generates puzzles from the [technique, size, seed] `spec` until one needs the
+## technique; Groups need Hard puzzles, the others turn up in Medium ones.
+static func _make_drill(spec: Array) -> Dictionary:
+	var technique: String = spec[0]
+	var size: int = spec[1]
+	var rng := _seeded(spec[2])
+	var difficulty := Generator.Difficulty.HARD if technique == "group" else Generator.Difficulty.MEDIUM
+	while true:
+		var puzzle := Generator.generate(size, difficulty, rng)
+		var marks := _marks_before(size, puzzle.regions, puzzle.solution, technique)
+		if not marks.is_empty():
+			puzzle.marks = marks
+			return puzzle
+	return {}
 
 
 ## A grader step's technique as the lessons name them: "confined" for one group
 ## inside another, "group" for several.
-func _technique(step: Dictionary) -> String:
+static func _technique(step: Dictionary) -> String:
 	if step.rule == "confined" and step.from.size() > 1:
 		return "group"
 	return step.rule
 
 
 func _tutorial_cards() -> Array[String]:
-	match LESSONS[_lesson].technique:
+	return _technique_cards(LESSONS[_lesson].technique)
+
+
+## What a drill's boards show to start with: how its technique works, as its lesson explains it.
+func _technique_tip(technique: String) -> String:
+	return _technique_cards(technique)[-1]
+
+
+## The tutorial's cards for a lesson's technique, or the basics' for "".
+func _technique_cards(technique: String) -> Array[String]:
+	match technique:
 		"confined":
 			return [tr("Harder puzzles need more than \"only one cell left\". These lessons show the techniques the hints use, starting with claiming a line."),
 					tr("If all of a region's open cells lie in one row, its crown must be in that row. That uses up the row's crown, so cross out the rest of the row. The same works for columns, and for a row that lies inside one region.")]
@@ -2506,6 +2615,9 @@ func _check_win() -> void:
 		_win_leaderboard_button.visible = false
 		_show_win_overlay()
 		return
+	if _mode == Mode.DRILL:
+		_drill_solved()
+		return
 	_count_day()
 	if _mode == Mode.CHALLENGE:
 		var solved: int = _run.level
@@ -2597,7 +2709,28 @@ func _custom_solved() -> void:
 	_show_win_overlay()
 
 
-## A speedrun's board is solved: on to the next after a short pause, or the
+## A drill's board is solved: on to the next, or the drill is done.
+func _drill_solved() -> void:
+	_drill.level += 1
+	_next_puzzle_button.visible = true
+	_win_leaderboard_button.visible = false
+	if _drill.level > DRILL_SIZES.size():
+		var completed: Dictionary = _progress.get_value(DRILLS, "completed", {})
+		completed[_drill.technique] = completed.get(_drill.technique, 0) + 1
+		_progress.set_value(DRILLS, "completed", completed)
+		_progress.save(save_path)
+		_win_label.text = tr("Drill complete!")
+		# TRANSLATORS: Starts the same drill again with new boards.
+		_next_puzzle_button.text = tr("Again")
+	else:
+		# TRANSLATORS: After a drill's board, e.g. "Board 2 of 5 done."
+		_win_label.text = tr("Board {board} of {boards} done.").format(
+				{"board": _drill.level - 1, "boards": DRILL_SIZES.size()})
+		_next_puzzle_button.text = tr("Next board")
+	_show_win_overlay()
+
+
+## A speed run's board is solved: on to the next after a short pause, or the
 ## run's result after the last.
 func _speed_solved() -> void:
 	_speed_run.elapsed = _elapsed
@@ -2804,8 +2937,8 @@ func _has_mode_leaderboard() -> bool:
 			return _has_leaderboards() and _daily_live
 		Mode.WEEKLY:
 			return _play_games.has_weekly() or _silent_wolf_on()
-		Mode.SPEED, Mode.CUSTOM:
-			# Speedruns only keep a personal best, and anyone can make an easy custom puzzle.
+		Mode.SPEED, Mode.CUSTOM, Mode.DRILL:
+			# Speed runs only keep a personal best, and anyone can make an easy custom puzzle.
 			return false
 	return _has_leaderboards()
 
@@ -2849,7 +2982,7 @@ func _show_leaderboards(kind: String) -> void:
 	if _generating:
 		return
 	_leaderboards_from_game = false
-	for screen: Control in [_menu, _settings, _stats, _archive, _credits]:
+	for screen: Control in [_menu, _settings, _stats, _archive, _credits, _drills]:
 		screen.visible = false
 	_open_leaderboards(kind)
 
@@ -2902,10 +3035,10 @@ func _player_name() -> String:
 	return _progress.get_value(ONLINE, "player_name")
 
 
-## The timer and best time show unless hidden in Settings; lessons are untimed.
+## The timer and best time show unless hidden in Settings; lessons and drills are untimed.
 ## Hidden, the clock still runs, so times and leaderboards work as usual.
 func _update_clock() -> void:
-	var shown: bool = _mode != Mode.TUTORIAL and _progress.get_value("settings", "show_timer", true)
+	var shown: bool = _mode not in [Mode.TUTORIAL, Mode.DRILL] and _progress.get_value("settings", "show_timer", true)
 	_timer_label.visible = shown
 	_best_label.visible = shown
 
@@ -2951,8 +3084,8 @@ func _puzzle_key() -> String:
 			return _weekly_key(_week)
 		Mode.CHALLENGE:
 			return CHALLENGE_KEY
-		Mode.TUTORIAL, Mode.SPEED:
-			# Nothing from the tutorial or a speedrun is saved.
+		Mode.TUTORIAL, Mode.SPEED, Mode.DRILL:
+			# Nothing from the tutorial, a speed run or a drill is saved.
 			return ""
 		Mode.CUSTOM:
 			return "custom_" + _custom.code

@@ -11,7 +11,7 @@
 - [x] Boards up to 14×14 (11×11 to 14×14 come from the pre-made puzzle packs)
 - [x] Hard+ difficulty: puzzles that need the hardest deductions the hint system knows
 - [x] Puzzle editor: draw regions, check for a single solution and grade it, share it as a code
-- [ ] Technique drills: short sets of puzzles that each need one deduction from the tutorial, to practise it
+- [x] Technique drills: short sets of puzzles that each need one deduction from the tutorial, to practise it
 
 ## Daily and progress
 - [x] The Climb (challenge mode): one life, no hints, puzzles ramp from 5×5 Easy to 10×10 Hard

@@ -1,6 +1,6 @@
 extends Control
 ## Stats screen: daily streaks and weekly solves, solves and times per size,
-## recent solve times as a graph, The Climb and speedruns.
+## recent solve times as a graph, The Climb and speed runs.
 
 const HistoryGraph := preload("res://scripts/history_graph.gd")
 const Heatmap := preload("res://scripts/heatmap.gd")
@@ -127,7 +127,7 @@ func set_stats(daily: Array, sizes: Array, climb: Array, speed: Array) -> void:
 	_column = _content.get_child(1)
 	_section(tr("Solve history"), _history_section())
 	_section(tr("The Climb"), _pairs(climb))
-	_section(tr("Speedrun"), _pairs(speed))
+	_section(tr("Speed run"), _pairs(speed))
 
 
 ## Puzzles solved per day ("YYYY-MM-DD" -> count) for the year's calendar,

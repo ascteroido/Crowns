@@ -17,7 +17,7 @@ Windows and Android) · [GitHub releases](https://github.com/ascteroido/Crowns/r
 
 - Puzzles from 5×5 to 14×14, graded Easy, Medium, Hard and Hard+
 - A daily puzzle with streaks and an archive, and a weekly challenge
-- The Climb (one life, no hints) and speedruns
+- The Climb (one life, no hints), speed runs and technique drills
 - Hints that explain the next deduction, rather than just placing a crown
 - A puzzle editor, and puzzle codes to share any board
 - An interactive tutorial, stats, a solve history and a calendar of days played

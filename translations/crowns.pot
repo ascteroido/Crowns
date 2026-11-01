@@ -15,7 +15,7 @@ msgstr ""
 msgid "Archive"
 msgstr ""
 
-#: scripts/archive.gd scripts/credits.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd
+#: scripts/archive.gd scripts/credits.gd scripts/drills.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd
 msgid "Back"
 msgstr ""
 
@@ -227,6 +227,49 @@ msgstr ""
 #. A sound's credit, e.g. "Item Pickup by Strechy".
 #: scripts/credits.gd
 msgid "{title} by {author}"
+msgstr ""
+
+#. Practice runs of one solving technique at a time.
+#: scripts/drills.gd scripts/menu.gd
+msgid "Drills"
+msgstr ""
+
+#: scripts/drills.gd
+msgid "Practise one technique at a time. Each board starts where it's needed."
+msgstr ""
+
+#. A drill's name: a region inside one row or column claims that line.
+#: scripts/drills.gd
+msgid "Claiming a line"
+msgstr ""
+
+#. A drill's name: several regions inside as many lines.
+#: scripts/drills.gd
+msgid "Groups"
+msgstr ""
+
+#. A drill's name: imagine a crown in a cell and see what it rules out.
+#: scripts/drills.gd
+msgid "What if?"
+msgstr ""
+
+#. How many times a drill was finished.
+#: scripts/drills.gd
+msgid "Completed %d time"
+msgid_plural "Completed %d times"
+msgstr[0] ""
+msgstr[1] ""
+
+#: scripts/drills.gd
+msgid "A region inside one row or column claims that line's crown."
+msgstr ""
+
+#: scripts/drills.gd
+msgid "Two or more regions inside as many rows or columns claim them all."
+msgstr ""
+
+#: scripts/drills.gd
+msgid "A cell whose crown would leave a row, column or region with no room is ruled out."
 msgstr ""
 
 #. The puzzle editor's title.
@@ -620,9 +663,14 @@ msgstr ""
 msgid "Custom puzzle · %s"
 msgstr ""
 
-#. The board being played in a speedrun, e.g. "Speedrun · 2 of 5".
+#. The board being played in a speed run, e.g. "Speed run · 2 of 5".
 #: scripts/main.gd
-msgid "Speedrun · {board} of {boards}"
+msgid "Speed run · {board} of {boards}"
+msgstr ""
+
+#. The board being played in a drill, e.g. "Groups · 2 of 5".
+#: scripts/main.gd
+msgid "{drill} · {board} of {boards}"
 msgstr ""
 
 #: scripts/main.gd scripts/settings.gd
@@ -793,6 +841,24 @@ msgid "Previous best: %s"
 msgstr ""
 
 #: scripts/main.gd
+msgid "Drill complete!"
+msgstr ""
+
+#. Starts the same drill again with new boards.
+#: scripts/main.gd
+msgid "Again"
+msgstr ""
+
+#. After a drill's board, e.g. "Board 2 of 5 done."
+#: scripts/main.gd
+msgid "Board {board} of {boards} done."
+msgstr ""
+
+#: scripts/main.gd
+msgid "Next board"
+msgstr ""
+
+#: scripts/main.gd
 msgid "Finished!"
 msgstr ""
 
@@ -935,7 +1001,7 @@ msgid "Weekly challenge"
 msgstr ""
 
 #: scripts/menu.gd scripts/stats.gd
-msgid "Speedrun"
+msgid "Speed run"
 msgstr ""
 
 #: scripts/menu.gd scripts/stats.gd

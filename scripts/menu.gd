@@ -1,6 +1,6 @@
 extends Control
 ## Title screen: continue the numbered puzzles, play today's daily puzzle or a past one,
-## this week's weekly challenge, The Climb or a speedrun, or make a puzzle.
+## this week's weekly challenge, The Climb, a speed run or a drill, or make a puzzle.
 
 const CrownIcon := preload("res://scripts/crown_icon.gd")
 
@@ -10,6 +10,7 @@ signal archive_chosen
 signal weekly_chosen
 signal challenge_chosen
 signal speed_chosen
+signal drills_chosen
 signal stats_chosen
 signal create_chosen
 signal leaderboards_chosen
@@ -23,6 +24,7 @@ var archive_button: Button
 var weekly_button: Button
 var challenge_button: Button
 var speed_button: Button
+var drills_button: Button
 var stats_button: Button
 var create_button: Button
 var leaderboards_button: Button
@@ -108,7 +110,7 @@ func _ready() -> void:
 
 	box = _sections[2]
 
-	# The Climb and speedruns share a row, each with its detail beneath.
+	# The Climb and speed runs share a row, each with its detail beneath.
 	var runs_row := HBoxContainer.new()
 	_scale(runs_row, "separation", 10)
 	box.add_child(runs_row)
@@ -116,7 +118,7 @@ func _ready() -> void:
 	_scale(details_row, "separation", 10)
 	box.add_child(details_row)
 	challenge_button = _button(tr("The Climb"), challenge_chosen.emit)
-	speed_button = _button(tr("Speedrun"), speed_chosen.emit)
+	speed_button = _button(tr("Speed run"), speed_chosen.emit)
 	_challenge_detail = _label("", 14)
 	_speed_detail = _label("", 14)
 	for button: Button in [challenge_button, speed_button]:
@@ -129,10 +131,17 @@ func _ready() -> void:
 		details_row.add_child(detail)
 	box.add_child(_gap(8))
 
-	# Shown only where Google Play Games is available.
+	# Drills share a row with Leaderboards, which only shows where there are any.
+	var extras_row := HBoxContainer.new()
+	_scale(extras_row, "separation", 10)
+	box.add_child(extras_row)
+	drills_button = _button(tr("Drills"), drills_chosen.emit)
+	drills_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	extras_row.add_child(drills_button)
 	leaderboards_button = _button(tr("Leaderboards"), leaderboards_chosen.emit)
+	leaderboards_button.size_flags_horizontal = SIZE_EXPAND_FILL
 	leaderboards_button.visible = false
-	box.add_child(leaderboards_button)
+	extras_row.add_child(leaderboards_button)
 
 	# Side by side, so the menu still fits the desktop window.
 	var options_row := HBoxContainer.new()
@@ -201,6 +210,9 @@ func _fit() -> void:
 		if base.x > 0.0:
 			factor = minf(factor, (size.x - 48.0) / base.x)
 	_apply(factor)
+	# The centring container can miss the menu shrinking, e.g. when a button
+	# appears and the sizes drop in one go, and keep its old, taller layout.
+	(_box.get_parent() as Container).queue_sort()
 
 
 func _apply(factor: float) -> void:

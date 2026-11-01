@@ -550,6 +550,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_dim_finished()
 	await _frames(2)
+	await _check_drills()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -874,14 +876,14 @@ func _check_speed() -> void:
 	await _frames(3)
 	var progress: ConfigFile = game._progress
 	var boards: int = game.SPEED_STAGES.size()
-	_expect(game._menu._speed_detail.text == "%d boards, one clock" % boards, "menu introduces speedruns")
+	_expect(game._menu._speed_detail.text == "%d boards, one clock" % boards, "menu introduces speed runs")
 	game._menu.speed_button.pressed.emit()
 	await _settle()
 	var view: Control = game._view
 	_expect(game._mode == game.Mode.SPEED and not game._hint_button.visible and not game._size_picker.visible,
-			"speedruns hide hints and puzzle pickers")
-	_expect(game._puzzle_label.text == "Speedrun · 1 of %d" % boards, "the label counts the boards")
-	_expect(not game._win_leaderboard_button.visible, "speedruns have no leaderboard")
+			"speed runs hide hints and puzzle pickers")
+	_expect(game._puzzle_label.text == "Speed run · 1 of %d" % boards, "the label counts the boards")
+	_expect(not game._win_leaderboard_button.visible, "speed runs have no leaderboard")
 
 	# Each board flows into the next on the same clock, which stops in between.
 	for level in boards:
@@ -1735,7 +1737,7 @@ func _check_cloud_save() -> void:
 			and not local.has_section_key("in_progress", "9x9_hard_1"), "boards in progress merge, skipping solved ones")
 	_expect(local.get_value("challenge", "best") == 8 and local.get_value("challenge", "run").level == 4,
 			"The Climb's best and a run from the other device carry over")
-	_expect(local.get_value("speed", "best") == 70.0, "the faster speedrun wins")
+	_expect(local.get_value("speed", "best") == 70.0, "the faster speed run wins")
 	_expect(local.get_value("history", "size_7") == [[100, 50.0, 1], [200, 70.0, 2], [300, 40.0, 1]],
 			"solve histories merge in order without repeating shared solves")
 	var merged_8: Array = local.get_value("history", "size_8")
@@ -2223,7 +2225,7 @@ func _check_solution() -> void:
 		game._leave_game()
 		game._start(mode)
 		await _settle()
-		_expect(not game._solution_button.visible, "no solution in The Climb or speedruns")
+		_expect(not game._solution_button.visible, "no solution in The Climb or speed runs")
 	game._leave_game()
 	game._progress.erase_section("revealed")
 	game._progress.save(TEST_SAVE)
@@ -2345,6 +2347,67 @@ func _check_patterns() -> void:
 	await _frames(3)
 	_screenshot("patterns.png")
 	view.queue_free()
+
+
+func _check_drills() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var main_script: Script = game.get_script()
+	# Each technique's boards open just where it's the easiest step left.
+	for technique: String in ["confined", "group", "blocker"]:
+		for seed in 3:
+			var puzzle: Dictionary = main_script._make_drill([technique, 6, seed])
+			var step := Grader.next_step(6, puzzle.regions, puzzle.marks)
+			_expect(main_script._technique(step) == technique, "a %s drill starts where it's needed" % technique)
+
+	_expect(game._menu.drills_button.is_visible_in_tree(), "the menu has Drills")
+	game._menu.drills_button.pressed.emit()
+	await _frames(3)
+	_expect(game._drills.visible and not game._menu.visible, "Drills opens its screen")
+	game._drills.buttons["group"].pressed.emit()
+	await _settle()
+	_expect(game._mode == game.Mode.DRILL and game._game.visible, "picking a technique starts its drill")
+	_expect(game._puzzle_label.text == "Groups · 1 of 5", "the label names the drill and counts its boards")
+	_expect(game._hint_label.text.begins_with("Groups:"), "the board opens with how the technique works")
+	_expect(game._hint_button.visible and game._check_button.visible, "drills have hints and checks")
+	_expect(not game._solution_button.visible and not game._clear_button.visible and not game._timer_label.visible,
+			"drills have no solution, clear or clock")
+	_expect(game._view.auto_cross, "drills cross out around crowns")
+	var step := Grader.next_step(game._board.size, game._board.regions, game._board.marks)
+	_expect(game._technique(step) == "group", "the board needs the drill's technique next")
+	_expect(game._board_key.is_empty(), "drills aren't saved")
+	var solved_before: int = game._progress.get_value("stats", "solved_6", 0)
+	var sizes := []
+	for board in 5:
+		sizes.append(game._board.size)
+		_solve_with_hints(game)
+		await _frames(2)
+		_expect(game._next_puzzle_button.visible, "each drill board has a next step")
+		if board < 4:
+			_expect(game._win_label.text == "Board %d of 5 done." % (board + 1), "the panel counts the boards")
+			game._on_next_puzzle()
+			await _settle()
+	_expect(sizes == [6, 6, 7, 7, 8], "a drill's boards grow")
+	_expect(game._win_label.text == "Drill complete!" and game._next_puzzle_button.text == "Again",
+			"the last board finishes the drill")
+	var saved := ConfigFile.new()
+	saved.load(TEST_SAVE)
+	_expect(saved.get_value("drills", "completed", {}).get("group", 0) == 1, "finished drills are counted")
+	_expect(saved.get_value("stats", "solved_6", 0) == solved_before, "drill boards aren't counted as solves")
+	game._on_next_puzzle()
+	await _settle()
+	_expect(game._puzzle_label.text == "Groups · 1 of 5", "Again starts the drill over")
+	game._leave_game()
+	await _frames(3)
+	_expect(game._drills.visible and not game._game.visible, "leaving a drill goes back to Drills")
+	_expect("Completed 1 time" in game._drills._details["group"].text, "Drills shows finished drills")
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not game._drills.visible, "back from Drills goes to the menu")
+	game.queue_free()
+	await _frames(2)
 
 
 func _check_dim_finished() -> void:
