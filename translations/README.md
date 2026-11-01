@@ -23,6 +23,20 @@ The game also follows the device's language when the player hasn't chosen one.
 - Hints build sentences from parts. `{group}` is a row, column or region, made
   from "row %d", "column %d" and "the %s region", where `%s` is a colour name.
   Choose wording for those parts that fits each sentence they appear in.
+- Articles and endings go in those parts, not in the code: "the %s region" can
+  become `den %s regionen` in Swedish, so put "the" wherever your language does.
+  The colour names come twice. The plain entries ("purple") go into "the %s region"
+  and "the %s regions", so give them the form that fits there, e.g. Swedish
+  "röda" for *den röda regionen*. The entries with context "colour alone" are the
+  colour as a word on its own, e.g. "röd", shown in the puzzle editor. Leave those
+  untranslated if they'd be the same; the plain form is used until they're filled in.
+- `{group}` is the same words in every sentence it appears in. If your language
+  changes a noun's ending with its role in the sentence (Finnish, Icelandic,
+  German, Polish…), word the hints so `{group}` keeps its basic form wherever
+  your language allows. Possessives work
+  the same way: "{a}'s open cells" can be reworded around `{a}` ("the open cells
+  in {a}") rather than adding an ending to it. If that can't be done naturally,
+  open an issue, and the game can give those names a form for each role.
 - Lines starting with `#.` in the file are notes about where a string appears.
 - Strings with a plural form (`msgid_plural`) need every plural form your language
   has. Set the *Plural-Forms* header for your language; Poedit fills it in for you.

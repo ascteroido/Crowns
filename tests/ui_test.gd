@@ -554,6 +554,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_dim_finished()
 	await _frames(2)
+	_check_colour_names()
+	await _frames(2)
 	await _check_updater()
 	await _frames(2)
 	await _check_home_screen()
@@ -2686,6 +2688,28 @@ func _check_updater() -> void:
 	game._settings.check_updates_toggle.button_pressed = true
 	game.queue_free()
 	await _frames(2)
+
+
+func _check_colour_names() -> void:
+	var view := BoardViewScript.new()
+	root.add_child(view)
+	var swedish := Translation.new()
+	swedish.locale = "sv"
+	swedish.add_message("purple", "lila")
+	swedish.add_message("orange", "orangea")
+	swedish.add_message("orange", "orange", "colour alone")
+	swedish.add_message("the %s region", "den %s regionen")
+	TranslationServer.add_translation(swedish)
+	var locale := TranslationServer.get_locale()
+	TranslationServer.set_locale("sv")
+	_expect(view.region_name(1) == "orangea" and view.colour_name(1) == "orange",
+			"colours have one form inside \"the %s region\" and another on their own")
+	_expect(view.colour_name(0) == "lila", "an untranslated colour on its own uses the in-phrase form")
+	_expect(view.tr("the %s region") % view.region_name(1) == "den orangea regionen", "the article is the translator's")
+	TranslationServer.set_locale(locale)
+	TranslationServer.remove_translation(swedish)
+	_expect(view.colour_name(2) == "blue" and view.region_name(2) == "blue", "English uses the same word for both")
+	view.queue_free()
 
 
 func _check_dim_finished() -> void:

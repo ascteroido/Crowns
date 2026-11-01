@@ -232,7 +232,7 @@ func _build_palette() -> void:
 		var swatch := Button.new()
 		swatch.custom_minimum_size = Vector2(40, 40)
 		swatch.focus_mode = FOCUS_NONE
-		swatch.tooltip_text = view.region_name(region)
+		swatch.tooltip_text = view.colour_name(region)
 		for state in ["normal", "hover", "pressed", "hover_pressed"]:
 			swatch.add_theme_stylebox_override(state, _swatch_box(region, false))
 		swatch.pressed.connect(_select_color.bind(region))

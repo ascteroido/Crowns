@@ -244,12 +244,36 @@ func celebration_ms() -> float:
 	return (board.size - 1) * WAVE_STEP_MS + HOP_MS if board else 0.0
 
 
-## The name hints use for a region's colour, matching REGION_COLORS.
+## The colours' names in English, in REGION_COLORS' order.
+const COLOUR_WORDS := ["purple", "orange", "blue", "green", "grey", "yellow", "pink", "teal", "tan", "mint", "salmon",
+		"gold", "olive", "periwinkle"]
+
+
+## A region's colour as hints name it, inside "the %s region", matching
+## REGION_COLORS. Languages that change an adjective there (Swedish "röda" for
+## "röd") give that form; colour_name() is the word on its own.
 func region_name(region: int) -> String:
-	# TRANSLATORS: Region colours, used in hints like "the purple region".
+	# TRANSLATORS: Region colours, put into "the %s region" and "the %s regions" in hints, so use the form
+	# that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 	var names: Array[String] = [tr("purple"), tr("orange"), tr("blue"), tr("green"), tr("grey"), tr("yellow"),
 			tr("pink"), tr("teal"), tr("tan"), tr("mint"), tr("salmon"), tr("gold"), tr("olive"), tr("periwinkle")]
 	return names[region % names.size()]
+
+
+## A region's colour as a word on its own, e.g. the editor's swatch tooltips.
+## Until a language translates these, its region_name() form stands in.
+func colour_name(region: int) -> String:
+	# TRANSLATORS: Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+	var names: Array[String] = [tr("purple", "colour alone"), tr("orange", "colour alone"), tr("blue", "colour alone"),
+			tr("green", "colour alone"), tr("grey", "colour alone"), tr("yellow", "colour alone"),
+			tr("pink", "colour alone"), tr("teal", "colour alone"), tr("tan", "colour alone"), tr("mint", "colour alone"),
+			tr("salmon", "colour alone"), tr("gold", "colour alone"), tr("olive", "colour alone"),
+			tr("periwinkle", "colour alone")]
+	var english: String = COLOUR_WORDS[region % COLOUR_WORDS.size()]
+	var translation := TranslationServer.get_translation_object(TranslationServer.get_locale())
+	if translation and not String(translation.get_message(english, "colour alone")).is_empty():
+		return names[region % names.size()]
+	return region_name(region)
 
 
 ## Back to the whole board.

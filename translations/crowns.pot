@@ -119,32 +119,32 @@ msgstr ""
 msgid "Sa"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "purple"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "orange"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "blue"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "green"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "grey"
 msgstr ""
 
-#. Region colours, used in hints like "the purple region".
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
 #: scripts/board_view.gd
 msgid "yellow"
 msgstr ""
@@ -178,6 +178,79 @@ msgid "olive"
 msgstr ""
 
 #: scripts/board_view.gd
+msgid "periwinkle"
+msgstr ""
+
+#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "purple"
+msgstr ""
+
+#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "orange"
+msgstr ""
+
+#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "blue"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "green"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "grey"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "yellow"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "pink"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "teal"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "tan"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "mint"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "salmon"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "gold"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
+msgid "olive"
+msgstr ""
+
+#: scripts/board_view.gd
+msgctxt "colour alone"
 msgid "periwinkle"
 msgstr ""
 
