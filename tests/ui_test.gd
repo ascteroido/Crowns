@@ -516,6 +516,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_pinch_zoom()
 	await _frames(2)
+	await _check_go_back()
+	await _frames(2)
 	await _check_languages()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
@@ -1985,6 +1987,33 @@ func _check_pinch_zoom() -> void:
 	saved.load(TEST_SAVE)
 	_expect(saved.get_value("settings", "pinch_zoom", true) == false, "turning pinch to zoom off is saved")
 	game._on_clear()
+	game.queue_free()
+	await _frames(2)
+
+
+func _check_go_back() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	_expect(not ProjectSettings.get_setting("application/config/quit_on_go_back"),
+			"Android's back gesture doesn't quit by itself")
+	game._menu.settings_button.pressed.emit()
+	await _frames(2)
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not game._settings.visible, "back from Settings goes to the menu")
+	game._menu.continue_button.pressed.emit()
+	await _settle()
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not game._game.visible, "back from a puzzle goes to the menu")
+	game._menu.create_button.pressed.emit()
+	await _frames(3)
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not game._editor.visible, "back from the editor goes to the menu")
+	_expect(not Input.is_action_pressed("ui_cancel"), "back leaves no key held")
 	game.queue_free()
 	await _frames(2)
 

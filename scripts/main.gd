@@ -326,6 +326,21 @@ func _notification(what: int) -> void:
 		_focused = false
 	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
 		_focused = true
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_go_back()
+
+
+## Android's back button or gesture: closes the app from the menu, and
+## elsewhere goes back a screen as Escape does.
+func _go_back() -> void:
+	if _menu.visible and not _leaderboards.visible:
+		_exit()
+		return
+	for pressed in [true, false]:
+		var cancel := InputEventAction.new()
+		cancel.action = "ui_cancel"
+		cancel.pressed = pressed
+		Input.parse_input_event(cancel)
 
 
 func _exit_tree() -> void:

@@ -13,6 +13,7 @@ config_version=5
 config/name="Crowns"
 config/version="0.3"
 run/main_scene="res://main.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
