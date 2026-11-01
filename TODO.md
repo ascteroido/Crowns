@@ -26,7 +26,7 @@
 - [x] Solve history: a graph of recent solve times per size in Stats
 - [x] Calendar heatmap in Stats: a year grid of the days played, coloured by solves
 - [x] Save backup for builds without cloud save: copy progress as a backup code and restore it (in Settings)
-- [ ] Weekly archive: play past weekly challenges, like the daily archive
+- [x] Weekly archive: play past weekly challenges, like the daily archive
 - [ ] Stats export: save the solve history as a CSV file
 
 ## Google Play Games

@@ -8,6 +8,7 @@ signal continue_chosen
 signal daily_chosen
 signal archive_chosen
 signal weekly_chosen
+signal weekly_archive_chosen
 signal challenge_chosen
 signal speed_chosen
 signal drills_chosen
@@ -22,6 +23,7 @@ var continue_button: Button
 var daily_button: Button
 var archive_button: Button
 var weekly_button: Button
+var weekly_archive_button: Button
 var challenge_button: Button
 var speed_button: Button
 var drills_button: Button
@@ -101,8 +103,15 @@ func _ready() -> void:
 	box.add_child(_daily_detail)
 	box.add_child(_gap(8))
 
+	var weekly_row := HBoxContainer.new()
+	_scale(weekly_row, "separation", 10)
+	box.add_child(weekly_row)
 	weekly_button = _button(tr("Weekly challenge"), weekly_chosen.emit)
-	box.add_child(weekly_button)
+	weekly_button.size_flags_horizontal = SIZE_EXPAND_FILL
+	weekly_row.add_child(weekly_button)
+	weekly_archive_button = _button(tr("Archive"), weekly_archive_chosen.emit)
+	_scale(weekly_archive_button, "width", 110)
+	weekly_row.add_child(weekly_archive_button)
 	_weekly_detail = _label("", 14)
 	_weekly_detail.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(_weekly_detail)

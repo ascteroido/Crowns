@@ -511,6 +511,8 @@ func _run() -> void:
 	await _frames(2)
 	await _check_weekly()
 	await _frames(2)
+	await _check_weekly_archive()
+	await _frames(2)
 	await _check_puzzle_code()
 	await _frames(2)
 	await _check_prefetch()
@@ -1524,6 +1526,55 @@ func _check_weekly() -> void:
 	await _frames(3)
 	_screenshot("menu_weekly.png")
 	game.queue_free()
+
+
+func _check_weekly_archive() -> void:
+	var game: Control = load("res://main.tscn").instantiate()
+	game.save_path = TEST_SAVE
+	root.add_child(game)
+	await _frames(3)
+	var current: String = game._week_start()
+	var last_week := Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(current) - 7 * 86400)
+	game._menu.weekly_archive_button.pressed.emit()
+	await _frames(3)
+	var archive: Control = game._weekly_archive
+	_expect(archive.visible and not game._menu.visible, "the weekly Archive button opens the weekly archive")
+	var buttons: Array = archive._list.get_children()
+	var weeks := (Time.get_unix_time_from_datetime_string(current)
+			- Time.get_unix_time_from_datetime_string(game.WEEKLY_FIRST)) / (7 * 86400) + 1
+	_expect(buttons.size() == weeks, "every week from the first is listed")
+	_expect((buttons[0] as Button).text.begins_with("Week of " + game._pretty_date(current))
+			and "This week" in (buttons[0] as Button).text, "newest first, starting with this week")
+	_expect((buttons[-1] as Button).text.begins_with("Week of " + game._pretty_date(game.WEEKLY_FIRST)),
+			"oldest last")
+
+	var solved_before: int = game._progress.get_value("stats", "weeklies_solved", 0)
+	(buttons[1] as Button).pressed.emit()
+	await _settle()
+	_expect(game._mode == game.Mode.WEEKLY and game._week == last_week, "a past week opens its own puzzle")
+	_expect(game._puzzle_label.text == "Weekly · " + game._pretty_date(last_week), "the label names that week")
+	var spec: Array = game._puzzle_spec()
+	_expect(spec[2] == hash(["weekly", last_week]), "the same puzzle everyone had that week")
+	_expect(not game._has_mode_leaderboard(), "past weeks have no leaderboard")
+	var board: Board = game._board
+	for row in board.size:
+		await _right_click(game._view, Vector2i(row, board.solution[row]))
+	await _frames(2)
+	_expect(game._win_overlay.visible and game._win_back_button.text == "Back", "a past week can be solved")
+	_expect(game._progress.get_value("solved", game._weekly_key(last_week), false), "and its solve is saved")
+	_expect(game._progress.get_value("stats", "weeklies_solved", 0) == solved_before,
+			"past weeks don't count towards the weekly achievements")
+	game._leave_game()
+	await _frames(3)
+	_expect(archive.visible and not game._game.visible, "leaving a past week goes back to the weekly archive")
+	var solved_button: Button = archive._list.get_child(1)
+	_expect("Solved" in solved_button.text and solved_button.get_child_count() > 0, "a solved week wears a crown")
+	_screenshot("weekly_archive.png")
+	game.notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	await _frames(3)
+	_expect(game._menu.visible and not archive.visible, "back from the weekly archive goes to the menu")
+	game.queue_free()
+	await _frames(2)
 
 
 func _check_reminder() -> void:

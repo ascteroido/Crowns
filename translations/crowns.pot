@@ -15,7 +15,7 @@ msgstr ""
 msgid "Archive"
 msgstr ""
 
-#: scripts/archive.gd scripts/credits.gd scripts/drills.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd
+#: scripts/archive.gd scripts/credits.gd scripts/drills.gd scripts/editor.gd scripts/leaderboards.gd scripts/main.gd scripts/settings.gd scripts/stats.gd scripts/weekly_archive.gd
 msgid "Back"
 msgstr ""
 
@@ -576,6 +576,16 @@ msgstr ""
 
 #: scripts/main.gd
 msgid "Puzzle #%d"
+msgstr ""
+
+#. A weekly challenge that was started but not finished.
+#: scripts/main.gd
+msgid "In progress"
+msgstr ""
+
+#. Marks the current week in the weekly archive, e.g. "In progress · This week".
+#: scripts/main.gd
+msgid "This week"
 msgstr ""
 
 #: scripts/main.gd
@@ -1272,4 +1282,9 @@ msgstr[1] ""
 
 #: scripts/stats.gd
 msgid "average %s · fastest %s"
+msgstr ""
+
+#. The heading over past weekly challenges.
+#: scripts/weekly_archive.gd
+msgid "Weekly archive"
 msgstr ""

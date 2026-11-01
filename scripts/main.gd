@@ -12,6 +12,7 @@ const Stats := preload("res://scripts/stats.gd")
 const Archive := preload("res://scripts/archive.gd")
 const Credits := preload("res://scripts/credits.gd")
 const Drills := preload("res://scripts/drills.gd")
+const WeeklyArchive := preload("res://scripts/weekly_archive.gd")
 const PlayGames := preload("res://scripts/play_games.gd")
 const Sounds := preload("res://scripts/sounds.gd")
 const Haptics := preload("res://scripts/haptics.gd")
@@ -68,6 +69,10 @@ const DAILY_FIRST := "2026-10-01"
 ## The weekly challenge: one large, hard puzzle for everyone each week.
 const WEEKLY_SIZE := 10
 const WEEKLY_DIFFICULTY := Generator.Difficulty.HARD
+## The weekly archive's first week, named by its Monday: the week the daily
+## archive starts in. Every week's puzzle comes from its date, so weeks from
+## before the weekly challenge existed can be played too.
+const WEEKLY_FIRST := "2026-09-28"
 ## [size, difficulty] for each challenge puzzle; the last one repeats.
 const CHALLENGE_STAGES := [
 	[5, Generator.Difficulty.EASY], [5, Generator.Difficulty.EASY], [6, Generator.Difficulty.EASY],
@@ -206,6 +211,7 @@ var _stats: Stats
 var _archive: Archive
 var _credits: Credits
 var _drills: Drills
+var _weekly_archive: WeeklyArchive
 var _editor: Editor
 var _play_games: PlayGames
 var _reminder: Reminder
@@ -421,7 +427,7 @@ func _show_focus_rings(shown: bool) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if (_settings.visible or _stats.visible or _archive.visible or _credits.visible or _drills.visible) and event.is_action_pressed("ui_cancel"):
+	if (_settings.visible or _stats.visible or _archive.visible or _credits.visible or _drills.visible or _weekly_archive.visible) and event.is_action_pressed("ui_cancel"):
 		_show_menu()
 		get_viewport().set_input_as_handled()
 	if _leaderboards.visible and event.is_action_pressed("ui_cancel"):
@@ -474,6 +480,7 @@ func _build_ui() -> void:
 	_menu.daily_chosen.connect(_start.bind(Mode.DAILY))
 	_menu.archive_chosen.connect(_show_archive)
 	_menu.weekly_chosen.connect(_start.bind(Mode.WEEKLY))
+	_menu.weekly_archive_chosen.connect(_show_weekly_archive)
 	_menu.challenge_chosen.connect(_start.bind(Mode.CHALLENGE))
 	_menu.speed_chosen.connect(_start.bind(Mode.SPEED))
 	_menu.drills_chosen.connect(_show_drills)
@@ -546,6 +553,13 @@ func _build_ui() -> void:
 	_drills.drill_chosen.connect(_start_drill)
 	_drills.back.connect(_show_menu)
 	add_child(_drills)
+
+	_weekly_archive = WeeklyArchive.new()
+	_weekly_archive.set_anchors_preset(PRESET_FULL_RECT)
+	_weekly_archive.visible = false
+	_weekly_archive.week_chosen.connect(func(week: String) -> void: _start(Mode.WEEKLY, week))
+	_weekly_archive.back.connect(_show_menu)
+	add_child(_weekly_archive)
 
 	_play_games = PlayGames.new()
 	add_child(_play_games)
@@ -780,7 +794,7 @@ func _pad_focus(event: InputEvent) -> bool:
 	elif _menu.visible:
 		target = _menu.continue_button
 	else:
-		for screen: Control in [_settings, _stats, _archive, _credits, _drills, _leaderboards]:
+		for screen: Control in [_settings, _stats, _archive, _credits, _drills, _weekly_archive, _leaderboards]:
 			if screen.visible:
 				target = screen.find_next_valid_focus()
 				break
@@ -1234,6 +1248,7 @@ func _show_menu() -> void:
 	_archive.visible = false
 	_credits.visible = false
 	_drills.visible = false
+	_weekly_archive.visible = false
 	_editor.visible = false
 	_leaderboards.visible = false
 	_fade_in(_menu)
@@ -1281,6 +1296,8 @@ func _leave_game() -> void:
 		_set_tutorial_done()
 	if _mode == Mode.DAILY and _from_archive:
 		_show_archive()
+	elif _mode == Mode.WEEKLY and _from_archive:
+		_show_weekly_archive()
 	elif _mode == Mode.CUSTOM and _from_editor:
 		_show_editor()
 	elif _mode == Mode.DRILL:
@@ -1332,6 +1349,38 @@ func _show_archive() -> void:
 	_archive.last_date = _today()
 	_archive.show_month_of(_daily_date if _game_is_archive_daily() else _today())
 	_fade_in(_archive)
+
+
+func _show_weekly_archive() -> void:
+	if _generating:
+		return
+	_save_board()
+	_running = false
+	_game.visible = false
+	_menu.visible = false
+	var current := _week_start()
+	var weeks := []
+	var week := current
+	while week >= WEEKLY_FIRST:
+		var key := _weekly_key(week)
+		var best: float = _progress.get_value("best", key, INF)
+		var solved: bool = _progress.get_value("solved", key, false)
+		var detail := ""
+		if best != INF:
+			detail = tr("Solved in %s") % _format_time(best)
+		elif solved:
+			detail = tr("Solved (hints used)")
+		elif _progress.has_section_key("in_progress", key):
+			# TRANSLATORS: A weekly challenge that was started but not finished.
+			detail = tr("In progress")
+		if week == current:
+			# TRANSLATORS: Marks the current week in the weekly archive, e.g. "In progress · This week".
+			detail = tr("This week") if detail.is_empty() else detail + " · " + tr("This week")
+		weeks.append({"week": week, "title": tr("Week of %s") % _pretty_date(_week_first_day(week)),
+				"detail": detail, "solved": solved, "current": week == current})
+		week = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(week) - 7 * 86400)
+	_weekly_archive.set_weeks(weeks)
+	_fade_in(_weekly_archive)
 
 
 func _game_is_archive_daily() -> bool:
@@ -1884,7 +1933,8 @@ func _switch_icon(track: Color, knob_right: bool) -> DPITexture:
 	return DPITexture.create_from_string(svg)
 
 
-## `date` picks a past daily from the archive; otherwise the daily is today's.
+## `date` picks a past daily or weekly from an archive (a weekly by its Monday);
+## otherwise it's today's daily or this week's weekly.
 func _start(mode: Mode, date := "") -> void:
 	_mode = mode
 	_from_archive = not date.is_empty()
@@ -1896,7 +1946,7 @@ func _start(mode: Mode, date := "") -> void:
 		_daily_date = date if _from_archive else _today()
 		_daily_live = _daily_date == _today()
 	elif mode == Mode.WEEKLY:
-		_week = _week_start()
+		_week = date if _from_archive else _week_start()
 	elif mode == Mode.CHALLENGE and _run.is_empty():
 		_new_run()
 	elif mode == Mode.SPEED:
@@ -1908,6 +1958,7 @@ func _start(mode: Mode, date := "") -> void:
 	_settings.visible = false
 	_leaderboards.visible = false
 	_drills.visible = false
+	_weekly_archive.visible = false
 	_fade_in(_game)
 	var regular := mode == Mode.REGULAR
 	_size_picker.visible = regular
@@ -2661,7 +2712,9 @@ func _check_win() -> void:
 				if _daily_live:
 					_record_daily(_daily_date)
 			Mode.WEEKLY:
-				_add_stat("weeklies_solved", 1)
+				# Past weeks count as solves, but not towards the weekly achievements.
+				if _week == _week_start():
+					_add_stat("weeklies_solved", 1)
 			_:
 				if not _hinted:
 					_add_stat("puzzles_unhinted", 1)
@@ -2936,7 +2989,8 @@ func _has_mode_leaderboard() -> bool:
 			# Past dailies aren't on the daily board, which only shows today's times.
 			return _has_leaderboards() and _daily_live
 		Mode.WEEKLY:
-			return _play_games.has_weekly() or _silent_wolf_on()
+			# Past weeks aren't on the weekly board, which only shows this week's times.
+			return (_play_games.has_weekly() or _silent_wolf_on()) and _week == _week_start()
 		Mode.SPEED, Mode.CUSTOM, Mode.DRILL:
 			# Speed runs only keep a personal best, and anyone can make an easy custom puzzle.
 			return false
@@ -2982,7 +3036,7 @@ func _show_leaderboards(kind: String) -> void:
 	if _generating:
 		return
 	_leaderboards_from_game = false
-	for screen: Control in [_menu, _settings, _stats, _archive, _credits, _drills]:
+	for screen: Control in [_menu, _settings, _stats, _archive, _credits, _drills, _weekly_archive]:
 		screen.visible = false
 	_open_leaderboards(kind)
 
