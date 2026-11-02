@@ -119,32 +119,32 @@ msgstr ""
 msgid "Sa"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "purple"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "orange"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "blue"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "green"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "grey"
 msgstr ""
 
-#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+#. Region colours, put into "the %s region" and "the %s regions" in hints, so use the form that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The colour on its own is a separate entry. See translations/README.md.
 #: scripts/board_view.gd
 msgid "yellow"
 msgstr ""
@@ -181,19 +181,19 @@ msgstr ""
 msgid "periwinkle"
 msgstr ""
 
-#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#. Region colours on their own, as in the puzzle editor's colour swatches, e.g. French "violet", Norwegian "rød". Leave untranslated if the same as the form in "the %s region".
 #: scripts/board_view.gd
 msgctxt "colour alone"
 msgid "purple"
 msgstr ""
 
-#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#. Region colours on their own, as in the puzzle editor's colour swatches, e.g. French "violet", Norwegian "rød". Leave untranslated if the same as the form in "the %s region".
 #: scripts/board_view.gd
 msgctxt "colour alone"
 msgid "orange"
 msgstr ""
 
-#. Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+#. Region colours on their own, as in the puzzle editor's colour swatches, e.g. French "violet", Norwegian "rød". Leave untranslated if the same as the form in "the %s region".
 #: scripts/board_view.gd
 msgctxt "colour alone"
 msgid "blue"

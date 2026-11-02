@@ -254,7 +254,8 @@ const COLOUR_WORDS := ["purple", "orange", "blue", "green", "grey", "yellow", "p
 ## "röd") give that form; colour_name() is the word on its own.
 func region_name(region: int) -> String:
 	# TRANSLATORS: Region colours, put into "the %s region" and "the %s regions" in hints, so use the form
-	# that fits there, e.g. Swedish "röda" (den röda regionen). The colour on its own is a separate entry.
+	# that fits there, e.g. French "violette" (la région violette), Norwegian "røde" (den røde regionen). The
+	# colour on its own is a separate entry. See translations/README.md.
 	var names: Array[String] = [tr("purple"), tr("orange"), tr("blue"), tr("green"), tr("grey"), tr("yellow"),
 			tr("pink"), tr("teal"), tr("tan"), tr("mint"), tr("salmon"), tr("gold"), tr("olive"), tr("periwinkle")]
 	return names[region % names.size()]
@@ -263,7 +264,8 @@ func region_name(region: int) -> String:
 ## A region's colour as a word on its own, e.g. the editor's swatch tooltips.
 ## Until a language translates these, its region_name() form stands in.
 func colour_name(region: int) -> String:
-	# TRANSLATORS: Region colours on their own, as in the puzzle editor's colour swatches (Swedish "röd").
+	# TRANSLATORS: Region colours on their own, as in the puzzle editor's colour swatches, e.g. French
+	# "violet", Norwegian "rød". Leave untranslated if the same as the form in "the %s region".
 	var names: Array[String] = [tr("purple", "colour alone"), tr("orange", "colour alone"), tr("blue", "colour alone"),
 			tr("green", "colour alone"), tr("grey", "colour alone"), tr("yellow", "colour alone"),
 			tr("pink", "colour alone"), tr("teal", "colour alone"), tr("tan", "colour alone"), tr("mint", "colour alone"),
