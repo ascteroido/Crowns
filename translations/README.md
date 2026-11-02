@@ -19,32 +19,75 @@ The game also follows the device's language when the player hasn't chosen one.
 
 - Keep `%d` and `%s` as they are. They're filled with numbers and text in order.
 - Words in braces, like `{group}` or `{month}`, are filled in by name. Keep them
-  spelled the same, but move them wherever your grammar needs them.
-- Hints build sentences from parts. `{group}` is a row, column or region, made
-  from "row %d", "column %d" and "the %s region", where `%s` is a colour name.
-  Choose wording for those parts that fits each sentence they appear in.
-- Articles and endings go in those parts, not in the code: "the %s region" can
-  become `den %s regionen` in Swedish, so put "the" wherever your language does.
-  The colour names come twice. The plain entries ("purple") go into "the %s region"
-  and "the %s regions", so give them the form that fits there, e.g. Swedish
-  "röda" for *den röda regionen*. The entries with context "colour alone" are the
-  colour as a word on its own, e.g. "röd", shown in the puzzle editor. Leave those
-  untranslated if they'd be the same; the plain form is used until they're filled in.
-- `{group}` is the same words in every sentence it appears in. If your language
-  changes a noun's ending with its role in the sentence (Finnish, Icelandic,
-  German, Polish…), word the hints so `{group}` keeps its basic form wherever
-  your language allows. Possessives work
-  the same way: "{a}'s open cells" can be reworded around `{a}` ("the open cells
-  in {a}") rather than adding an ending to it. If that can't be done naturally,
-  open an issue, and the game can give those names a form for each role.
+  spelled the same, but move them wherever your grammar needs them: Japanese
+  might put `{month}` first where English puts it last.
 - Lines starting with `#.` in the file are notes about where a string appears.
-- Strings with a plural form (`msgid_plural`) need every plural form your language
-  has. Set the *Plural-Forms* header for your language; Poedit fills it in for you.
+
+### Hint sentences
+
+Hints build sentences from parts. `{group}` is a row, column or region, made from
+"row %d", "column %d" and "the %s region", where `%s` is a colour name. Several at
+once use "rows %s", "columns %s" and "the %s regions", where `%s` is a list like
+"purple and blue", joined with "{items} and {last}" and the list separator ", "
+(Chinese and Japanese would use `、`). Choose wording for those parts that fits each
+sentence they appear in.
+
+**Articles and word order** go in those parts, not in the code, so put "the" wherever
+your language does, or leave it out:
+
+| Language  | "the %s region"    | "the %s regions"    | Filled in                          |
+|-----------|--------------------|---------------------|------------------------------------|
+| French    | `la région %s`     | `les régions %s`    | la région violette                 |
+| Spanish   | `la región %s`     | `las regiones %s`   | las regiones morada y azul         |
+| Norwegian | `den %s regionen`  | `de %s regionene`   | den røde regionen                  |
+| Romanian  | `regiunea %s`      | `regiunile %s`      | regiunea mov (*-a* is "the")       |
+| Arabic    | `المنطقة %s`       | `المناطق %s`        | المنطقة البنفسجية                  |
+| Chinese   | `%s区域`           | `%s区域`            | 紫色区域                           |
+
+**Colour names come twice.** The plain entries ("purple", "red"…) only ever go into
+"the %s region" and "the %s regions", so give them the form that fits there: French
+`violette` to agree with *la région*, Spanish `morada`, Norwegian `røde`, Arabic
+`البنفسجية` with its article. The entries with context "colour alone" are the colour
+as a word by itself, shown in the puzzle editor: French `violet`, Spanish `morado`,
+Norwegian `rød`, Arabic `بنفسجي`. If they'd be the same as the plain entry, as in
+Chinese (`紫色` both times), leave them untranslated; the plain form is used until
+they're filled in.
+
+One plain form has to fit both the singular and the list. Where adjectives change
+between them (German *die rote Region*, but *die roten Regionen*), name the region
+by its colour instead: `Region %s` and `Regionen %s` give *Region Rot* and
+*Regionen Rot und Blau*, which keep one form everywhere.
+
+**Cases and endings.** `{group}` is the same words in every sentence it appears in.
+If your language changes a noun's ending with its role in the sentence (German,
+Finnish, Polish, Russian, Icelandic…), word the hints so `{group}` keeps its basic
+form wherever your language allows:
+
+- German: `die %s Region` would need *der* after *in* (*in der roten Region*), but
+  `Region %s` works after any word: *in Region Rot*, *Region Rot hat…*.
+- Possessives work the same way: "{a}'s open cells" can become "the open cells in
+  {a}" rather than adding an ending to `{a}`, as Finnish or Polish would need.
+- A label can carry the name when nothing else fits, e.g. Polish *w obszarze: {b}*
+  rather than declining `{b}`.
+
+If that can't be done naturally, open an issue, and the game can give those names a
+form for each role.
+
+### Plurals
+
+Strings with a plural form (`msgid_plural`) need every plural form your language
+has: one for Japanese or Chinese, two for German, three for Polish or Russian, six
+for Arabic. Set the *Plural-Forms* header for your language; Poedit fills it in for you.
+
+### Length, fonts and direction
+
 - Text that runs too long can overflow buttons on phones. If a word won't fit,
-  a shorter one is better than an exact one.
+  a shorter one is better than an exact one. German and Finnish compounds are the
+  usual culprits.
 - Godot draws letters from the device's fonts when the game's font lacks them, so
-  most scripts display as they are. Arabic and Hebrew letters are bundled too, for
-  the web build, which can't use the device's fonts.
+  most scripts (Cyrillic, Greek, Devanagari, Thai, Chinese, Japanese, Korean…)
+  display as they are. Arabic and Hebrew letters are bundled too, for the web build,
+  which can't use the device's fonts.
 - Right-to-left languages (Arabic, Hebrew, Persian, Urdu…) mirror the layout
   automatically: buttons, rows and the archive calendar run right to left. The
   puzzle board itself isn't mirrored, so "column 1" in hints is always the
